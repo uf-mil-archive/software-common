@@ -6,10 +6,10 @@ import time
 import pygame
 import pygame.gfxdraw
 
-from imagenex_852 import device
+from imagenex_852 import driver
 
 
-d = device.Device('/dev/ttyUSB0')
+d = driver.Device('/dev/ttyUSB0')
 disp = pygame.display.set_mode((512, 512))
 while True:
     time.sleep(.03)

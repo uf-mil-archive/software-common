@@ -26,19 +26,19 @@ class Node(object):
             
             d.send_switch_data_command(train_angle_degrees=0, sector_width_degrees=360, step_size_degrees=3)
             res = d.read_sonar_return_data()
-            #res = dict(_range=50, echo_data=[52]*252, head_position_degrees=45.2)
+            #res = dict(range_meters=50, echo_data=[52]*252, head_position_degrees=45.2)
             
             msg = Echo()
             msg.header.frame_id = frame_id
             msg.header.stamp = rospy.Time.now()
             angle_rad = math.radians(res['head_position_degrees'])
-            scale = res['_range']/len(res['echo_data'])
+            scale = res['range_meters']/len(res['echo_data'])
             msg.step = Vector3(scale * math.cos(angle_rad), scale * math.sin(angle_rad), 0)
             msg.intensity = [x/255 for x in res['echo_data']]
             pub.publish(msg)
 
 if __name__ == '__main__':
-    rospy.init_node('node')
+    rospy.init_node('imagenex_852')
     try:
         n = Node()
     except rospy.ROSInterruptException:
