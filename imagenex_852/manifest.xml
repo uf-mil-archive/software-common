@@ -1,0 +1,16 @@
+<package>
+  <description brief="imagenex_852">
+
+     imagenex_852
+
+  </description>
+  <author>Forrest Voight</author>
+  <license>BSD</license>
+  <review status="unreviewed" notes=""/>
+  <url>http://ros.org/wiki/imagenex_852</url>
+
+  <depend package="geometry_msgs"/>
+  <depend package="rospy"/>
+</package>
+
+

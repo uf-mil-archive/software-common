@@ -1,0 +1,7 @@
+CMakeCache.txt
+CMakeFiles/
+Makefile
+cmake_install.cmake
+msg_gen/
+src/imagenex_852/msg/
+*pyc
