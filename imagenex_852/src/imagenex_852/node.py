@@ -8,10 +8,9 @@ import sys
 import roslib
 roslib.load_manifest('imagenex_852')
 import rospy
-from geometry_msgs.msg import Vector3
+from sensor_msgs.msg import PointCloud2
 
-from imagenex_852 import driver
-from imagenex_852.msg import Echo
+from imagenex_852 import driver, pointclouds
 
 class Node(object):
     def __init__(self):
@@ -20,7 +19,7 @@ class Node(object):
         
         d = driver.Device(port_filename)
         
-        pub = rospy.Publisher('imagenex_852', Echo)
+        pub = rospy.Publisher('imagenex_852', PointCloud2)
         while not rospy.is_shutdown():
             rospy.sleep(.03)
             
@@ -28,13 +27,18 @@ class Node(object):
             res = d.read_sonar_return_data()
             #res = dict(range_meters=50, echo_data=[52]*252, head_position_degrees=45.2)
             
-            msg = Echo()
-            msg.header.frame_id = frame_id
-            msg.header.stamp = rospy.Time.now()
             angle_rad = math.radians(res['head_position_degrees'])
             scale = res['range_meters']/len(res['echo_data'])
-            msg.step = Vector3(scale * math.cos(angle_rad), scale * math.sin(angle_rad), 0)
-            msg.intensity = [x/255 for x in res['echo_data']]
+            
+            import numpy as np
+            array = np.zeros(len(res['echo_data']), dtype=[('x', np.float32), ('y', np.float32), ('z', np.float32), ('intensity', np.float32)])
+            for i, x in enumerate(res['echo_data']):
+                array[i]['x'] = scale * i * math.cos(angle_rad)
+                array[i]['y'] = scale * i * math.sin(angle_rad)
+                array[i]['z'] = 0
+                array[i]['intensity'] = x/255
+            
+            msg = pointclouds.array_to_pointcloud2(array, stamp=rospy.Time.now(), frame_id=frame_id)
             pub.publish(msg)
 
 if __name__ == '__main__':
