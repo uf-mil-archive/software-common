@@ -5,6 +5,8 @@ from __future__ import division
 import math
 import sys
 
+import numpy
+
 import roslib
 roslib.load_manifest('imagenex_852')
 import rospy
@@ -21,25 +23,19 @@ class Node(object):
         
         pub = rospy.Publisher('imagenex_852', PointCloud2)
         while not rospy.is_shutdown():
-            rospy.sleep(.03)
+            rospy.sleep(.03) # no response without this wait. why is this necessary?
             
             d.send_switch_data_command(train_angle_degrees=0, sector_width_degrees=360, step_size_degrees=3)
             res = d.read_sonar_return_data()
-            #res = dict(range_meters=50, echo_data=[52]*252, head_position_degrees=45.2)
             
-            angle_rad = math.radians(res['head_position_degrees'])
-            scale = res['range_meters']/len(res['echo_data'])
-            
-            import numpy as np
-            array = np.zeros(len(res['echo_data']), dtype=[('x', np.float32), ('y', np.float32), ('z', np.float32), ('intensity', np.float32)])
+            array = numpy.zeros(len(res['echo_data']), dtype=[('x', numpy.float32), ('y', numpy.float32), ('z', numpy.float32), ('intensity', numpy.float32)])
             for i, x in enumerate(res['echo_data']):
-                array[i]['x'] = scale * i * math.cos(angle_rad)
-                array[i]['y'] = scale * i * math.sin(angle_rad)
+                array[i]['x'] = res['range_meters'] * i/len(res['echo_data']) * math.cos(math.radians(res['head_position_degrees']))
+                array[i]['y'] = res['range_meters'] * i/len(res['echo_data']) * math.sin(math.radians(res['head_position_degrees']))
                 array[i]['z'] = 0
                 array[i]['intensity'] = x/255
             
-            msg = pointclouds.array_to_pointcloud2(array, stamp=rospy.Time.now(), frame_id=frame_id)
-            pub.publish(msg)
+            pub.publish(pointclouds.array_to_pointcloud2(array, stamp=rospy.Time.now(), frame_id=frame_id))
 
 if __name__ == '__main__':
     rospy.init_node('imagenex_852')
