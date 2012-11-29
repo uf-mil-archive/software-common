@@ -10,22 +10,34 @@ import numpy
 import roslib
 roslib.load_manifest('imagenex_852')
 import rospy
+from dynamic_reconfigure.server import Server as DynamicReconfigureServer
 from sensor_msgs.msg import PointCloud2
 
 from imagenex_852 import driver, pointclouds
+from imagenex_852.cfg import sonarConfig
 
 class Node(object):
+    def reconfigure(self, config, level):
+        for name, default, allowed_values in driver.Device.switch_data_command_desc:
+            # snap input to closest allowed value
+            config[name] = min(allowed_values, key=lambda v: abs(v-config[name]))
+        self.config = dict((x, config[x]) for x in sonarConfig.defaults)
+        return config
+    
     def __init__(self):
         port_filename = rospy.get_param('~port_filename', '/dev/ttyUSB0')
         frame_id = rospy.get_param('~frame_id', '/sonar')
         
         d = driver.Device(port_filename)
         
+        self.config = sonarConfig.defaults
+        server = DynamicReconfigureServer(sonarConfig, self.reconfigure)
+        
         pub = rospy.Publisher('imagenex_852', PointCloud2)
         while not rospy.is_shutdown():
             rospy.sleep(.03) # no response without this wait. why is this necessary?
             
-            d.send_switch_data_command(train_angle_degrees=0, sector_width_degrees=360, step_size_degrees=3)
+            d.send_switch_data_command(**self.config)
             res = d.read_sonar_return_data()
             
             array = numpy.zeros(len(res['echo_data']), dtype=[('x', numpy.float32), ('y', numpy.float32), ('z', numpy.float32), ('intensity', numpy.float32)])
