@@ -39,7 +39,8 @@ class Device(object):
         inner_data += chr(0)                        # Byte 21; Reserved
         inner_data += chr(0)                        # Byte 22; Reserved
         inner_data += chr(0)                        # Byte 23; Reserved
-        inner_data += chr(0)                        # Byte 24; Switch Delay
+        assert 0 <= switch_delay_msec <= 255 and switch_delay_msec != 253
+        inner_data += chr(switch_delay_msec)        # Byte 24; Switch Delay
         assert frequency_kHz in [675, 850]
         inner_data += chr(1 if frequency_kHz == 850 else 0) # Byte 25; Frequency; 0 = 675 kHz; 1 = 850 kHz
         
