@@ -1,0 +1,19 @@
+<package>
+  <description brief="rise_6dof">
+
+     rise_6dof
+
+  </description>
+  <author>Forrest Voight</author>
+  <license>BSD</license>
+  <review status="unreviewed" notes=""/>
+  <url>http://ros.org/wiki/rise_6dof</url>
+
+  <depend package="geometry_msgs"/>
+  <depend package="nav_msgs"/>
+  <depend package="rospy"/>
+  <depend package="dynamic_reconfigure"/>
+  <depend package="tf"/>
+</package>
+
+

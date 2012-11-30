@@ -1,0 +1,82 @@
+#!/usr/bin/env python
+
+from __future__ import division
+
+import traceback
+
+import numpy
+
+import roslib
+roslib.load_manifest('rise_6dof')
+import rospy
+from dynamic_reconfigure.server import Server as DynamicReconfigureServer
+from geometry_msgs.msg import WrenchStamped
+from nav_msgs.msg import Odometry
+from std_msgs.msg import Header
+
+from rise_6dof import controller
+from rise_6dof.cfg import controllerConfig
+from rise_6dof.msg import PoseTwist, PoseTwistStamped
+
+
+class Node(object):
+    def reconfigure(self, config, level):
+        try:
+            processed_config = {}
+            for name in 'k ks alpha beta'.split(' '):
+                x = numpy.array(map(float, config[name].split(',')))
+                assert len(x) == 6
+                processed_config[name] = x
+            processed_config['use_rise'] = config['use_rise']
+            
+            self.config = config
+            self.processed_config = processed_config
+            
+            return config
+        except:
+            traceback.print_exc()
+            # go back to old config if new is invalid
+            return self.config
+    
+    def __init__(self):
+        self.reconfigure(controllerConfig.defaults, 0)
+        server = DynamicReconfigureServer(controllerConfig, self.reconfigure)
+        
+        self.controller = controller.Controller(self.processed_config)
+        
+        self.desired = None
+        rospy.Subscriber('/desired', PoseTwistStamped, lambda desired: setattr(self, 'desired', desired))
+        
+        self.current = None
+        rospy.Subscriber('/current', Odometry, lambda current: setattr(self, 'current', current))
+        
+        pub = rospy.Publisher('/output', WrenchStamped)
+        
+        dt = 1/50
+        
+        while not rospy.is_shutdown():
+            rospy.sleep(dt)
+            
+            if self.current is None:
+                print 'no current'
+                rospy.sleep(1/10)
+                continue
+            if self.desired is None:
+                print 'no desired'
+                rospy.sleep(1/10)
+                continue
+            
+            assert self.current.header.frame_id == self.desired.header.frame_id and self.current.header.frame_id in ['/map', '/odom']
+            
+            self.controller.config = self.processed_config
+            wrench = self.controller.update(dt, self.desired.posetwist, PoseTwist(pose=self.current.pose.pose, twist=self.current.twist.twist))
+            
+            pub.publish(WrenchStamped(header=Header(frame_id='/base_link'), wrench=wrench))
+
+
+if __name__ == '__main__':
+    rospy.init_node('rise_6dof')
+    try:
+        Node()
+    except rospy.ROSInterruptException:
+        pass
