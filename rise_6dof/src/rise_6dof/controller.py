@@ -86,15 +86,13 @@ class Controller(object):
         
         
         if self.config['use_rise']:
-            ksPlus1 = self.config['ks'] + numpy.ones(6)
-            
             sign = lambda x: 1 if x > 0 else -1 if x < 0 else 0
-            rise_term_int = ksPlus1*self.config['alpha']*error_velocity_body + self.config['beta']*map(sign, error_velocity_body)
+            rise_term_int = self.config['ks']*self.config['alpha']*error_velocity_body + self.config['beta']*map(sign, error_velocity_body)
             
             self._rise_term += dt/2*(rise_term_int + self._rise_term_int_prev)
             self._rise_term_int_prev = rise_term_int
             
-            output = ksPlus1 * error_velocity_body + self._rise_term
+            output = self.config['ks'] * error_velocity_body + self._rise_term
         else:
             # zero rise term so it doesn't wind up over time
             self._rise_term = numpy.zeros(6)
