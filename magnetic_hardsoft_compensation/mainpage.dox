@@ -1,0 +1,66 @@
+/**
+\mainpage
+\htmlinclude manifest.html
+
+\b magnetic_hardsoft_compensation 
+
+This package is intended to correct the raw magnetic output from a magnetometer
+for hard and soft magnetic effects, resulting in the true magnetic field being
+outputted.
+
+\section rosapi ROS API
+
+List of nodes:
+- \b nodelet
+
+<hr>
+
+\subsection nodelet nodelet
+
+nodelet is a nodelet that implements hard+soft magnetic compensation
+
+\subsubsection Usage
+\verbatim
+$ rosrun nodelet nodelet load magnetic_hardsoft_compensation/nodelet manager [standard ROS args]
+\endverbatim
+
+
+\subsubsection topics ROS topics
+
+Subscribes to:
+- \b "imu/mag_raw": [geometry_msgs/Vector3Stamped] uncompensated magnetic field (tesla)
+
+Publishes to:
+- \b "img/mag": [geometry_msgs/Vector3Stamped] compensated magnetic field (tesla)
+
+
+\subsubsection parameters ROS parameters
+
+Reads the following parameters from the parameter server
+
+- \b "~frame_id" : \b [string] frame magnetic field messages are in
+- \b "~shift" : \b [list of 3 doubles] vector on imu/mag_raw when imu is exposed to 0 magnetic field (tesla)
+- \b "~correction" : \b [list of 4 doubles] quaternion that rotates field so that ellipsoid is axis-aligned
+- \b "~scale" : \b [list of 3 doubles] amount to divide magnetic field on each axis by
+
+
+
+\section commandline Command-line tools
+
+
+\subsection generate_config generate_config
+
+Fits ellipsoid to raw magnetic field data and prints estimated config settings.
+
+\subsubsection Usage
+\verbatim
+$ rosrun magnetic_hardsoft_compensation generate_config [bag file]
+\endverbatim
+
+\par Example
+
+\verbatim
+$ rosrun magnetic_hardsoft_compensation generate_config mag_raw.bag
+\endverbatim
+
+*/
