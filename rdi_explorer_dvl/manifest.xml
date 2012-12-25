@@ -1,0 +1,19 @@
+<package>
+  <description brief="rdi_explorer_dvl">
+
+     rdi_explorer_dvl
+
+  </description>
+  <author>Forrest Voight</author>
+  <license>BSD</license>
+  <review status="unreviewed" notes=""/>
+  <url>http://ros.org/wiki/rdi_explorer_dvl</url>
+  <depend package="roscpp"/>
+  <depend package="nodelet"/>
+
+  <export>
+    <nodelet plugin="${prefix}/nodelet.xml"/>
+  </export>
+</package>
+
+
