@@ -1,0 +1,43 @@
+/**
+\mainpage
+\htmlinclude manifest.html
+
+\b thruster_mapper 
+
+This package translates desired wrenches into sets of thruster efforts.
+
+\section rosapi ROS API
+
+List of nodes:
+- \b thruster_mapper
+
+<hr>
+
+\subsection thruster_mapper thruster_mapper
+
+thruster_mapper is the only node.
+
+\subsubsection Usage
+\verbatim
+$ rosrun thruster_mapper thruster_mapper [standard ROS args]
+\endverbatim
+
+
+\subsubsection topics ROS topics
+
+Subscribes to:
+- \b "wrench": [geometry_msgs/WrenchStamped] desired wrench
+- \b "thrusters/info": [thruster_mapper/ThrusterInfo] descriptions of available thrusters
+
+Publishes to:
+- \b "thrusters/command": [thruster_mapper/ThrusterCommand] commands to thrusters
+
+
+\subsubsection parameters ROS parameters
+
+Reads the following parameters from the parameter server
+
+(none)
+
+
+*/
