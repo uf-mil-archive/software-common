@@ -62,9 +62,15 @@ class Node(object):
                 rospy.sleep(1/10)
                 continue
             if self.desired is None:
-                print 'no desired'
-                rospy.sleep(1/10)
-                continue
+                # default to original pose
+                self.desired = PoseTwistStamped(
+                    header=Header(
+                        frame_id=self.current.header.frame_id,
+                    ),
+                    posetwist=PoseTwist(
+                        pose=self.current.pose.pose,
+                    ),
+                )
             
             assert self.current.header.frame_id == self.desired.header.frame_id and self.current.header.frame_id in ['/map', '/odom']
             
