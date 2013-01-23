@@ -1,0 +1,102 @@
+#!/usr/bin/env python
+
+import math
+
+import numpy
+
+import roslib
+roslib.load_manifest('rise_6dof')
+import rospy
+from nav_msgs.msg import Odometry
+from std_msgs.msg import Header
+from geometry_msgs.msg import Pose, Twist, Vector3, Quaternion, Point
+from tf import transformations
+
+from rise_6dof.msg import PoseTwist, PoseTwistStamped
+
+
+xyz_array = lambda o: numpy.array([o.x, o.y, o.z])
+
+def get_current():
+    res = [None]
+    def cb(msg):
+        res[0] = msg
+    sub = rospy.Subscriber('/odom', Odometry, cb)
+    while res[0] is None:
+        rospy.sleep(.01)
+    sub.unregister()
+    return res[0]
+
+def quat_to_rotvec(q):
+    if q[3] < 0:
+        q = -q
+    q = transformations.unit_vector(q)
+    angle = math.acos(q[3])*2
+    axis = q[0:3]/numpy.linalg.norm(q[0:3]) if numpy.linalg.norm(q[0:3]) else numpy.zeros(3)
+    return axis * angle
+
+
+def position_generator(t):
+    r = 2*(1 - math.e**(-t/10))
+    w = 2*math.pi/30 # 1 rev/100 s
+    return r*numpy.array([math.cos(w*t), math.sin(w*t), 0])
+
+def positionvelocity_generator(t):
+    pos = position_generator(t)
+    dt = 1e-3
+    vel = (position_generator(t+dt/2) - position_generator(t-dt/2))/dt
+    return pos, vel
+
+def positionorientationvelocity_generator(t):
+    pos, vel = positionvelocity_generator(t)
+    
+    vel_direction = transformations.unit_vector(vel)
+    rot_cross = numpy.cross([1, 0, 0], vel_direction)
+    axis = rot_cross
+    angle = math.acos(numpy.dot([1, 0, 0], vel_direction))
+    return pos, vel, transformations.quaternion_about_axis(angle, axis)
+
+def positionorientationvelocityangularvelocity_generator(t):
+    pos, vel, orientation = positionorientationvelocity_generator(t)
+    
+    dt = 1e-3
+    _, _, orientation1 = positionorientationvelocity_generator(t-dt/2)
+    _, _, orientation2 = positionorientationvelocity_generator(t+dt/2)
+    
+    angvel = quat_to_rotvec(transformations.quaternion_multiply(orientation1, transformations.quaternion_inverse(orientation2)))/dt
+    return pos, vel, orientation, angvel
+
+rospy.init_node('do_spiral', anonymous=True)
+
+print 'waiting for current position...'
+current = get_current()
+start = xyz_array(current.pose.pose.position)
+print '...got', start
+
+pub = rospy.Publisher('/desired', PoseTwistStamped)
+
+start_time = rospy.Time.now()
+while not rospy.is_shutdown():
+    rospy.sleep(.01)
+    
+    now_time = rospy.Time.now()
+    
+    t = (now_time - start_time).to_sec()
+    pos, vel, orient, angvel = positionorientationvelocityangularvelocity_generator(t)
+    
+    pub.publish(PoseTwistStamped(
+        header=Header(
+            stamp=now_time,
+            frame_id=current.header.frame_id,
+        ),
+        posetwist=PoseTwist(
+            pose=Pose(
+                position=Point(*pos + start),
+                orientation=Quaternion(*orient),
+            ),
+            twist=Twist(
+                linear=Vector3(*vel),
+                angular=Vector3(*angvel),
+            ),
+        ),
+    ))
