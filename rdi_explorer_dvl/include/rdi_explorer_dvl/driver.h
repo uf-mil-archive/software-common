@@ -21,10 +21,6 @@ namespace rdi_explorer_dvl {
             boost::asio::io_service io;
             boost::asio::serial_port p;
             
-            void send_packet(ByteVec out) {
-                p.write_some(boost::asio::buffer(out.data(), out.size()));
-            }
-            
             uint8_t read_byte() {
                 uint8_t res; p.read_some(boost::asio::buffer(&res, sizeof(res)));
                 return res;
@@ -49,22 +45,26 @@ namespace rdi_explorer_dvl {
                 ensemble.push_back(read_byte());
                 ensemble.push_back(read_byte());
                 uint16_t ensemble_size = ensemble[2] + 256 * ensemble[3];
-                ensemble.resize(ensemble_size);
-                p.read_some(boost::asio::buffer(ensemble.data() + 4, ensemble_size - 4));
+                for(int i = 0; i < ensemble_size - 4; i++)
+                    ensemble.push_back(read_byte());
                 
                 uint16_t checksum = 0; BOOST_FOREACH(uint16_t b, ensemble) checksum += b;
-                if(checksum != read_short()) {
-                    ROS_ERROR("invalid dvl message checksum");
+                uint16_t received_checksum = read_short();
+                if(received_checksum != checksum) {
+                    ROS_ERROR("Invalid DVL ensemble checksum. received: %i calculated: %i size: %i", received_checksum, checksum, ensemble_size);
                     goto start;
                 }
                 
-                //bla
                 for(int dt = 0; dt < ensemble[5]; dt++) {
                     int offset = getu16le(ensemble.data() + 6 + 2*dt);
                     if(ensemble.size() - offset < 2+4*4) continue;
                     if(getu16le(ensemble.data() + offset) != 0x5803) continue;
                     geometry_msgs::Vector3Stamped res;
                     res.header.stamp = stamp;
+                    if(gets32le(ensemble.data() + offset + 2) == -3276801) { // -3276801 indicates no data
+                        ROS_ERROR("DVL didn't return bottom velocity");
+                        goto start;
+                    }
                     res.vector.x = gets32le(ensemble.data() + offset + 2) * .01e-3;
                     res.vector.y = gets32le(ensemble.data() + offset + 6) * .01e-3;
                     res.vector.z = gets32le(ensemble.data() + offset + 10) * .01e-3;
@@ -74,9 +74,28 @@ namespace rdi_explorer_dvl {
                 goto start;
             }
             
+            
             void send_heartbeat() {
-                //send_packet(ByteVec()); // heartbeat
-                //uint8_t msg[] = {4, 1, 20}; send_packet(ByteVec(msg, msg + sizeof(msg)/sizeof(msg[0]))); // StartPublishing 20hz
+                double maxdepth = 15;
+                
+                std::stringstream buf;
+                buf << "CR0\r"; // load factory settings (won't change baud rate)
+                buf << "#BJ 100 110 000\r"; // enable only bottom track high res velocity and bottom track range
+                //buf << "#BK2\r"; // send water mass pings when bottom track pings fail
+                //buf << "#BL7,36,46\r"; // configure near layer and far layer to 12 and 15 feet
+                buf << "ES0\r"; // 0 salinity
+                buf << "EX10010\r"; // transform results to ship XYZ, allow 3 beam solutions
+                buf << "EZ10000010\r"; // configure sensor sources. Provide manual data for everything except speed of sound and temperature
+                buf << "BX" << std::setw(5) << std::setfill('0') << (int)(maxdepth * 10 + 0.5) << '\r'; // configure max depth
+                buf << "TT2012/03/04, 05:06:07\r"; // set RTC
+                buf << "CS\r"; // start pinging
+                
+                std::string str = buf.str();
+                
+                size_t written = 0;
+                while(written < str.size()) {
+                    written += p.write_some(boost::asio::buffer(str.data() + written, str.size() - written));
+                }
             }
     };
     
