@@ -1,10 +1,12 @@
-#include <boost/foreach.hpp>
+#include <iostream>
 #include <time.h>
+
+#include <boost/foreach.hpp>
 #include <boost/random/normal_distribution.hpp>
 #include <boost/random/uniform_real.hpp>
 #include <boost/random/mersenne_twister.hpp>
 #include <boost/random/variate_generator.hpp>
-
+#include <Eigen/Dense>
 
 #include <tf/transform_listener.h>
 #include <message_filters/subscriber.h>
@@ -17,6 +19,7 @@ using namespace std;
 using namespace sensor_msgs;
 using namespace message_filters;
 using namespace visualization_msgs;
+using namespace Eigen;
 
 
 static std_msgs::ColorRGBA make_ColorRGBA(float r, float g, float b, float a) {
@@ -42,11 +45,144 @@ double uniform() {
     return boost::uniform_real<double>()(m);
 }
 
+
+// if this function returns true,
+// hit1_axis1 * plane_axis1 + hit1_axis2 * plane_axis2 and
+// hit2_axis1 * plane_axis1 + hit2_axis2 * plane_axis2
+// will be the two points on the intersection of the plane and the sphere
+// that are tangent to the origin
+bool intersect_plane_sphere(Vector3d plane_axis1, Vector3d plane_axis2,
+        Vector3d sphere_pos, double sphere_radius,
+        double &hit1_axis1, double &hit1_axis2,
+        double &hit2_axis1, double &hit2_axis2) {
+    
+    // orthonormalize plane axes. z axis is normal to plane
+    Matrix3d real_from_flat; real_from_flat << // fill columns
+        plane_axis1.normalized(),
+        plane_axis1.cross(plane_axis2).cross(plane_axis1).normalized(),
+        plane_axis1.cross(plane_axis2).normalized();
+    Matrix3d flat_from_real = real_from_flat.inverse();
+    
+    Vector3d sphere_pos_flat = flat_from_real * sphere_pos;
+    // now sphere_pos_plane has the closest point to the center in 
+    // flat coordinates in [0] and [1] and abs(sphere_pos_plane[2])
+    // is the distance from the plane to the sphere
+    
+    if(abs(sphere_pos_flat[2]) > sphere_radius)
+        return false; // plane doesn't intersect sphere
+    
+    double r = sqrt(pow(sphere_radius, 2) - pow(sphere_pos_flat(2), 2)); // radius of intersection (circle)
+    double cx = sphere_pos_flat(0);
+    double cy = sphere_pos_flat(1);
+    
+    double dist = cx*cx + cy*cy - r*r;
+    if(dist < 0)
+        return false; // origin is within sphere
+    double inner = r*sqrt(dist);
+    double cx2_plus_cy2 = cx*cx + cy*cy;
+    Vector3d hit1_flat(
+        (cx*cx*cx + cy*cy*cx - cx*r*r - cy*inner)/cx2_plus_cy2,
+        (cy*cy*cy + cx*cx*cy - cy*r*r + cx*inner)/cx2_plus_cy2,
+        0);
+    Vector3d hit2_flat(
+        (cx*cx*cx + cy*cy*cx - cx*r*r + cy*inner)/cx2_plus_cy2, 
+        (cy*cy*cy + cx*cx*cy - cy*r*r - cx*inner)/cx2_plus_cy2,
+        0);
+    
+    Matrix3d real_from_plane; real_from_plane <<
+        plane_axis1,
+        plane_axis2,
+        plane_axis1.cross(plane_axis2).normalized();
+    Matrix3d plane_from_real = real_from_plane.inverse();
+    
+    Matrix3d plane_from_flat = plane_from_real * real_from_flat;
+    
+    Vector3d hit1_plane = plane_from_flat * hit1_flat;
+    hit1_axis1 = hit1_plane(0); hit1_axis2 = hit1_plane(1);
+    assert(abs(hit1_plane(2)) < 1e-3);
+    
+    Vector3d hit2_plane = plane_from_flat * hit2_flat;
+    hit2_axis1 = hit2_plane(0); hit2_axis2 = hit2_plane(1);
+    assert(abs(hit1_plane(2)) < 1e-3);
+    
+    return true;
+}
+
+void sphere_query(const ImageConstPtr& image, const CameraInfoConstPtr& cam_info, Vector3d pos_camera, double sphere_radius, Vector3d &total_color, double &count) {
+    assert(image->encoding == "rgba8"); // XXX use opencv to support more than one encoding
+    
+    Matrix<double, 3, 4> proj;
+    for(int row = 0; row < 3; row++)
+        for(int col = 0; col < 4; col++)
+            proj(row, col) = cam_info->P[4*row + col];
+    
+    total_color = Vector3d(0, 0, 0);
+    count = 0;
+    
+    //cout << endl;
+    for(int yy = 0; yy < (int)image->height; yy++) {
+        double y = yy;
+        
+        // solution space of project((X, Y, Z)) = (x, y, z) with y fixed
+        Vector3d plane1(
+            0,
+            -((cam_info->P[7] + cam_info->P[6]) - y*(cam_info->P[11] + cam_info->P[10]))/(cam_info->P[ 5] - y*cam_info->P[9]),
+            1);
+        Vector3d plane2(
+            1,
+            (y*cam_info->P[8] - cam_info->P[4])/(cam_info->P[5] - y*cam_info->P[9]),
+            0);
+        
+        double hit1_axis1, hit1_axis2;
+        double hit2_axis1, hit2_axis2;
+        if(!intersect_plane_sphere(plane1, plane2, pos_camera, sphere_radius, hit1_axis1, hit1_axis2, hit2_axis1, hit2_axis2)) {
+            // sphere doesn't intersect scanline
+            //cout << yy << " miss" << endl;
+            continue;
+        }
+        
+        Vector3d point1 = hit1_axis1 * plane1 + hit1_axis2 * plane2;
+        Vector3d point2 = hit2_axis1 * plane1 + hit2_axis2 * plane2;
+        
+        Vector3d point1_homo = proj * point1.homogeneous();
+        if(point1_homo(2) <= 0)
+            continue; // behind camera
+        Vector2d point1_screen = point1_homo.hnormalized();
+        assert(abs(point1_screen(1) - y) < 1e-3);
+        
+        Vector3d point2_homo = proj * point2.homogeneous();
+        if(point2_homo(2) <= 0)
+            continue; // behind camera
+        Vector2d point2_screen = point2_homo.hnormalized();
+        assert(abs(point2_screen(1) - y) < 1e-3);
+        
+        double minx = min(point1_screen(0), point2_screen(0));
+        double maxx = max(point1_screen(0), point2_screen(0));
+        
+        int xstart = max(0, (int)ceil(minx));
+        int xend = min((int)image->width-1, (int)floor(maxx));
+        
+        for(int xx = xstart; xx <= xend; xx++) {
+            const uint8_t *pixel = image->data.data() + image->step * yy + 4 * xx;
+            double r = pixel[0] / 255.;
+            double g = pixel[1] / 255.;
+            double b = pixel[2] / 255.;
+            
+            total_color += Vector3d(r, g, b);
+            count += 1;
+        }
+        
+        /*cout << yy << " "
+            << "(" << point1_screen(0) << " " << point1_screen(1) << ") "
+            << "(" << point2_screen(0) << " " << point2_screen(1) << ")" << endl;*/
+    }
+}
+
 struct Particle {
     btVector3 pos;
     Particle() {
         // prior distribution of object is centered at (3, 10, -4)
-        pos = btVector3(3+gauss(), 10+gauss(), -4+gauss());
+        pos = btVector3(1+gauss(), 5+gauss(), -4+gauss());
     }
     Particle predict(double dt) {
         Particle p(*this);
@@ -55,35 +191,23 @@ struct Particle {
         return p;
     }
     double P(const ImageConstPtr& image, const CameraInfoConstPtr& cam_info, const tf::StampedTransform& transform) {
-        tf::Vector3 pos_camera = transform.inverse() * pos;
+        tf::Vector3 pos_camera_ = transform.inverse() * pos;
+        Vector3d pos_camera(pos_camera_[0], pos_camera_[1], pos_camera_[2]);
         
-        if(pos_camera[2] <= 0) return 1; // behind camera
+        Vector3d total_color; double count;
+        sphere_query(image, cam_info, pos_camera, 0.2, total_color, count);
         
-        double u = cam_info->P[ 0] * pos_camera[0] + cam_info->P[ 1] * pos_camera[1] + cam_info->P[ 2] * pos_camera[2] + cam_info->P[ 3] * 1;
-        double v = cam_info->P[ 4] * pos_camera[0] + cam_info->P[ 5] * pos_camera[1] + cam_info->P[ 6] * pos_camera[2] + cam_info->P[ 7] * 1;
-        double w = cam_info->P[ 8] * pos_camera[0] + cam_info->P[ 9] * pos_camera[1] + cam_info->P[10] * pos_camera[2] + cam_info->P[11] * 1;
-        
-        double x = u / w;
-        double y = v / w;
-        
-        int xx = x + .5;
-        int yy = y + .5;
-        
-        if(xx < 0 || xx >= (signed)image->width || yy < 0 || yy >= (signed)image->height)
-            return 1; // not within camera's field of view
-        else {
-            assert(image->encoding == "rgba8"); // XXX use opencv to support more than one encoding
-            const uint8_t *pixel = image->data.data() + image->step * yy + 4 * xx;
-            double r = pixel[0] / 255.;
-            double g = pixel[1] / 255.;
-            double b = pixel[2] / 255.;
+        //cout << "count: " << count << endl;
+        if(count > 3) {
+            Vector3d color = total_color/count;
+            //cout << "color: " << color << endl;
             
             // assume that pixel color at object's center follows a triangular distribution with max at (0, 1, 0) and minimums at all other corners
-            // XXX this is where most of the work is to be done
-            return 2*(1-r) * 2*(g) * 2*(1-b) + 1e-6; // 1e-6 is to make sure every particle doesn't go to 0 at the same time
+            return 2*(1-color(0)) * 2*(color(1)) * 2*(1-color(2)) + 1e-6; // 1e-6 is to make sure every particle doesn't go to 0 at the same time
+        } else {
+            // not visible
+            return 1 + 1e-6; // expected value of above expression
         }
-        
-        return 1;
     }
 };
 
@@ -102,15 +226,15 @@ struct Node {
     
     
     Node() :
-        image_sub(nh, "image", 1),
-        info_sub(nh, "camera_info", 1),
+        image_sub(nh, "sim_camera/image_rect_color", 1),
+        info_sub(nh, "sim_camera/camera_info", 1),
         sync(image_sub, info_sub, 10) {
         
         particles_pub = nh.advertise<Marker>("particles", 1);
         
         sync.registerCallback(boost::bind(&Node::callback, this, _1, _2));
         
-        for(int i = 0; i < 100000; i++)
+        for(int i = 0; i < 5000; i++)
             particles.push_back(make_pair(1, Particle()));
         
         double total_weight = 0; BOOST_FOREACH(pair_type &pair, particles) total_weight += pair.first;
@@ -133,11 +257,14 @@ struct Node {
         // get map from camera transform
         tf::StampedTransform transform;
         try {
+            listener.setExtrapolationLimit(ros::Duration(0.3));
+            listener.waitForTransform("/map", image->header.frame_id, image->header.stamp, ros::Duration(0.05));
             listener.lookupTransform("/map", image->header.frame_id, image->header.stamp, transform);
         } catch (tf::TransformException ex){
             ROS_ERROR("%s", ex.what());
             return;
         }
+        ROS_INFO("good");
         
         // decide whether resampling is necessary
         double weight2_sum = 0; BOOST_FOREACH(pair_type &pair, particles) weight2_sum += pair.first * pair.first;
