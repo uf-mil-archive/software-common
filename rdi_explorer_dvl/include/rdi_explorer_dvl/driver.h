@@ -18,22 +18,44 @@ namespace rdi_explorer_dvl {
         private:
             typedef std::vector<boost::uint8_t> ByteVec;
             
+            const std::string port;
+            const int baudrate;
             boost::asio::io_service io;
             boost::asio::serial_port p;
             
             uint8_t read_byte() {
-                uint8_t res; p.read_some(boost::asio::buffer(&res, sizeof(res)));
-                return res;
+                while(true) {
+                    try {
+                        uint8_t res; p.read_some(boost::asio::buffer(&res, sizeof(res)));
+                        return res;
+                    } catch(const std::exception &exc) {
+                        ROS_ERROR("error on read: %s; reopening", exc.what());
+                        open();
+                    }
+                }
             }
             uint16_t read_short() {
                 uint8_t low = read_byte();
                 return 256 * read_byte() + low;
             }
             
+            void open() {
+                while(true) {
+                    try {
+                        p.close();
+                        p.open(port);
+                        p.set_option(boost::asio::serial_port::baud_rate(baudrate));
+                        return;
+                    } catch(const std::exception &exc) {
+                        ROS_ERROR("error on open(%s): %s; reopening after delay", port.c_str(), exc.what());
+                        boost::this_thread::sleep(boost::posix_time::seconds(1));
+                    }
+                }
+            }
+            
         public:
-            Device(const std::string port, int baudrate) : p(io) {
-                p.open(port);
-                p.set_option(boost::asio::serial_port::baud_rate(baudrate));
+            Device(const std::string port, int baudrate) : port(port), baudrate(baudrate), p(io) {
+                // open is called on first read_byte() in the _polling_ thread
             }
             
             geometry_msgs::Vector3Stamped read() {
@@ -92,9 +114,13 @@ namespace rdi_explorer_dvl {
                 
                 std::string str = buf.str();
                 
-                size_t written = 0;
-                while(written < str.size()) {
-                    written += p.write_some(boost::asio::buffer(str.data() + written, str.size() - written));
+                try {
+                    size_t written = 0;
+                    while(written < str.size()) {
+                        written += p.write_some(boost::asio::buffer(str.data() + written, str.size() - written));
+                    }
+                } catch(const std::exception &exc) {
+                    ROS_ERROR("error on write: %s; dropping", exc.what());
                 }
             }
     };
