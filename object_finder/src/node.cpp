@@ -108,8 +108,10 @@ bool intersect_plane_sphere(Vector3d plane_axis1, Vector3d plane_axis2,
     return true;
 }
 
-void sphere_query(const ImageConstPtr& image, const CameraInfoConstPtr& cam_info, Vector3d pos_camera, double sphere_radius, Vector3d &total_color, double &count) {
-    assert(image->encoding == "rgba8"); // XXX use opencv to support more than one encoding
+void sphere_query(const vector<Vector3d>& sumimage, const CameraInfoConstPtr& cam_info, Vector3d sphere_pos_camera, double sphere_radius, Vector3d &total_color, double &count) {
+    // get the sum of the color values (along with the count) of the pixels
+    // that are included within the provided sphere specified by
+    // sphere_pos_camera and sphere_radius
     
     Matrix<double, 3, 4> proj;
     for(int row = 0; row < 3; row++)
@@ -120,7 +122,7 @@ void sphere_query(const ImageConstPtr& image, const CameraInfoConstPtr& cam_info
     count = 0;
     
     //cout << endl;
-    for(int yy = 0; yy < (int)image->height; yy++) {
+    for(uint32_t yy = 0; yy < cam_info->height; yy++) {
         double y = yy;
         
         // solution space of project((X, Y, Z)) = (x, y, z) with y fixed
@@ -135,7 +137,7 @@ void sphere_query(const ImageConstPtr& image, const CameraInfoConstPtr& cam_info
         
         double hit1_axis1, hit1_axis2;
         double hit2_axis1, hit2_axis2;
-        if(!intersect_plane_sphere(plane1, plane2, pos_camera, sphere_radius, hit1_axis1, hit1_axis2, hit2_axis1, hit2_axis2)) {
+        if(!intersect_plane_sphere(plane1, plane2, sphere_pos_camera, sphere_radius, hit1_axis1, hit1_axis2, hit2_axis1, hit2_axis2)) {
             // sphere doesn't intersect scanline
             //cout << yy << " miss" << endl;
             continue;
@@ -159,18 +161,11 @@ void sphere_query(const ImageConstPtr& image, const CameraInfoConstPtr& cam_info
         double minx = min(point1_screen(0), point2_screen(0));
         double maxx = max(point1_screen(0), point2_screen(0));
         
-        int xstart = max(0, (int)ceil(minx));
-        int xend = min((int)image->width-1, (int)floor(maxx));
+        int xstart = max(0, min((int)cam_info->width, (int)ceil(minx)));
+        int xend   = max(0, min((int)cam_info->width, (int)ceil(maxx))); // not inclusive
         
-        for(int xx = xstart; xx <= xend; xx++) {
-            const uint8_t *pixel = image->data.data() + image->step * yy + 4 * xx;
-            double r = pixel[0] / 255.;
-            double g = pixel[1] / 255.;
-            double b = pixel[2] / 255.;
-            
-            total_color += Vector3d(r, g, b);
-            count += 1;
-        }
+        total_color += (xend == 0 ? Vector3d::Zero() : sumimage[yy * cam_info->width + xend - 1]) - (xstart == 0 ? Vector3d::Zero() : sumimage[yy * cam_info->width + xstart - 1]);
+        count += xend - xstart;
         
         /*cout << yy << " "
             << "(" << point1_screen(0) << " " << point1_screen(1) << ") "
@@ -190,12 +185,12 @@ struct Particle {
         p.pos += btVector3(gauss(), gauss(), gauss()) * sqrt(.001 * dt);
         return p;
     }
-    double P(const ImageConstPtr& image, const CameraInfoConstPtr& cam_info, const tf::StampedTransform& transform) {
+    double P(const vector<Vector3d>& sumimage, const CameraInfoConstPtr& cam_info, const tf::StampedTransform& transform) {
         tf::Vector3 pos_camera_ = transform.inverse() * pos;
         Vector3d pos_camera(pos_camera_[0], pos_camera_[1], pos_camera_[2]);
         
         Vector3d total_color; double count;
-        sphere_query(image, cam_info, pos_camera, 0.2, total_color, count);
+        sphere_query(sumimage, cam_info, pos_camera, 0.2, total_color, count);
         
         //cout << "count: " << count << endl;
         if(count > 3) {
@@ -293,8 +288,26 @@ struct Node {
             BOOST_FOREACH(pair_type &pair, particles) pair.second = pair.second.predict(dt);
         }
         
+        static vector<Vector3d> sumimage; // static so not reallocated every frame
+        sumimage.resize(image->width * image->height);
+        
+        assert(image->encoding == "rgba8"); // XXX use opencv to support more than one encoding
+        for(uint32_t row = 0; row < image->height; row++) {
+            Vector3d row_cumulative_sum(0, 0, 0);
+            for(uint32_t col = 0; col < image->width; col++) {
+                const uint8_t *pixel = image->data.data() + image->step * row + 4 * col;
+                double r = pixel[0] / 255.;
+                double g = pixel[1] / 255.;
+                double b = pixel[2] / 255.;
+                
+                row_cumulative_sum += Vector3d(r, g, b);
+                
+                sumimage[image->width * row + col] = row_cumulative_sum;
+            }
+        }
+        
         // update weights
-        BOOST_FOREACH(pair_type &pair, particles) pair.first *= pair.second.P(image, cam_info, transform);
+        BOOST_FOREACH(pair_type &pair, particles) pair.first *= pair.second.P(sumimage, cam_info, transform);
         
         // normalize weights
         double total_weight = 0; BOOST_FOREACH(pair_type &pair, particles) total_weight += pair.first;
