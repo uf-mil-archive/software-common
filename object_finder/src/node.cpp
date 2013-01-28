@@ -189,16 +189,25 @@ struct Particle {
         tf::Vector3 pos_camera_ = transform.inverse() * pos;
         Vector3d pos_camera(pos_camera_[0], pos_camera_[1], pos_camera_[2]);
         
-        Vector3d total_color; double count;
-        sphere_query(sumimage, cam_info, pos_camera, 0.2, total_color, count);
+        Vector3d inner_total_color; double inner_count;
+        sphere_query(sumimage, cam_info, pos_camera, 0.2, inner_total_color, inner_count);
+        
+        Vector3d both_total_color; double both_count;
+        sphere_query(sumimage, cam_info, pos_camera, 0.4, both_total_color, both_count);
+        
+        Vector3d outer_total_color = both_total_color - inner_total_color;
+        double outer_count = both_count - inner_count;
         
         //cout << "count: " << count << endl;
-        if(count > 3) {
-            Vector3d color = total_color/count;
+        if(inner_count > 10 && outer_count > 10) {
+            Vector3d inner_color = inner_total_color/inner_count;
+            Vector3d outer_color = outer_total_color/outer_count;
             //cout << "color: " << color << endl;
             
             // assume that pixel color at object's center follows a triangular distribution with max at (0, 1, 0) and minimums at all other corners
-            return 2*(1-color(0)) * 2*(color(1)) * 2*(1-color(2)) + 1e-6; // 1e-6 is to make sure every particle doesn't go to 0 at the same time
+            return 2*(1-inner_color(0)) * 2*(  inner_color(1)) * 2*(1-inner_color(2)) *
+                   2*(1-outer_color(0)) * 2*(1-outer_color(1)) * 2*(  outer_color(2))
+                + 1e-6; // 1e-6 is to make sure every particle doesn't go to 0 at the same time
         } else {
             // not visible
             return 1 + 1e-6; // expected value of above expression
