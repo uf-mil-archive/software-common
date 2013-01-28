@@ -13,10 +13,12 @@
 #include <message_filters/time_synchronizer.h>
 #include <sensor_msgs/Image.h>
 #include <sensor_msgs/CameraInfo.h>
+#include <geometry_msgs/PoseStamped.h>
 #include <visualization_msgs/Marker.h>
 
 using namespace std;
 using namespace sensor_msgs;
+using namespace geometry_msgs;
 using namespace message_filters;
 using namespace visualization_msgs;
 using namespace Eigen;
@@ -231,10 +233,11 @@ struct Particle {
 struct Node {
     ros::NodeHandle nh;
     tf::TransformListener listener;
-    ros::Publisher particles_pub;
     message_filters::Subscriber<Image> image_sub;
     message_filters::Subscriber<CameraInfo> info_sub;
     TimeSynchronizer<Image, CameraInfo> sync;
+    ros::Publisher particles_pub;
+    ros::Publisher pose_pub;
     
     
     typedef std::pair<double, Particle> pair_type;
@@ -248,6 +251,7 @@ struct Node {
         sync(image_sub, info_sub, 10) {
         
         particles_pub = nh.advertise<Marker>("particles", 1);
+        pose_pub = nh.advertise<PoseStamped>("buoy", 1);
         
         sync.registerCallback(boost::bind(&Node::callback, this, _1, _2));
         
@@ -335,6 +339,7 @@ struct Node {
         double total_weight = 0; BOOST_FOREACH(pair_type &pair, particles) total_weight += pair.first;
         BOOST_FOREACH(pair_type &pair, particles) pair.first /= total_weight;
         
+        pair_type max_p; max_p.first = -1; BOOST_FOREACH(pair_type &pair, particles) if(pair.first > max_p.first) max_p = pair;
         
         // send marker message for particle visualization
         Marker msg;
@@ -345,12 +350,22 @@ struct Node {
         msg.scale.y = .4;
         msg.scale.z = 1;
         msg.color.a = 1;
-        double max_p = 0; BOOST_FOREACH(pair_type &pair, particles) if(pair.first > max_p) max_p = pair.first;
         BOOST_FOREACH(pair_type &pair, particles) {
             msg.points.push_back(make_Point(pair.second.pos.x(), pair.second.pos.y(), pair.second.pos.z()));
-            msg.colors.push_back(make_ColorRGBA(pair.first/max_p, 0, 1-pair.first/max_p, 1));
+            msg.colors.push_back(make_ColorRGBA(pair.first/max_p.first, 0, 1-pair.first/max_p.first, 1));
         }
         particles_pub.publish(msg);
+        
+        
+        
+        PoseStamped msg2;
+        msg2.header.frame_id = "/map";
+        msg2.header.stamp = image->header.stamp;
+        msg2.pose.position.x = max_p.second.pos.x();
+        msg2.pose.position.y = max_p.second.pos.y();
+        msg2.pose.position.z = max_p.second.pos.z();
+        msg2.pose.orientation.w = 1;
+        pose_pub.publish(msg2);
     }
 };
 
