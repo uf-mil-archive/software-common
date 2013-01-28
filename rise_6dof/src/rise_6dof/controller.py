@@ -52,7 +52,7 @@ class Controller(object):
     '''
     config is a dict of k, ks, alpha, beta
     
-    inputs must all be in world frame
+    input poses must all be in world frame/velocities must all be in body frame (follows convention from Odometry message)
     output wrench is in body frame
     '''
     
@@ -66,13 +66,11 @@ class Controller(object):
         xyz_array = lambda p: numpy.array([p.x, p.y, p.z])
         xyzw_array = lambda q: numpy.array([q.x, q.y, q.z, q.w])
         
-        body_from_world = transformations.quaternion_matrix(transformations.quaternion_conjugate(xyzw_array(current_posetwist.pose.orientation)))[:3, :3]
-        
         x = numpy.concatenate([xyz_array(current_posetwist.pose.position), transformations.euler_from_quaternion(xyzw_array(current_posetwist.pose.orientation))])
-        vb = numpy.concatenate([body_from_world.dot(xyz_array(current_posetwist.twist.linear)), body_from_world.dot(xyz_array(current_posetwist.twist.angular))])
+        vb = numpy.concatenate([xyz_array(current_posetwist.twist.linear), xyz_array(current_posetwist.twist.angular)])
         
         xd = numpy.concatenate([xyz_array(desired_posetwist.pose.position), transformations.euler_from_quaternion(xyzw_array(desired_posetwist.pose.orientation))])
-        xd_dot = numpy.concatenate([xyz_array(desired_posetwist.twist.linear), _jacobian(x)[3:6,3:6].dot(body_from_world.dot(xyz_array(desired_posetwist.twist.angular)))])
+        xd_dot = _jacobian(xd).dot(numpy.concatenate([xyz_array(desired_posetwist.twist.linear), xyz_array(desired_posetwist.twist.angular)]))
         
         
         def smallest_coterminal_angle(x):

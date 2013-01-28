@@ -38,7 +38,8 @@ def quat_to_rotvec(q):
 
 def position_generator(t):
     r = 2*(1 - math.e**(-t/10))
-    w = 2*math.pi/30 # 1 rev/100 s
+    p = 30 # sec/rev
+    w = 2*math.pi / p
     return r*numpy.array([math.cos(w*t), math.sin(w*t), 0])
 
 def positionvelocity_generator(t):
@@ -84,6 +85,8 @@ while not rospy.is_shutdown():
     t = (now_time - start_time).to_sec()
     pos, vel, orient, angvel = positionorientationvelocityangularvelocity_generator(t)
     
+    world_from_body = transformations.quaternion_matrix(orient)[:3, :3]
+    
     pub.publish(PoseTwistStamped(
         header=Header(
             stamp=now_time,
@@ -95,8 +98,8 @@ while not rospy.is_shutdown():
                 orientation=Quaternion(*orient),
             ),
             twist=Twist(
-                linear=Vector3(*vel),
-                angular=Vector3(*angvel),
+                linear=Vector3(*world_from_body.T.dot(vel)),
+                angular=Vector3(*world_from_body.T.dot(angvel)),
             ),
         ),
     ))
