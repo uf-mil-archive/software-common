@@ -191,8 +191,7 @@ void sphere_query(const vector<Vector3d>& sumimage, const CameraInfoConstPtr& ca
 struct Particle {
     btVector3 pos;
     Particle() {
-        // prior distribution of object is centered at (3, 10, -4)
-        pos = btVector3(1+gauss(), 5+gauss(), -4+gauss());
+        pos = btVector3(0+gauss(), 7+gauss(), -4+gauss());
     }
     Particle predict(double dt) {
         Particle p(*this);
