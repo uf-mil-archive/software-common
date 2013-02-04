@@ -1,0 +1,22 @@
+#!/usr/bin/env python
+
+import roslib
+roslib.load_manifest('rdi_explorer_dvl')
+import rospy
+from std_msgs.msg import Header
+from geometry_msgs.msg import Vector3, Vector3Stamped
+
+rospy.init_node('fake_dvl')
+
+pub = rospy.Publisher('dvl', Vector3Stamped)
+
+while not rospy.is_shutdown():
+    rospy.sleep(.1)
+    
+    pub.publish(Vector3Stamped(
+        header=Header(
+            stamp=rospy.Time.now(),
+            frame_id='/dvl',
+        ),
+        vector=Vector3(0, 0, 0),
+    ))
