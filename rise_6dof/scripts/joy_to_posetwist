@@ -1,0 +1,92 @@
+#!/usr/bin/env python
+
+from __future__ import division
+
+import numpy
+
+import roslib
+roslib.load_manifest('rise_6dof')
+import rospy
+from geometry_msgs.msg import WrenchStamped, Wrench, Vector3, Twist, Pose, Point, Quaternion
+from sensor_msgs.msg import Joy
+from std_msgs.msg import Header
+from nav_msgs.msg import Odometry
+from tf import transformations
+
+from rise_6dof.msg import PoseTwist, PoseTwistStamped
+
+
+rospy.init_node('joy_to_posetwist')
+
+def get_current():
+    res = [None]
+    def cb(msg):
+        res[0] = msg
+    sub = rospy.Subscriber('/odom', Odometry, cb)
+    while res[0] is None:
+        rospy.sleep(.01)
+    sub.unregister()
+    return res[0]
+current = get_current()
+
+out = PoseTwistStamped(
+    header=Header(
+        stamp=current.header.stamp,
+        frame_id=current.header.frame_id,
+    ),
+    posetwist=PoseTwist(
+        pose=current.pose.pose,
+        twist=Twist(
+            linear=Vector3(0, 0, 0),
+            angular=Vector3(0, 0, 0),
+        ),
+    ),
+)
+
+
+xyz_array = lambda o: numpy.array([o.x, o.y, o.z])
+xyzw_array = lambda o: numpy.array([o.x, o.y, o.z, o.w])
+rotvec_to_quat = lambda v: transformations.quaternion_about_axis(numpy.linalg.norm(v), v)
+def integrate(pose, twist, dt, vel_frame):
+    old_orientation = xyzw_array(pose.orientation)
+    orientation = transformations.quaternion_multiply(old_orientation, rotvec_to_quat(dt * xyz_array(twist.angular)))
+    return Pose(
+        position=Point(*xyz_array(pose.position) + transformations.quaternion_matrix(old_orientation if vel_frame == 'left' else orientation)[:3, :3].dot(dt * xyz_array(twist.linear))),
+        orientation=Quaternion(*orientation),
+    )
+
+pub = rospy.Publisher('/desired', PoseTwistStamped)
+def joy_callback(msg):
+    global out
+    
+    dt = (msg.header.stamp - out.header.stamp).to_sec()
+    twist = Twist(
+        linear=Vector3(
+            x=msg.axes[1],
+            y=msg.axes[0],
+            z=msg.axes[3],
+        ),
+        angular=Vector3(
+            x=-msg.axes[4],
+            y=-msg.axes[5],
+            z=msg.axes[2],
+        ),
+    )
+    
+    midpose = integrate(out.posetwist.pose, out.posetwist.twist, dt/2, vel_frame='left')
+    endpose = integrate(midpose, twist, dt/2, vel_frame='right')
+    
+    out = PoseTwistStamped(
+        header=Header(
+            stamp=msg.header.stamp,
+            frame_id=out.header.frame_id,
+        ),
+        posetwist=PoseTwist(
+            pose=endpose,
+            twist=twist,
+        ),
+    )
+    pub.publish(out)
+rospy.Subscriber('joy', Joy, joy_callback)
+
+rospy.spin()
