@@ -84,8 +84,7 @@ class Controller(object):
         
         
         if self.config['use_rise']:
-            sign = lambda x: 1 if x > 0 else -1 if x < 0 else 0
-            rise_term_int = self.config['ks']*self.config['alpha']*error_velocity_body + self.config['beta']*map(sign, error_velocity_body)
+            rise_term_int = self.config['ks']*self.config['alpha']*error_velocity_body + self.config['beta']*numpy.sign(error_velocity_body)
             
             self._rise_term += dt/2*(rise_term_int + self._rise_term_int_prev)
             self._rise_term_int_prev = rise_term_int
