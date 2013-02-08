@@ -67,7 +67,7 @@ class Controller(object):
         xyzw_array = lambda q: numpy.array([q.x, q.y, q.z, q.w])
         
         x = numpy.concatenate([xyz_array(current_posetwist.pose.position), transformations.euler_from_quaternion(xyzw_array(current_posetwist.pose.orientation))])
-        vb = numpy.concatenate([xyz_array(current_posetwist.twist.linear), xyz_array(current_posetwist.twist.angular)])
+        x_dot = _jacobian(x).dot(numpy.concatenate([xyz_array(current_posetwist.twist.linear), xyz_array(current_posetwist.twist.angular)]))
         
         xd = numpy.concatenate([xyz_array(desired_posetwist.pose.position), transformations.euler_from_quaternion(xyzw_array(desired_posetwist.pose.orientation))])
         xd_dot = _jacobian(xd).dot(numpy.concatenate([xyz_array(desired_posetwist.twist.linear), xyz_array(desired_posetwist.twist.angular)]))
@@ -75,27 +75,23 @@ class Controller(object):
         
         def smallest_coterminal_angle(x):
             return (x + math.pi) % (2*math.pi) - math.pi
-        error_position_world = numpy.concatenate([xd[0:3] - x[0:3], map(smallest_coterminal_angle, xd[3:6] - x[3:6])]) # e in paper
+        error_position_world = numpy.concatenate([xd[0:3] - x[0:3], map(smallest_coterminal_angle, xd[3:6] - x[3:6])]) # e_1 in paper
         
-        desired_velocity_world = self.config['k'] * error_position_world + xd_dot
-        desired_velocity_body = _jacobian_inv(x).dot(desired_velocity_world)
-        
-        error_velocity_body = desired_velocity_body - vb # e2 in paper
-        
+        error_velocity_world = (xd_dot + self.config['k'] * error_position_world) - x_dot # e_2 in paper
         
         if self.config['use_rise']:
-            rise_term_int = self.config['ks']*self.config['alpha']*error_velocity_body + self.config['beta']*numpy.sign(error_velocity_body)
+            rise_term_int = self.config['ks']*self.config['alpha']*error_velocity_world + self.config['beta']*numpy.sign(error_velocity_world)
             
             self._rise_term += dt/2*(rise_term_int + self._rise_term_int_prev)
             self._rise_term_int_prev = rise_term_int
             
-            output = self.config['ks'] * error_velocity_body + self._rise_term
+            output = _jacobian_inv(x).dot(self.config['ks'] * error_velocity_world + self._rise_term)
         else:
             # zero rise term so it doesn't wind up over time
             self._rise_term = numpy.zeros(6)
             self._rise_term_int_prev = numpy.zeros(6)
             
-            output = self.config['ks'] * error_velocity_body
+            output = _jacobian_inv(x).dot(self.config['ks'] * error_velocity_world)
         
         
         return Wrench(force=Vector3(x=output[0], y=output[1], z=output[2]), torque=Vector3(x=output[3], y=output[4], z=output[5]))
