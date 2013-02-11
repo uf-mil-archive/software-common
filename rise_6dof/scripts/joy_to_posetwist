@@ -7,7 +7,7 @@ import numpy
 import roslib
 roslib.load_manifest('rise_6dof')
 import rospy
-from geometry_msgs.msg import WrenchStamped, Wrench, Vector3, Twist, Pose, Point, Quaternion
+from geometry_msgs.msg import WrenchStamped, Wrench, Vector3, Twist, Pose, Point, Quaternion, PoseStamped
 from sensor_msgs.msg import Joy
 from std_msgs.msg import Header
 from nav_msgs.msg import Odometry
@@ -17,6 +17,19 @@ from rise_6dof.msg import PoseTwist, PoseTwistStamped
 
 
 rospy.init_node('joy_to_posetwist')
+
+
+xyz_array = lambda o: numpy.array([o.x, o.y, o.z])
+xyzw_array = lambda o: numpy.array([o.x, o.y, o.z, o.w])
+rotvec_to_quat = lambda v: transformations.quaternion_about_axis(numpy.linalg.norm(v), v)
+def integrate(pose, twist, dt, vel_frame):
+    old_orientation = xyzw_array(pose.orientation)
+    orientation = transformations.quaternion_multiply(old_orientation, rotvec_to_quat(dt * xyz_array(twist.angular)))
+    return Pose(
+        position=Point(*xyz_array(pose.position) + transformations.quaternion_matrix(old_orientation if vel_frame == 'left' else orientation)[:3, :3].dot(dt * xyz_array(twist.linear))),
+        orientation=Quaternion(*orientation),
+    )
+
 
 def get_current():
     res = [None]
@@ -42,23 +55,15 @@ out = PoseTwistStamped(
         ),
     ),
 )
-
-
-xyz_array = lambda o: numpy.array([o.x, o.y, o.z])
-xyzw_array = lambda o: numpy.array([o.x, o.y, o.z, o.w])
-rotvec_to_quat = lambda v: transformations.quaternion_about_axis(numpy.linalg.norm(v), v)
-def integrate(pose, twist, dt, vel_frame):
-    old_orientation = xyzw_array(pose.orientation)
-    orientation = transformations.quaternion_multiply(old_orientation, rotvec_to_quat(dt * xyz_array(twist.angular)))
-    return Pose(
-        position=Point(*xyz_array(pose.position) + transformations.quaternion_matrix(old_orientation if vel_frame == 'left' else orientation)[:3, :3].dot(dt * xyz_array(twist.linear))),
-        orientation=Quaternion(*orientation),
-    )
-
+last_msg = None
 pub = rospy.Publisher('/desired', PoseTwistStamped)
+pub_rviz = rospy.Publisher('/desired_rviz', PoseStamped)
 def joy_callback(msg):
-    global out
+    global out, last_msg
     
+    last_msg = msg
+    
+    msg.header.stamp = rospy.Time.now()
     dt = (msg.header.stamp - out.header.stamp).to_sec()
     twist = Twist(
         linear=Vector3(
@@ -87,6 +92,14 @@ def joy_callback(msg):
         ),
     )
     pub.publish(out)
+    pub_rviz.publish(PoseStamped(
+        header=Header(
+            stamp=msg.header.stamp,
+            frame_id=out.header.frame_id,
+        ),
+        pose=endpose,
+    ))
 rospy.Subscriber('joy', Joy, joy_callback)
+rospy.Timer(rospy.Duration(.01), lambda timer_event: joy_callback(last_msg) if last_msg is not None else None)
 
 rospy.spin()
