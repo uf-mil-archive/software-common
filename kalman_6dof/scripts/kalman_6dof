@@ -242,7 +242,7 @@ rospy.init_node('kalman_6dof')
 body_frame = rospy.get_param('~body_frame', '/base_link')
 fixed_frame = rospy.get_param('~fixed_frame', '/map')
 hack_down_ref = rospy.get_param('~hack_down_ref')
-north = numpy.array([-0.022442e-4, 0.241510e-4, -0.405728e-4])*1e-4 # gauss
+north = numpy.array([-0.022442e-4, 0.241510e-4, -0.405728e-4])*1e4 # gauss
 
 tf_listener = tf.TransformListener()
 tf_broadcaster = tf.TransformBroadcaster()
