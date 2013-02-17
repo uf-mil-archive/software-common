@@ -4,6 +4,8 @@ string id
 
 duration lifetime
 
+bool active
+
 geometry_msgs/Point position
 geometry_msgs/Vector3 direction
 

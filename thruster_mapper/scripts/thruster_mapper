@@ -12,38 +12,23 @@ from std_msgs.msg import Header
 import tf
 from tf import transformations
 
-from thruster_mapper.msg import ThrusterInfo, ThrusterCommand
+from thruster_handling.listener import ThrusterListener
 
 
 rospy.init_node('thruster_mapper')
 
 
-thrusterinfos = {} # cache of received ThrusterInfo messages by id
-
-# listen for info messages and update thrusterinfos with them
-def thrusterinfo_callback(msg):
-    if msg.id in thrusterinfos and msg.header.stamp < thrusterinfos[msg.id].header.stamp:
-        return # this is older than current info
-    if not (msg.min_force < 0 < msg.max_force):
-        rospy.logerr('Thruster must be able to exert negative and positive thrust.')
-        return
-    thrusterinfos[msg.id] = msg
-rospy.Subscriber('thrusters/info', ThrusterInfo, thrusterinfo_callback)
-
-
 # listen for wrenches and send out ThrusterCommand messages
 xyz_array = lambda o: numpy.array([o.x, o.y, o.z])
 tf_listener = tf.TransformListener()
-thrustercommand_publisher = rospy.Publisher('thrusters/command', ThrusterCommand)
+thruster_listener = ThrusterListener()
+
 def wrench_callback(msg):
     wrench = numpy.concatenate([xyz_array(msg.wrench.force), xyz_array(msg.wrench.torque)])
     
     # get thrusterinfos that haven't expired
     good_thrusterinfos = []
-    for ti in thrusterinfos.values():
-        if ti.header.stamp + ti.lifetime < msg.header.stamp:
-            continue # thrusterinfo has expired
-        
+    for ti in thruster_listener.get_thrusters():
         try:
             trans, rot_q = tf_listener.lookupTransform(
                 msg.header.frame_id, ti.header.frame_id, msg.header.stamp)
@@ -75,14 +60,7 @@ def wrench_callback(msg):
         efforts = efforts / scaled_max
     
     for (ti, _, _), effort in zip(good_thrusterinfos, efforts):
-        thrustercommand_publisher.publish(ThrusterCommand(
-            header=Header(
-                stamp=msg.header.stamp,
-                frame_id=ti.header.frame_id,
-            ),
-            id=ti.id,
-            force=effort,
-        ))
+        thruster_listener.send_command(msg.header.stamp, ti.header.frame_id, ti.id, effort)
 rospy.Subscriber('wrench', WrenchStamped, wrench_callback)
 
 
