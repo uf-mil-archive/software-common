@@ -8,8 +8,6 @@ class KillListener(object):
         if msg.id in self._kill_cache and msg.header.stamp < self._kill_cache[msg.id].header.stamp:
             return # this is older than current info
         
-        killed_before = self.get_killed()
-        
         self._kill_cache[msg.id] = msg
         
         self._check_killed()
