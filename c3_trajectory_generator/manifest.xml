@@ -1,0 +1,19 @@
+<package>
+  <description brief="c3_trajectory_generator">
+
+     c3_trajectory_generator
+
+  </description>
+  <author>Forrest Voight</author>
+  <license>BSD</license>
+  <review status="unreviewed" notes=""/>
+  <url>http://ros.org/wiki/c3_trajectory_generator</url>
+
+  <depend package="nav_msgs"/>
+  <depend package="tf"/>
+  
+  <depend package="uf_common"/>
+  <depend package="kill_handling"/>
+</package>
+
+
