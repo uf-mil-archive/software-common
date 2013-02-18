@@ -59,6 +59,9 @@ class Controller(object):
     def __init__(self, config):
         self.config = config
         
+        self.reset()
+    
+    def reset(self):
         self._rise_term = numpy.zeros(6)
         self._rise_term_int_prev = numpy.zeros(6)
     

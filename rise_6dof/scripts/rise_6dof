@@ -64,6 +64,7 @@ class Node(object):
             if self.kill_listener.get_killed():
                 self.current = None
                 self.desired = None
+                self.controller.reset()
                 continue
             
             if self.current is None:
