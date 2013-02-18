@@ -1,0 +1,15 @@
+<package>
+  <description brief="uf_common">
+
+     uf_common
+
+  </description>
+  <author>Forrest Voight</author>
+  <license>BSD</license>
+  <review status="unreviewed" notes=""/>
+  <url>http://ros.org/wiki/uf_common</url>
+
+  <depend package="geometry_msgs"/>
+</package>
+
+

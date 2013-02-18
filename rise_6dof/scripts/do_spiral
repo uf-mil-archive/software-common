@@ -12,7 +12,7 @@ from std_msgs.msg import Header
 from geometry_msgs.msg import Pose, Twist, Vector3, Quaternion, Point
 from tf import transformations
 
-from rise_6dof.msg import PoseTwist, PoseTwistStamped
+from uf_common.msg import PoseTwist, PoseTwistStamped
 
 
 xyz_array = lambda o: numpy.array([o.x, o.y, o.z])

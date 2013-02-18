@@ -14,11 +14,11 @@ from geometry_msgs.msg import WrenchStamped
 from nav_msgs.msg import Odometry
 from std_msgs.msg import Header
 
+from uf_common.msg import PoseTwist, PoseTwistStamped
 from kill_handling.listener import KillListener
 
 from rise_6dof import controller
 from rise_6dof.cfg import controllerConfig
-from rise_6dof.msg import PoseTwist, PoseTwistStamped
 
 
 class Node(object):

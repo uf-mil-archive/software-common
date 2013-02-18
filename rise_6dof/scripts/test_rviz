@@ -14,7 +14,7 @@ from nav_msgs.msg import Odometry
 from std_msgs.msg import Header, ColorRGBA
 from tf import transformations
 
-from rise_6dof.msg import PoseTwist, PoseTwistStamped
+from uf_common.msg import PoseTwist, PoseTwistStamped
 
 
 def makeBoxControl():
