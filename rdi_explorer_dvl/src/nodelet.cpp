@@ -5,7 +5,6 @@
 #include <pluginlib/class_list_macros.h>
 #include <ros/ros.h>
 
-#include "rdi_explorer_dvl/Float64Stamped.h"
 #include "rdi_explorer_dvl/driver.h"
 
 
