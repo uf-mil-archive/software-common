@@ -25,6 +25,11 @@ namespace subjugator {
 
 			Point(const Vector6d &q, const Vector6d &qdot) :
 				q(q), qdot(qdot) { }
+			
+			bool is_approximately(const Point &other) {
+			    Vector6d q_difference = q - other.q;
+			    return q_difference.dot(q_difference) < 1e-6;
+		    }
 		};
 
 		struct Waypoint {

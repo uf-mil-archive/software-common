@@ -1,0 +1,7 @@
+# goal
+Header header # only used for frame_id
+geometry_msgs/Pose pose
+---
+# result
+---
+# feedback

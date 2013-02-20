@@ -2,11 +2,13 @@
 #include <tf/transform_listener.h>
 #include <nav_msgs/Odometry.h>
 #include <geometry_msgs/PoseStamped.h>
+#include <actionlib/server/simple_action_server.h>
 
 #include <uf_common/PoseTwistStamped.h>
 #include <kill_handling/Kill.h>
 #include <kill_handling/listener.h>
 
+#include "c3_trajectory_generator/MoveToAction.h"
 #include "C3Trajectory.h"
 
 using namespace std;
@@ -100,7 +102,7 @@ struct Node {
     ros::Duration traj_dt;
     
     ros::Subscriber odom_sub;
-    ros::Subscriber waypoint_sub;
+    actionlib::SimpleActionServer<c3_trajectory_generator::MoveToAction> actionserver;
     ros::Publisher trajectory_pub;
     
     ros::Timer update_timer;
@@ -117,7 +119,8 @@ struct Node {
     
     Node() :
         private_nh("~"),
-        kill_listener(boost::bind(&Node::killed_callback, this)) {
+        kill_listener(boost::bind(&Node::killed_callback, this)),
+        actionserver(nh, "moveto", false) {
         
         limits.vmin_b << -.2, -.5, -.4, -.75, -.5, -1;
         limits.vmax_b << .75,  .5,  .4,  .75,  .5,  1;
@@ -139,11 +142,12 @@ struct Node {
         */
         
         odom_sub = nh.subscribe<Odometry>("odom", 1, boost::bind(&Node::odom_callback, this, _1));
-        waypoint_sub = nh.subscribe<PoseTwistStamped>("waypoint", 1, boost::bind(&Node::waypoint_callback, this, _1));
         
         trajectory_pub = nh.advertise<PoseTwistStamped>("trajectory", 1);
         
         update_timer = nh.createTimer(ros::Duration(1./50), boost::bind(&Node::timer_callback, this, _1));
+        
+        actionserver.start();
     }
     
     void odom_callback(const OdometryConstPtr& odom) {
@@ -161,16 +165,22 @@ struct Node {
         current_waypoint_t = odom->header.stamp;
     }
     
-    void waypoint_callback(const PoseTwistStampedConstPtr& waypoint) {
-        current_waypoint = Point_from_PoseTwist(waypoint->posetwist.pose, waypoint->posetwist.twist);
-        current_waypoint_t = waypoint->header.stamp;
-    }
-    
     void timer_callback(const ros::TimerEvent&) {
         if(!c3trajectory)
             return;
         
         ros::Time now = ros::Time::now();
+        
+        if(actionserver.isNewGoalAvailable()) {
+            boost::shared_ptr<const c3_trajectory_generator::MoveToGoal> goal = actionserver.acceptNewGoal();
+            current_waypoint = Point_from_PoseTwist(goal->pose, Twist());
+            current_waypoint_t = now; // goal->pose.stamp;
+        }
+        if(actionserver.isPreemptRequested()) {
+            current_waypoint = c3trajectory->getCurrentPoint();
+            current_waypoint.qdot = subjugator::Vector6d::Zero(); // zero velocities
+            current_waypoint_t = now;
+        }
         
         while(c3trajectory_t + traj_dt < now) {
             c3trajectory->update(traj_dt.toSec(), current_waypoint, (c3trajectory_t - current_waypoint_t).toSec());
@@ -183,6 +193,10 @@ struct Node {
         msg.posetwist = PoseTwist_from_Point(c3trajectory->getCurrentPoint());
 	    
 	    trajectory_pub.publish(msg);
+	    
+	    if(actionserver.isActive() && c3trajectory->getCurrentPoint().is_approximately(current_waypoint)) {
+	        actionserver.setSucceeded();
+        }
     }
 };
 

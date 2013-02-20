@@ -9,6 +9,7 @@
   <review status="unreviewed" notes=""/>
   <url>http://ros.org/wiki/c3_trajectory_generator</url>
 
+  <depend package="actionlib"/>
   <depend package="nav_msgs"/>
   <depend package="tf"/>
   
