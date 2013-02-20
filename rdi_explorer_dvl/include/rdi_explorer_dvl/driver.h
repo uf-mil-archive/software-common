@@ -23,77 +23,89 @@ namespace rdi_explorer_dvl {
             boost::asio::io_service io;
             boost::asio::serial_port p;
             
-            uint8_t read_byte() {
+            bool read_byte(uint8_t &res) {
                 while(true) {
                     try {
-                        uint8_t res; p.read_some(boost::asio::buffer(&res, sizeof(res)));
-                        return res;
+                        p.read_some(boost::asio::buffer(&res, sizeof(res)));
+                        return true;
                     } catch(const std::exception &exc) {
                         ROS_ERROR("error on read: %s; reopening", exc.what());
                         open();
+                        return false;
                     }
                 }
             }
-            uint16_t read_short() {
-                uint8_t low = read_byte();
-                return 256 * read_byte() + low;
+            bool read_short(uint16_t &x) {
+                uint8_t low; if(!read_byte(low)) return false;
+                uint8_t high; if(!read_byte(high)) return false;
+                x = 256 * high + low;
+                return true;
             }
             
             void open() {
-                while(true) {
-                    try {
-                        p.close();
-                        p.open(port);
-                        p.set_option(boost::asio::serial_port::baud_rate(baudrate));
-                        return;
-                    } catch(const std::exception &exc) {
-                        ROS_ERROR("error on open(%s): %s; reopening after delay", port.c_str(), exc.what());
-                        boost::this_thread::sleep(boost::posix_time::seconds(1));
-                    }
+                try {
+                    p.close();
+                    p.open(port);
+                    p.set_option(boost::asio::serial_port::baud_rate(baudrate));
+                    return;
+                } catch(const std::exception &exc) {
+                    ROS_ERROR("error on open(%s): %s; reopening after delay", port.c_str(), exc.what());
+                    boost::this_thread::sleep(boost::posix_time::seconds(1));
                 }
             }
             
         public:
             Device(const std::string port, int baudrate) : port(port), baudrate(baudrate), p(io) {
-                // open is called on first read_byte() in the _polling_ thread
+                // open is called on first read() in the _polling_ thread
             }
             
-            geometry_msgs::Vector3Stamped read() {
-            start:
-                ByteVec ensemble;
-                ensemble.push_back(read_byte()); if(ensemble[0] != 0x7F) goto start; // Header ID
+            bool read(geometry_msgs::Vector3Stamped &res) {
+                if(!p.is_open()) {
+                    open();
+                    return false;
+                }
+                
+                ByteVec ensemble; ensemble.resize(4);
+                
+                if(!read_byte(ensemble[0])) return false; // Header ID
+                if(ensemble[0] != 0x7F) return false;
+                
                 ros::Time stamp = ros::Time::now();
-                ensemble.push_back(read_byte()); if(ensemble[1] != 0x7F) goto start; // Data Source ID
-                ensemble.push_back(read_byte());
-                ensemble.push_back(read_byte());
-                uint16_t ensemble_size = ensemble[2] + 256 * ensemble[3];
-                for(int i = 0; i < ensemble_size - 4; i++)
-                    ensemble.push_back(read_byte());
+                
+                if(!read_byte(ensemble[1])) return false; // Data Source ID
+                if(ensemble[1] != 0x7F) return false;
+                
+                if(!read_byte(ensemble[2])) return false; // Size low
+                if(!read_byte(ensemble[3])) return false; // Size high
+                uint16_t ensemble_size = getu16le(ensemble.data() + 2);
+                ensemble.resize(ensemble_size);
+                for(int i = 4; i < ensemble_size; i++) {
+                    if(!read_byte(ensemble[i])) return false;
+                }
                 
                 uint16_t checksum = 0; BOOST_FOREACH(uint16_t b, ensemble) checksum += b;
-                uint16_t received_checksum = read_short();
+                uint16_t received_checksum; if(!read_short(received_checksum)) return false;
                 if(received_checksum != checksum) {
                     ROS_ERROR("Invalid DVL ensemble checksum. received: %i calculated: %i size: %i", received_checksum, checksum, ensemble_size);
-                    goto start;
+                    return false;
                 }
                 
                 for(int dt = 0; dt < ensemble[5]; dt++) {
                     int offset = getu16le(ensemble.data() + 6 + 2*dt);
                     if(ensemble.size() - offset < 2+4*4) continue;
                     if(getu16le(ensemble.data() + offset) != 0x5803) continue;
-                    geometry_msgs::Vector3Stamped res;
                     res.header.stamp = stamp;
                     if(gets32le(ensemble.data() + offset + 2) == -3276801) { // -3276801 indicates no data
                         ROS_ERROR("DVL didn't return bottom velocity");
-                        goto start;
+                        return false;
                     }
                     res.vector.x = gets32le(ensemble.data() + offset + 2) * .01e-3;
                     res.vector.y = gets32le(ensemble.data() + offset + 6) * .01e-3;
                     res.vector.z = gets32le(ensemble.data() + offset + 10) * .01e-3;
-                    return res;
+                    return true;
                 }
                 
-                goto start;
+                return false;
             }
             
             
@@ -122,6 +134,10 @@ namespace rdi_explorer_dvl {
                 } catch(const std::exception &exc) {
                     ROS_ERROR("error on write: %s; dropping", exc.what());
                 }
+            }
+            
+            void abort() {
+                p.close();
             }
     };
     

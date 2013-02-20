@@ -17,6 +17,7 @@ namespace rdi_explorer_dvl {
             ~Nodelet() {
                 heartbeat_timer.stop();
                 running = false;
+                device->abort();
                 polling_thread_inst.join();
             }
             
@@ -40,7 +41,9 @@ namespace rdi_explorer_dvl {
             
             void polling_thread() {
                 while(running) {
-                    geometry_msgs::Vector3Stamped msg = device->read();
+                    geometry_msgs::Vector3Stamped msg;
+                    if(!device->read(msg))
+                        continue;
                     msg.header.frame_id = frame_id;
                     pub.publish(msg);
                 }
