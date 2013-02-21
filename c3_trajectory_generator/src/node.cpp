@@ -153,6 +153,8 @@ struct Node {
     void odom_callback(const OdometryConstPtr& odom) {
         if(c3trajectory)
             return; // already initialized
+        if(kill_listener.get_killed())
+            return; // only initialize when unkilled
         
         subjugator::C3Trajectory::Point current = Point_from_PoseTwist(odom->pose.pose, odom->twist.twist);
         
