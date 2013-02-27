@@ -9,11 +9,15 @@ import roslib
 roslib.load_manifest('kalman_6dof')
 import rospy
 from tf import transformations
-
-from kalman_6dof import util
+from uf_common.orientation_helpers import rotvec_to_quat, quat_to_rotvec
 
 
 G = numpy.array([0, 0, -9.81]) # gravity acceleration vector
+
+skewmatrix = lambda (x, y, z): numpy.array([[0,-z,y],
+                                            [z,0,-x],
+                                            [-y,x,0]])
+
 
 class Kalman(object):
     def __init__(self, t, # t is a rospy.Time
@@ -47,11 +51,11 @@ class Kalman(object):
         
         # this looks a little over-complicated because I tried to keep the frame that the accelerometer is in correct while doing midpoint integration
         
-        oldbody_from_newbody_q = util.rotvec_to_quat(dt * angular_velocity_body)
+        oldbody_from_newbody_q = rotvec_to_quat(dt * angular_velocity_body)
         oldbody_from_newbody = transformations.quaternion_matrix(oldbody_from_newbody_q)[:3, :3]
         orientation = transformations.quaternion_multiply(self.orientation, oldbody_from_newbody_q)
         
-        oldbody_from_accelbody_q = util.rotvec_to_quat(dt_measurement * angular_velocity_body)
+        oldbody_from_accelbody_q = rotvec_to_quat(dt_measurement * angular_velocity_body)
         oldbody_from_accelbody = transformations.quaternion_matrix(oldbody_from_accelbody_q)[:3, :3]
         
         world_from_oldbody = transformations.quaternion_matrix(self.orientation)[:3, :3]
@@ -68,22 +72,22 @@ class Kalman(object):
         
         F = numpy.zeros((9, 9))
         F[0:3, 0:3] = numpy.identity(3)
-        F[0:3, 3:6] = dt * util.skewmatrix(world_from_oldbody.dot(self.velocity_body)).T + dt**2/2 * util.skewmatrix(acceleration_felt).T # orientation affecting position
+        F[0:3, 3:6] = dt * skewmatrix(world_from_oldbody.dot(self.velocity_body)).T + dt**2/2 * skewmatrix(acceleration_felt).T # orientation affecting position
         F[0:3, 6:9] = dt * world_from_oldbody # velocity affecting position
         
         F[3:6, 3:6] = numpy.identity(3) # orientation error carries over since it's in world coordinates
         
-        F[6:9, 3:6] = dt * world_from_newbody.T.dot(util.skewmatrix(G)) # orientation affecting velocity
+        F[6:9, 3:6] = dt * world_from_newbody.T.dot(skewmatrix(G)) # orientation affecting velocity
         F[6:9, 6:9] = oldbody_from_newbody.T # velocity affecting velocity
         
         L = numpy.zeros((9, 6))
-        J_acceleration_newbody_angular_velocity_body = util.skewmatrix(acceleration_felt_body).T * dt_measurement
+        J_acceleration_newbody_angular_velocity_body = skewmatrix(acceleration_felt_body).T * dt_measurement
         L[0:3, 0:3] += dt**2/2 * world_from_newbody.dot(J_acceleration_newbody_angular_velocity_body) # gyro noise affecting position
         L[6:9, 0:3] += dt * J_acceleration_newbody_angular_velocity_body # gyro noise affecting velocity
         
         L[0:3, 3:6] += dt**2/2 * world_from_accelbody # accel noise affecting position
         L[3:6, 0:3] += dt * world_from_oldbody # gyro noise affecting orientation XXX approximation
-        L[6:9, 0:3] += dt * oldbody_from_newbody.T.dot(util.skewmatrix(velocity_oldbody)) # gyro noise affecting velocity XXX approximation
+        L[6:9, 0:3] += dt * oldbody_from_newbody.T.dot(skewmatrix(velocity_oldbody)) # gyro noise affecting velocity XXX approximation
         L[6:9, 3:6] += dt * oldbody_from_newbody.T.dot(oldbody_from_accelbody) # accel noise affecting velocity
         
         Q = numpy.zeros((6, 6))
@@ -133,7 +137,7 @@ class Kalman(object):
         return Kalman(
             t=self.t,
             position=self.position + dx[0:3],
-            orientation=transformations.quaternion_multiply(util.rotvec_to_quat(dx[3:6]), self.orientation),
+            orientation=transformations.quaternion_multiply(rotvec_to_quat(dx[3:6]), self.orientation),
             velocity_body=self.velocity_body + dx[6:9],
             P=P,
             angular_velocity_body=self.angular_velocity_body,
@@ -144,4 +148,4 @@ class Kalman(object):
     
     def _get_dx(self, other):
         q = transformations.quaternion_multiply(self.orientation, transformations.quaternion_conjugate(other.orientation))
-        return self.position - other.position, util.quat_to_rotvec(q), self.velocity_body - other.velocity_body
+        return self.position - other.position, quat_to_rotvec(q), self.velocity_body - other.velocity_body

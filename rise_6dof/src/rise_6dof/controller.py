@@ -8,6 +8,7 @@ import roslib
 roslib.load_manifest('rise_6dof')
 from tf import transformations
 from geometry_msgs.msg import Vector3, Wrench
+from uf_common.orientation_helpers import xyz_array, xyzw_array
 
 
 def _jacobian(x):
@@ -66,9 +67,6 @@ class Controller(object):
         self._rise_term_int_prev = numpy.zeros(6)
     
     def update(self, dt, desired_posetwist, current_posetwist):
-        xyz_array = lambda p: numpy.array([p.x, p.y, p.z])
-        xyzw_array = lambda q: numpy.array([q.x, q.y, q.z, q.w])
-        
         x = numpy.concatenate([xyz_array(current_posetwist.pose.position), transformations.euler_from_quaternion(xyzw_array(current_posetwist.pose.orientation))])
         x_dot = _jacobian(x).dot(numpy.concatenate([xyz_array(current_posetwist.twist.linear), xyz_array(current_posetwist.twist.angular)]))
         

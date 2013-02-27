@@ -13,13 +13,13 @@ from nav_msgs.msg import Odometry
 from tf import transformations
 import tf
 
+from uf_common.orientation_helpers import xyz_array, xyzw_array
+
 
 rospy.init_node('odometry_to_tf')
 
 tf_broadcaster = tf.TransformBroadcaster()
 pub = rospy.Publisher('gps2', PoseStamped)
-xyz_array = lambda o: numpy.array([o.x, o.y, o.z])
-xyzw_array = lambda o: numpy.array([o.x, o.y, o.z, o.w])
 first = None
 last = None
 prev_msg_pose = None

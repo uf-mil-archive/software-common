@@ -15,6 +15,7 @@ from std_msgs.msg import Header, ColorRGBA
 from tf import transformations
 
 from uf_common.msg import PoseTwist, PoseTwistStamped
+from uf_common.orientation_helpers import xyz_array, xyzw_array
 
 
 def makeBoxControl():
@@ -70,9 +71,6 @@ def makeMovingMarker(name, description):
     int_marker.controls.append(makeBoxControl())
     
     return int_marker
-
-xyz_array = lambda p: numpy.array([p.x, p.y, p.z])
-xyzw_array = lambda q: numpy.array([q.x, q.y, q.z, q.w])
 
 if __name__ == '__main__':
     rospy.init_node('test_rviz')

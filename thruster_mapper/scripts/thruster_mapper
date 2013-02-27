@@ -12,6 +12,7 @@ from std_msgs.msg import Header
 import tf
 from tf import transformations
 
+from uf_common.orientation_helpers import xyz_array
 from thruster_handling.listener import ThrusterListener
 
 
@@ -19,7 +20,6 @@ rospy.init_node('thruster_mapper')
 
 
 # listen for wrenches and send out ThrusterCommand messages
-xyz_array = lambda o: numpy.array([o.x, o.y, o.z])
 tf_listener = tf.TransformListener()
 thruster_listener = ThrusterListener()
 

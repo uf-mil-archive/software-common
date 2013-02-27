@@ -13,8 +13,9 @@ from nav_msgs.msg import Odometry
 from geometry_msgs.msg import Point, Quaternion, Vector3, Vector3Stamped, PoseStamped
 import tf
 from tf import transformations
+from uf_common.orientation_helpers import triad, xyz_array
 
-from kalman_6dof import kalman, triad, util
+from kalman_6dof import kalman
 
 
 _lock = threading.Lock()
@@ -23,11 +24,6 @@ def callWithLock(func, *args, **kwargs):
         func(*args, **kwargs)
 
 debug = False
-
-xyz_array = lambda o: numpy.array([o.x, o.y, o.z])
-normalized = lambda x: x/numpy.linalg.norm(x)
-
-
 
 k = None
 
@@ -55,7 +51,7 @@ def got_imu(msg):
             t=msg.header.stamp,
             position=gps_buffer[0:3],
             velocity_body=numpy.zeros(3),
-            orientation=triad.triad(
+            orientation=triad(
                 (-kalman.G, north),
                 (xyz_array(msg.linear_acceleration), mag_buffer),
             ),
@@ -80,7 +76,7 @@ def got_imu(msg):
     
     
     if hack_down_ref and oldk is not None:
-        # correct orientation there are no long accelerations
+        # correct orientation assuming there are no long accelerations
         # not necessary with a velocity or position reference
         
         world_from_body = transformations.quaternion_matrix(k.orientation)[:3, :3]
@@ -94,7 +90,7 @@ def got_imu(msg):
             predicted_acceleration_felt = -kalman.G
             predicted_acceleration_felt_body = world_from_body.T.dot(predicted_acceleration_felt)
             J = numpy.zeros((3, 9))
-            J[0:3, 3:6] = world_from_body.T.dot(util.skewmatrix(predicted_acceleration_felt))
+            J[0:3, 3:6] = world_from_body.T.dot(kalman.skewmatrix(predicted_acceleration_felt))
             #print J
             #print 'predicted', predicted_acceleration_felt_body
             #print 'actual', xyz_array(msg.linear_acceleration)
@@ -200,7 +196,7 @@ def got_mag(msg):
     predicted_mag = north
     predicted_mag_imu = imu_from_world.dot(predicted_mag)
     J = numpy.zeros((3, 9))
-    J[0:3, 3:6] = imu_from_world.dot(util.skewmatrix(predicted_mag))
+    J[0:3, 3:6] = imu_from_world.dot(kalman.skewmatrix(predicted_mag))
     
     k = k.update(my - predicted_mag_imu, J, numpy.diag([1e-3, 1e-3, 1e-3])**2, name='mag')
 
@@ -223,7 +219,7 @@ def got_gps(msg):
     predicted = numpy.concatenate([k.position, world_from_imu.dot(k.velocity_body)])
     J = numpy.zeros((6, 9))
     J[0:3, 0:3] = numpy.identity(3)
-    J[3:6, 3:6] = util.skewmatrix(world_from_imu.dot(k.velocity_body)).T
+    J[3:6, 3:6] = kalman.skewmatrix(world_from_imu.dot(k.velocity_body)).T
     J[3:6, 6:9] = world_from_imu
     
     if debug: print 'XXX gps'

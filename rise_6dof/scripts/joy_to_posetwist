@@ -14,14 +14,12 @@ from nav_msgs.msg import Odometry
 from tf import transformations
 
 from uf_common.msg import PoseTwist, PoseTwistStamped
+from uf_common.orientation_helpers import xyz_array, xyzw_array, rotvec_to_quat
 
 
 rospy.init_node('joy_to_posetwist')
 
 
-xyz_array = lambda o: numpy.array([o.x, o.y, o.z])
-xyzw_array = lambda o: numpy.array([o.x, o.y, o.z, o.w])
-rotvec_to_quat = lambda v: transformations.quaternion_about_axis(numpy.linalg.norm(v), v)
 def integrate(pose, twist, dt, vel_frame):
     old_orientation = xyzw_array(pose.orientation)
     orientation = transformations.quaternion_multiply(old_orientation, rotvec_to_quat(dt * xyz_array(twist.angular)))
@@ -30,17 +28,7 @@ def integrate(pose, twist, dt, vel_frame):
         orientation=Quaternion(*orientation),
     )
 
-
-def get_current():
-    res = [None]
-    def cb(msg):
-        res[0] = msg
-    sub = rospy.Subscriber('/odom', Odometry, cb)
-    while res[0] is None:
-        rospy.sleep(.01)
-    sub.unregister()
-    return res[0]
-current = get_current()
+current = rospy.wait_for_message('/odom', Odometry)
 
 out = PoseTwistStamped(
     header=Header(

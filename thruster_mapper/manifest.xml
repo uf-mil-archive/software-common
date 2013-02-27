@@ -15,6 +15,7 @@
   <depend package="tf"/>
 
   <depend package="thruster_handling"/>
+  <depend package="uf_common"/>
 </package>
 
 
