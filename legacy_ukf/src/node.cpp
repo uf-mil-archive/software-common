@@ -6,6 +6,8 @@
 #include <sensor_msgs/Imu.h>
 #include <nav_msgs/Odometry.h>
 
+#include <uf_common/param_helpers.h>
+#include <uf_common/msg_helpers.h>
 #include <depth_driver/Float64Stamped.h>
 
 #include "NavigationComputer.h"
@@ -17,20 +19,7 @@ using namespace message_filters;
 using namespace geometry_msgs;
 using namespace nav_msgs;
 using namespace depth_driver;
-
-Eigen::Vector3d get_Vector3(ros::NodeHandle& nh, const std::string& name) {
-    XmlRpc::XmlRpcValue my_list; ROS_ASSERT(nh.getParam(name, my_list));
-    ROS_ASSERT(my_list.getType() == XmlRpc::XmlRpcValue::TypeArray);
-    ROS_ASSERT(my_list.size() == 3);
-
-    Eigen::Vector3d res;
-    for (uint32_t i = 0; i < 3; i++) {
-        ROS_ASSERT(my_list[i].getType() == XmlRpc::XmlRpcValue::TypeDouble);
-        res[i] = static_cast<double>(my_list[i]);
-    }
-    return res;
-}
-
+using namespace uf_common;
 
 struct Node {
     ros::NodeHandle nh;
@@ -89,15 +78,9 @@ struct Node {
         
         subjugator::IMUInfo imuinfo;
         imuinfo.timestamp = imu->header.stamp;
-        imuinfo.acceleration[0] = imu->linear_acceleration.x;
-        imuinfo.acceleration[1] = imu->linear_acceleration.y;
-        imuinfo.acceleration[2] = imu->linear_acceleration.z;
-        imuinfo.ang_rate[0] = imu->angular_velocity.x;
-        imuinfo.ang_rate[1] = imu->angular_velocity.y;
-        imuinfo.ang_rate[2] = imu->angular_velocity.z;
-        imuinfo.mag_field[0] = mag->vector.x;
-        imuinfo.mag_field[1] = mag->vector.y;
-        imuinfo.mag_field[2] = mag->vector.z;
+        imuinfo.acceleration = xyz2vec(imu->linear_acceleration);
+        imuinfo.ang_rate = xyz2vec(imu->angular_velocity);
+        imuinfo.mag_field = xyz2vec(mag->vector);
         
         navComputer->UpdateIMU(imuinfo);
         
@@ -110,9 +93,7 @@ struct Node {
     
     void dvl_callback(const Vector3StampedConstPtr& dvl) {
         subjugator::DVLVelocity dvlvelocity;
-        dvlvelocity.vel[0] = dvl->vector.x;
-        dvlvelocity.vel[1] = dvl->vector.y;
-        dvlvelocity.vel[2] = dvl->vector.z;
+        dvlvelocity.vel = xyz2vec(dvl->vector);
         
         navComputer->UpdateDVL(dvlvelocity);
     }
@@ -134,50 +115,31 @@ struct Node {
         Eigen::Vector4d FLU_from_FRD = subjugator::MILQuaternionOps::QuatNormalize(Eigen::Vector4d(0, 1, 0, 0));
         
         Eigen::Vector3d position_ENU = subjugator::MILQuaternionOps::QuatRotate(ENU_from_NED, info.position_NED);
-        msg.pose.pose.position.x = position_ENU[0];
-        msg.pose.pose.position.y = position_ENU[1];
-        msg.pose.pose.position.z = position_ENU[2];
+        msg.pose.pose.position = vec2xyz<Point>(position_ENU);
         Eigen::Vector4d orientation_ENU = subjugator::MILQuaternionOps::QuatMultiply(subjugator::MILQuaternionOps::QuatMultiply(ENU_from_NED, info.quaternion_NED_B), subjugator::MILQuaternionOps::QuatConjugate(FLU_from_FRD));
-        msg.pose.pose.orientation.w = orientation_ENU[0];
-        msg.pose.pose.orientation.x = orientation_ENU[1];
-        msg.pose.pose.orientation.y = orientation_ENU[2];
-        msg.pose.pose.orientation.z = orientation_ENU[3];
+        msg.pose.pose.orientation = vec2wxyz<Quaternion>(orientation_ENU);
         
         Eigen::Vector3d velocity_BODY = subjugator::MILQuaternionOps::QuatRotate(
             subjugator::MILQuaternionOps::QuatConjugate(info.quaternion_NED_B),
             info.velocity_NED);
-        msg.twist.twist.linear.x = velocity_BODY[0];
-        msg.twist.twist.linear.y = -velocity_BODY[1];
-        msg.twist.twist.linear.z = -velocity_BODY[2];
-        msg.twist.twist.angular.x = info.angularRate_BODY[0];
-        msg.twist.twist.angular.y = -info.angularRate_BODY[1];
-        msg.twist.twist.angular.z = -info.angularRate_BODY[2];
+        msg.twist.twist.linear = vec2xyz<Vector3>(subjugator::MILQuaternionOps::QuatRotate(FLU_from_FRD, velocity_BODY));
+        msg.twist.twist.angular = vec2xyz<Vector3>(subjugator::MILQuaternionOps::QuatRotate(FLU_from_FRD, info.angularRate_BODY));
         
         odometry_pub.publish(msg);
         
         PoseStamped msg3;
         msg3.header.stamp = info.timestamp;
         msg3.header.frame_id = fixed_frame;
-        msg3.pose.position.x = position_ENU[0];
-        msg3.pose.position.y = position_ENU[1];
-        msg3.pose.position.z = position_ENU[2];
-        msg3.pose.orientation.w = orientation_ENU[0];
-        msg3.pose.orientation.x = orientation_ENU[1];
-        msg3.pose.orientation.y = orientation_ENU[2];
-        msg3.pose.orientation.z = orientation_ENU[3];
+        msg3.pose.position = vec2xyz<Point>(position_ENU);
+        msg3.pose.orientation = vec2wxyz<Quaternion>(orientation_ENU);
         pose_pub.publish(msg3);
         
         PoseStamped msg2;
         msg2.header.stamp = info.timestamp;
         msg2.header.frame_id = fixed_frame;
-        msg2.pose.position.x = position_ENU[0];
-        msg2.pose.position.y = position_ENU[1];
-        msg2.pose.position.z = position_ENU[2];
+        msg2.pose.position = vec2xyz<Point>(position_ENU);
         Eigen::Vector4d attref_ENU = subjugator::MILQuaternionOps::QuatMultiply(subjugator::MILQuaternionOps::QuatMultiply(ENU_from_NED, navComputer->getAttRef()), subjugator::MILQuaternionOps::QuatConjugate(FLU_from_FRD));
-        msg2.pose.orientation.w = attref_ENU[0];
-        msg2.pose.orientation.x = attref_ENU[1];
-        msg2.pose.orientation.y = attref_ENU[2];
-        msg2.pose.orientation.z = attref_ENU[3];
+        msg2.pose.orientation = vec2wxyz<Quaternion>(attref_ENU);
         attref_pub.publish(msg2);
         
         

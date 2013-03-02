@@ -233,10 +233,8 @@ void NavigationComputer::UpdateDVL(const DVLVelocity& dvl)
 
     if(!initialized)
         return;
-    INSData insdata = ins->GetData();
-    boost::shared_ptr<KalmanData> kdata = kFilter->GetData();
-
+    LPOSVSSInfo navinfo; GetNavInfo(navinfo);
     // Rotate dvl data from SUB to NED
-    velRef = MILQuaternionOps::QuatRotate(MILQuaternionOps::QuatMultiply(insdata.Orientation_NED_B, kdata->ErrorQuaternion), dvl_vel);
+    velRef = MILQuaternionOps::QuatRotate(navinfo.quaternion_NED_B, dvl_vel);
     velRefAvailable = true;
 }

@@ -12,6 +12,7 @@
   <depend package="roscpp"/>
   <depend package="tf"/>
   
+  <depend package="uf_common"/>
   <depend package="depth_driver"/>
   
   <rosdep name="eigen" />
