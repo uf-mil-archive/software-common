@@ -49,6 +49,8 @@ struct Node {
     
     ros::Publisher odometry_pub;
     tf::TransformBroadcaster tf_broadcaster;
+    ros::Publisher pose_pub;
+    ros::Publisher attref_pub;
     
     boost::scoped_ptr<subjugator::NavigationComputer> navComputer;
     
@@ -72,6 +74,8 @@ struct Node {
         navComputer.reset(new subjugator::NavigationComputer(navconf));
         
         odometry_pub = nh.advertise<Odometry>("odom", 1);
+        pose_pub = private_nh.advertise<PoseStamped>("pose", 1);
+        attref_pub = private_nh.advertise<PoseStamped>("attref", 1);
         
         sync.registerCallback(boost::bind(&Node::imu_callback, this, _1, _2));
         depth_sub.registerCallback(boost::bind(&Node::depth_callback, this, _1));
@@ -150,6 +154,31 @@ struct Node {
         msg.twist.twist.angular.z = -info.angularRate_BODY[2];
         
         odometry_pub.publish(msg);
+        
+        PoseStamped msg3;
+        msg3.header.stamp = info.timestamp;
+        msg3.header.frame_id = fixed_frame;
+        msg3.pose.position.x = position_ENU[0];
+        msg3.pose.position.y = position_ENU[1];
+        msg3.pose.position.z = position_ENU[2];
+        msg3.pose.orientation.w = orientation_ENU[0];
+        msg3.pose.orientation.x = orientation_ENU[1];
+        msg3.pose.orientation.y = orientation_ENU[2];
+        msg3.pose.orientation.z = orientation_ENU[3];
+        pose_pub.publish(msg3);
+        
+        PoseStamped msg2;
+        msg2.header.stamp = info.timestamp;
+        msg2.header.frame_id = fixed_frame;
+        msg2.pose.position.x = position_ENU[0];
+        msg2.pose.position.y = position_ENU[1];
+        msg2.pose.position.z = position_ENU[2];
+        Eigen::Vector4d attref_ENU = subjugator::MILQuaternionOps::QuatMultiply(subjugator::MILQuaternionOps::QuatMultiply(ENU_from_NED, navComputer->getAttRef()), subjugator::MILQuaternionOps::QuatConjugate(FLU_from_FRD));
+        msg2.pose.orientation.w = attref_ENU[0];
+        msg2.pose.orientation.x = attref_ENU[1];
+        msg2.pose.orientation.y = attref_ENU[2];
+        msg2.pose.orientation.z = attref_ENU[3];
+        attref_pub.publish(msg2);
         
         
         tf::Transform transform; poseMsgToTF(msg.pose.pose, transform);

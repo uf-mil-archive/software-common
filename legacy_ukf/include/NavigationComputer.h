@@ -30,6 +30,10 @@ namespace subjugator {
         
         bool getInitialized() { return initialized; }
         void GetNavInfo(LPOSVSSInfo& info);
+        
+        Vector4d getAttRef() {
+            return attRef;
+        }
 
     private:
         Config conf;
