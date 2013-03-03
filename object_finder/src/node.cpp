@@ -16,27 +16,19 @@
 #include <geometry_msgs/PoseStamped.h>
 #include <visualization_msgs/Marker.h>
 
+#include <uf_common/msg_helpers.h>
+
 using namespace std;
+using namespace std_msgs;
 using namespace sensor_msgs;
 using namespace geometry_msgs;
 using namespace message_filters;
 using namespace visualization_msgs;
 using namespace Eigen;
+using namespace uf_common;
 
 
 const double buoy_r = 0.095;
-
-static std_msgs::ColorRGBA make_ColorRGBA(float r, float g, float b, float a) {
-    std_msgs::ColorRGBA c;
-    c.r = r; c.g = g; c.b = b; c.a = a;
-    return c;
-}
-
-static geometry_msgs::Point make_Point(double x, double y, double z) {
-    geometry_msgs::Point p;
-    p.x = x; p.y = y; p.z = z;
-    return p;
-}
 
 double gauss() {
     static boost::variate_generator<boost::mt19937, boost::normal_distribution<> > generator(boost::mt19937(time(0)), boost::normal_distribution<>());
@@ -364,39 +356,30 @@ struct Node {
         msg.header.frame_id = "/map";
         msg.header.stamp = image->header.stamp;
         msg.type = Marker::POINTS;
-        msg.scale.x = buoy_r;
-        msg.scale.y = buoy_r;
-        msg.scale.z = 1;
+        msg.scale = make_xyz<Vector3>(buoy_r, buoy_r, 1);
         msg.color.a = 1;
         BOOST_FOREACH(pair_type &pair, particles) {
-            msg.points.push_back(make_Point(pair.second.pos.x(), pair.second.pos.y(), pair.second.pos.z()));
-            msg.colors.push_back(make_ColorRGBA(pair.first/max_p.first, 0, 1-pair.first/max_p.first, 1));
+            msg.points.push_back(vec2xyz<Point>(pair.second.pos));
+            msg.colors.push_back(make_rgba<ColorRGBA>(pair.first/max_p.first, 0, 1-pair.first/max_p.first, 1));
         }
         particles_pub.publish(msg);
-        
         
         
         PoseStamped msg2;
         msg2.header.frame_id = "/map";
         msg2.header.stamp = image->header.stamp;
-        msg2.pose.position.x = max_p.second.pos.x();
-        msg2.pose.position.y = max_p.second.pos.y();
-        msg2.pose.position.z = max_p.second.pos.z();
-        msg2.pose.orientation.w = 1;
+        msg2.pose.position = vec2xyz<Point>(max_p.second.pos);
+        msg2.pose.orientation = make_xyzw<geometry_msgs::Quaternion>(0, 0, 0, 1);
         pose_pub.publish(msg2);
         
         Marker msg3;
         msg3.header.frame_id = "/map";
         msg3.header.stamp = image->header.stamp;
-        msg3.pose.position.x = mean_position.x();
-        msg3.pose.position.y = mean_position.y();
-        msg3.pose.position.z = mean_position.z();
-        msg3.pose.orientation.w = 1;
+        msg3.pose.position = vec2xyz<Point>(mean_position);
+        msg3.pose.orientation = make_xyzw<geometry_msgs::Quaternion>(0, 0, 0, 1);
         msg3.type = Marker::SPHERE;
-        msg3.scale.x = 2*buoy_r;
-        msg3.scale.y = 2*buoy_r;
-        msg3.scale.z = 2*buoy_r;
-        msg3.color = make_ColorRGBA(0, 1, 0, 1);
+        msg3.scale = make_xyz<Vector3>(2*buoy_r, 2*buoy_r, 2*buoy_r);
+        msg3.color = make_rgba<ColorRGBA>(0, 1, 0, 1);
         marker_pub.publish(msg3);
     }
 };

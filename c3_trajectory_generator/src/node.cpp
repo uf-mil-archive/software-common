@@ -5,6 +5,7 @@
 #include <actionlib/server/simple_action_server.h>
 
 #include <uf_common/PoseTwistStamped.h>
+#include <uf_common/msg_helpers.h>
 #include <kill_handling/Kill.h>
 #include <kill_handling/listener.h>
 
@@ -16,76 +17,42 @@ using namespace geometry_msgs;
 using namespace nav_msgs;
 using namespace uf_common;
 
-Eigen::Vector3d get_Vector3(ros::NodeHandle& nh, const std::string& name) {
-    XmlRpc::XmlRpcValue my_list; ROS_ASSERT(nh.getParam(name, my_list));
-    ROS_ASSERT(my_list.getType() == XmlRpc::XmlRpcValue::TypeArray);
-    ROS_ASSERT(my_list.size() == 3);
-
-    Eigen::Vector3d res;
-    for (uint32_t i = 0; i < 3; i++) {
-        ROS_ASSERT(my_list[i].getType() == XmlRpc::XmlRpcValue::TypeDouble);
-        res[i] = static_cast<double>(my_list[i]);
-    }
-    return res;
-}
 
 subjugator::C3Trajectory::Point Point_from_PoseTwist(const Pose &pose, const Twist &twist) {
     tf::Quaternion q; tf::quaternionMsgToTF(pose.orientation, q);
     
     subjugator::C3Trajectory::Point res;
     
-    res.q[0] = pose.position.x;
-    res.q[1] = pose.position.y;
-    res.q[2] = pose.position.z;
-    
+    res.q.head(3) = xyz2vec(pose.position);
     tf::Matrix3x3(q).getRPY(
         res.q[3],
         res.q[4],
         res.q[5]);
     
-    tf::Vector3 global_vel = tf::Matrix3x3(q) * tf::Vector3(
-        twist.linear.x,
-        twist.linear.y,
-        twist.linear.z);
-    res.qdot[0] = global_vel[0];
-    res.qdot[1] = global_vel[1];
-    res.qdot[2] = global_vel[2];
-    
+    res.qdot.head(3) = vec2vec(tf::Matrix3x3(q) * vec2vec(xyz2vec(twist.linear)));
     res.qdot.tail(3) = (Eigen::Matrix3d() <<
         1, sin(res.q[3]) * tan(res.q[4]),  cos(res.q[3]) * tan(res.q[4]),
-        0, cos(res.q[3])                   , -sin(res.q[3]),
+        0, cos(res.q[3])                , -sin(res.q[3])                ,
         0, sin(res.q[3]) / cos(res.q[4]),  cos(res.q[3]) / cos(res.q[4])
-    ).finished() * Eigen::Vector3d(
-        twist.angular.x,
-        twist.angular.y,
-        twist.angular.z);
+    ).finished() * xyz2vec(twist.angular);
     
     return res;
 }
 
 PoseTwist PoseTwist_from_Point(const subjugator::C3Trajectory::Point p) {
-    PoseTwist res;
-    
     tf::Quaternion orient = tf::createQuaternionFromRPY(p.q[3], p.q[4], p.q[5]);
     
-    res.pose.position.x = p.q[0];
-    res.pose.position.y = p.q[1];
-    res.pose.position.z = p.q[2];
+    PoseTwist res;
+    
+    res.pose.position = vec2xyz<Point>(p.q.head(3));
     quaternionTFToMsg(orient, res.pose.orientation);
     
-    tf::Vector3 bodyvel = tf::Matrix3x3(orient.inverse()) * tf::Vector3(p.qdot[0], p.qdot[1], p.qdot[2]);
-    res.twist.linear.x = bodyvel[0];
-    res.twist.linear.y = bodyvel[1];
-    res.twist.linear.z = bodyvel[2];
-    Eigen::Matrix3d bodyangvel_from_globaleulerrates;
-    bodyangvel_from_globaleulerrates <<
-        1, 0, -sin(p.q[4]),
+    res.twist.linear = vec2xyz<Vector3>(tf::Matrix3x3(orient.inverse()) * vec2vec(p.qdot.head(3)));
+    res.twist.angular = vec2xyz<Vector3>((Eigen::Matrix3d() <<
+        1,            0,              -sin(p.q[4]),
         0,  cos(p.q[3]), sin(p.q[3]) * cos(p.q[4]),
-        0, -sin(p.q[3]), cos(p.q[3]) * cos(p.q[4]);
-    Eigen::Vector3d bodyangvel = bodyangvel_from_globaleulerrates * p.qdot.tail(3);
-    res.twist.angular.x = bodyangvel[0];
-    res.twist.angular.y = bodyangvel[1];
-    res.twist.angular.z = bodyangvel[2];
+        0, -sin(p.q[3]), cos(p.q[3]) * cos(p.q[4])
+    ).finished() * p.qdot.tail(3));
     
     return res;
 }

@@ -8,6 +8,8 @@
 #include <tf/LinearMath/Quaternion.h>
 #include <tf/transform_datatypes.h>
 
+#include <uf_common/param_helpers.h>
+
 
 namespace magnetic_hardsoft_compensation {
     class Nodelet : public nodelet::Nodelet {
@@ -18,32 +20,6 @@ namespace magnetic_hardsoft_compensation {
             tf::Vector3 scale;
             ros::Subscriber sub;
             ros::Publisher pub;
-            
-            tf::Vector3 get_Vector3(ros::NodeHandle& nh, const std::string& name) {
-                XmlRpc::XmlRpcValue my_list; ROS_ASSERT(nh.getParam(name, my_list));
-                ROS_ASSERT(my_list.getType() == XmlRpc::XmlRpcValue::TypeArray);
-                ROS_ASSERT(my_list.size() == 3);
-                
-                tf::Vector3 res;
-                for (uint32_t i = 0; i < 3; i++) {
-                    ROS_ASSERT(my_list[i].getType() == XmlRpc::XmlRpcValue::TypeDouble);
-                    res[i] = static_cast<double>(my_list[i]);
-                }
-                return res;
-            }
-            
-            tf::Quaternion get_Quaternion(ros::NodeHandle& nh, const std::string& name) {
-                XmlRpc::XmlRpcValue my_list; ROS_ASSERT(nh.getParam(name, my_list));
-                ROS_ASSERT(my_list.getType() == XmlRpc::XmlRpcValue::TypeArray);
-                ROS_ASSERT(my_list.size() == 4);
-                
-                tf::Quaternion res;
-                for (uint32_t i = 0; i < 4; i++) {
-                    ROS_ASSERT(my_list[i].getType() == XmlRpc::XmlRpcValue::TypeDouble);
-                    res[i] = static_cast<double>(my_list[i]);
-                }
-                return res;
-            }
             
             void handle(const geometry_msgs::Vector3Stamped::ConstPtr& msg) {
                 if(msg->header.frame_id != frame_id) {
@@ -70,9 +46,9 @@ namespace magnetic_hardsoft_compensation {
                 ros::NodeHandle& private_nh = getPrivateNodeHandle();
                 
                 frame_id = "/imu"; private_nh.getParam("frame_id", frame_id);
-                shift = get_Vector3(private_nh, "shift");
-                correction = get_Quaternion(private_nh, "correction");
-                scale = get_Vector3(private_nh, "scale");
+                shift = uf_common::get_tfVector3(private_nh, "shift");
+                correction = uf_common::get_tfQuaternion(private_nh, "correction");
+                scale = uf_common::get_tfVector3(private_nh, "scale");
                 
                 
                 ros::NodeHandle& nh = getNodeHandle();
