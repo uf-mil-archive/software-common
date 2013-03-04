@@ -24,6 +24,8 @@ using namespace visualization_msgs;
 using namespace Eigen;
 
 
+const double buoy_r = 0.095;
+
 static std_msgs::ColorRGBA make_ColorRGBA(float r, float g, float b, float a) {
     std_msgs::ColorRGBA c;
     c.r = r; c.g = g; c.b = b; c.a = a;
@@ -191,7 +193,7 @@ void sphere_query(const vector<Vector3d>& sumimage, const CameraInfoConstPtr& ca
 struct Particle {
     btVector3 pos;
     Particle() {
-        pos = btVector3(0+gauss(), 7+gauss(), -4+gauss());
+        pos = btVector3(-2+gauss(), 2+gauss(), -1+gauss());
     }
     Particle predict(double dt) {
         Particle p(*this);
@@ -204,10 +206,10 @@ struct Particle {
         Vector3d pos_camera(pos_camera_[0], pos_camera_[1], pos_camera_[2]);
         
         Vector3d inner_total_color; double inner_count;
-        sphere_query(sumimage, cam_info, pos_camera, 0.2, inner_total_color, inner_count);
+        sphere_query(sumimage, cam_info, pos_camera, buoy_r, inner_total_color, inner_count);
         
         Vector3d both_total_color; double both_count;
-        sphere_query(sumimage, cam_info, pos_camera, 0.4, both_total_color, both_count);
+        sphere_query(sumimage, cam_info, pos_camera, 2*buoy_r, both_total_color, both_count);
         
         Vector3d outer_total_color = both_total_color - inner_total_color;
         double outer_count = both_count - inner_count;
@@ -216,15 +218,18 @@ struct Particle {
         if(inner_count > 10 && outer_count > 10) {
             Vector3d inner_color = inner_total_color/inner_count;
             Vector3d outer_color = outer_total_color/outer_count;
+            
+            return (inner_color - outer_color).norm();
+            
             //cout << "color: " << color << endl;
             
             // assume that pixel color at object's center follows a triangular distribution with max at (0, 1, 0) and minimums at all other corners
-            return 2*(1-inner_color(0)) * 2*(  inner_color(1)) * 2*(1-inner_color(2)) *
+            return 2*(  inner_color(0)) * 2*(1-inner_color(1)) * 2*(1-inner_color(2)) *
                    2*(1-outer_color(0)) * 2*(1-outer_color(1)) * 2*(  outer_color(2))
                 + 1e-6; // 1e-6 is to make sure every particle doesn't go to 0 at the same time
         } else {
             // not visible
-            return 1 + 1e-6; // expected value of above expression
+            return .3; // expected value of above expression
         }
     }
 };
@@ -237,6 +242,7 @@ struct Node {
     TimeSynchronizer<Image, CameraInfo> sync;
     ros::Publisher particles_pub;
     ros::Publisher pose_pub;
+    ros::Publisher marker_pub;
     
     
     typedef std::pair<double, Particle> pair_type;
@@ -245,29 +251,40 @@ struct Node {
     
     
     Node() :
-        image_sub(nh, "sim_camera/image_rect_color", 1),
-        info_sub(nh, "sim_camera/camera_info", 1),
+        image_sub(nh, "camera/image_rect_color", 1),
+        info_sub(nh, "camera/camera_info", 1),
         sync(image_sub, info_sub, 10) {
         
         particles_pub = nh.advertise<Marker>("particles", 1);
         pose_pub = nh.advertise<PoseStamped>("buoy", 1);
+        marker_pub = nh.advertise<Marker>("buoy_rviz", 1);
         
         sync.registerCallback(boost::bind(&Node::callback, this, _1, _2));
+    }
+    
+    void init_particles(ros::Time t) {
+        particles.clear();
         
-        for(int i = 0; i < 5000; i++)
+        for(int i = 0; i < 2000; i++)
             particles.push_back(make_pair(1, Particle()));
         
         double total_weight = 0; BOOST_FOREACH(pair_type &pair, particles) total_weight += pair.first;
         BOOST_FOREACH(pair_type &pair, particles) pair.first /= total_weight;
         
-        current_stamp = ros::Time::now();
+        current_stamp = t;
     }
     
     void callback(const ImageConstPtr& image, const CameraInfoConstPtr& cam_info) {
         assert(image->header.stamp == cam_info->header.stamp);
         assert(image->header.frame_id == cam_info->header.frame_id);
         
-        if(image->header.stamp < current_stamp) {
+        if(particles.size() == 0) {
+            ROS_INFO("got first frame; initializing particles");
+            init_particles(image->header.stamp);
+        } else if(image->header.stamp < current_stamp - ros::Duration(1) || image->header.stamp > current_stamp + ros::Duration(5)) {
+            ROS_INFO("time jumped too far backwards or forwards; reinitializing particles");
+            init_particles(image->header.stamp);
+        } else if(image->header.stamp < current_stamp) {
             ROS_ERROR("dropped out of order camera frame");
             return;
         }
@@ -316,11 +333,11 @@ struct Node {
         static vector<Vector3d> sumimage; // static so not reallocated every frame
         sumimage.resize(image->width * image->height);
         
-        assert(image->encoding == "rgba8"); // XXX use opencv to support more than one encoding
+        assert(image->encoding == "rgb8"); // XXX use opencv to support more than one encoding
         for(uint32_t row = 0; row < image->height; row++) {
             Vector3d row_cumulative_sum(0, 0, 0);
             for(uint32_t col = 0; col < image->width; col++) {
-                const uint8_t *pixel = image->data.data() + image->step * row + 4 * col;
+                const uint8_t *pixel = image->data.data() + image->step * row + 3 * col;
                 double r = pixel[0] / 255.;
                 double g = pixel[1] / 255.;
                 double b = pixel[2] / 255.;
@@ -340,13 +357,15 @@ struct Node {
         
         pair_type max_p; max_p.first = -1; BOOST_FOREACH(pair_type &pair, particles) if(pair.first > max_p.first) max_p = pair;
         
+        btVector3 mean_position(0, 0, 0); BOOST_FOREACH(pair_type &pair, particles) mean_position += pair.first * pair.second.pos;
+        
         // send marker message for particle visualization
         Marker msg;
         msg.header.frame_id = "/map";
         msg.header.stamp = image->header.stamp;
         msg.type = Marker::POINTS;
-        msg.scale.x = .4;
-        msg.scale.y = .4;
+        msg.scale.x = buoy_r;
+        msg.scale.y = buoy_r;
         msg.scale.z = 1;
         msg.color.a = 1;
         BOOST_FOREACH(pair_type &pair, particles) {
@@ -365,6 +384,20 @@ struct Node {
         msg2.pose.position.z = max_p.second.pos.z();
         msg2.pose.orientation.w = 1;
         pose_pub.publish(msg2);
+        
+        Marker msg3;
+        msg3.header.frame_id = "/map";
+        msg3.header.stamp = image->header.stamp;
+        msg3.pose.position.x = mean_position.x();
+        msg3.pose.position.y = mean_position.y();
+        msg3.pose.position.z = mean_position.z();
+        msg3.pose.orientation.w = 1;
+        msg3.type = Marker::SPHERE;
+        msg3.scale.x = 2*buoy_r;
+        msg3.scale.y = 2*buoy_r;
+        msg3.scale.z = 2*buoy_r;
+        msg3.color = make_ColorRGBA(0, 1, 0, 1);
+        marker_pub.publish(msg3);
     }
 };
 
