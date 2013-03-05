@@ -97,9 +97,9 @@ struct Node {
         limits.umax_b << .25, .25, .25, .1, .1, .1;
         traj_dt = ros::Duration(0.0001);
         
-        /*
         ROS_ASSERT(private_nh.getParam("fixed_frame", fixed_frame));
         ROS_ASSERT(private_nh.getParam("body_frame", body_frame));
+        /*
         
         subjugator::NavigationComputer::Config navconf;
         navconf.referenceNorthVector = get_Vector3(private_nh, "referenceNorthVector");
@@ -158,7 +158,7 @@ struct Node {
 	    
         PoseTwistStamped msg;
         msg.header.stamp = c3trajectory_t;
-        msg.header.frame_id = "/map"; // XXX
+        msg.header.frame_id = fixed_frame;
         msg.posetwist = PoseTwist_from_Point(c3trajectory->getCurrentPoint());
 	    
 	    trajectory_pub.publish(msg);
