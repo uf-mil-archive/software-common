@@ -13,7 +13,10 @@ from nav_msgs.msg import Odometry
 from geometry_msgs.msg import Point, Quaternion, Vector3, Vector3Stamped, PoseStamped
 import tf
 from tf import transformations
+
+from uf_common.msg import Float64Stamped
 from uf_common.orientation_helpers import triad, xyz_array
+
 
 from kalman_6dof import kalman
 
@@ -44,12 +47,12 @@ def got_imu(msg):
         k = None
         return
     
-    if k is None and mag_buffer is not None and gps_buffer is not None:
+    if k is None and mag_buffer is not None and (gps_buffer is not None or depth_buffer is not None):
         # initialize filter
         k_frame = msg.header.frame_id
         k = kalman.Kalman(
             t=msg.header.stamp,
-            position=gps_buffer[0:3],
+            position=gps_buffer[0:3] if gps_buffer is not None else numpy.array([0, 0, -depth_buffer]),
             velocity_body=numpy.zeros(3),
             orientation=triad(
                 (-kalman.G, north),
@@ -198,7 +201,7 @@ def got_mag(msg):
     J = numpy.zeros((3, 9))
     J[0:3, 3:6] = imu_from_world.dot(kalman.skewmatrix(predicted_mag))
     
-    k = k.update(my - predicted_mag_imu, J, numpy.diag([1e-3, 1e-3, 1e-3])**2, name='mag')
+    k = k.update(my - predicted_mag_imu, J, numpy.diag([1e-6, 1e-6, 1e-6])**2, name='mag')
 
 
 gps_buffer = None
@@ -232,13 +235,58 @@ def got_gps(msg):
     if debug: print 'ANG', map(math.degrees, transformations.euler_from_quaternion(k.orientation))
     if debug: print 'end'
 
+dvl_buffer = None
+def got_dvl(msg):
+    global dvl_buffer, k
+    my = dvl_buffer = xyz_array(msg.vector)
+    
+    #assert k.t == msg.header.stamp
+    
+    if k is None: return
+    try:
+        tf_pos, tf_rot = tf_listener.lookupTransform(msg.header.frame_id, k_frame, msg.header.stamp) # dvl from imu
+    except Exception, e:
+        rospy.logerr('dvl lookupTransform failed: %s', e)
+        return
+    
+    imu_from_world = transformations.quaternion_matrix(k.orientation).T[:3, :3]
+    dvl_from_imu = transformations.quaternion_matrix(tf_rot)[:3, :3]
+    predicted = dvl_from_imu.dot(k.velocity_body + numpy.cross(k.angular_velocity_body, -numpy.array(tf_pos)))
+    
+    J = numpy.zeros((3, 9))
+    J[0:3, 3:6] = dvl_from_imu.dot(imu_from_world).dot(kalman.skewmatrix(imu_from_world.T.dot(k.velocity_body)))
+    J[0:3, 6:9] = dvl_from_imu
+    
+    k = k.update(my - predicted, J, numpy.diag([.001, .001, .001])**2, name='dvl')
+
+depth_buffer = None
+def got_depth(msg):
+    global depth_buffer, k
+    my = depth_buffer = msg.data
+    
+    
+    if k is None: return
+
+    #assert k.t == msg.header.stamp
+    # XXX use transform
+    if debug: print 'XXX depth'
+    if debug: print 'depth', 'measured', my, 'thought', -k.position[2]
+    if debug: print 'pre', k.position, k.velocity, k.orientation
+    k = k.update(my - (-k.position[2]), numpy.array([[0, 0, -1, 0, 0, 0, 0, 0, 0]]), numpy.array([[.1**2]]), name='dep')
+    if debug: print 'post', k.position, k.velocity, k.orientation
+
+    if debug: print 'STA', k.position, k.velocity, k.orientation
+    if debug: print 'VAR', numpy.diag(k.P)
+    if debug: print 'ANG', map(math.degrees, transformations.euler_from_quaternion(k.orientation))
+    if debug: print 'end'
+
 
 rospy.init_node('kalman_6dof')
 
 body_frame = rospy.get_param('~body_frame', '/base_link')
 fixed_frame = rospy.get_param('~fixed_frame', '/map')
 hack_down_ref = rospy.get_param('~hack_down_ref')
-north = numpy.array([-0.022442e-4, 0.241510e-4, -0.405728e-4])*1e4 # gauss
+north = numpy.array([-2244.2, 24151.0, -40572.8])*1e-9
 
 tf_listener = tf.TransformListener()
 tf_broadcaster = tf.TransformBroadcaster()
@@ -246,6 +294,8 @@ tf_broadcaster = tf.TransformBroadcaster()
 rospy.Subscriber('/imu/data_raw', Imu, lambda msg: callWithLock(got_imu, msg))
 rospy.Subscriber('/imu/mag', Vector3Stamped, lambda msg: callWithLock(got_mag, msg))
 rospy.Subscriber('gps_odom', Odometry, lambda msg: callWithLock(got_gps, msg))
+rospy.Subscriber('dvl', Vector3Stamped, lambda msg: callWithLock(got_dvl, msg))
+rospy.Subscriber('depth', Float64Stamped, lambda msg: callWithLock(got_depth, msg))
 pub = rospy.Publisher('ins', Odometry)
 pub2 = rospy.Publisher('ins2', PoseStamped)
 
