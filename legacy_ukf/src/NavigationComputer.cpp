@@ -14,13 +14,9 @@ using namespace Eigen;
 
 NavigationComputer::NavigationComputer(const Config &conf):
     conf(conf),
-    white_noise_sigma_f(0.0005,0.0005,0.0005), white_noise_sigma_w(0.05,0.05,0.05),
-    q_SUB_DVL(0.0,0.923879532511287,0.382683432365090,0.0), q_SUB_IMU(0.012621022547474,0.002181321593961,-0.004522523520991,0.999907744947984)
+    white_noise_sigma_f(0.0005,0.0005,0.0005), white_noise_sigma_w(0.05,0.05,0.05)
 {
     referenceGravityVector = AttitudeHelpers::LocalGravity(conf.latitudeDeg*boost::math::constants::pi<double>()/180.0, 0);
-
-    r_ORIGIN_NAV << 0.43115992,0.0,-0.00165058;
-    
     reset();
 }
 
@@ -47,7 +43,7 @@ void NavigationComputer::TryInit(ros::Time currentTime, Vector3d w_body, Vector3
                     conf.latitudeDeg*boost::math::constants::pi<double>()/180.0,
                     w_body,
                     a_body,    // a_body prev MUST be taken from a valid IMU packet!
-                    Vector3d(0, 0, depthRef) + MILQuaternionOps::QuatRotate(attRef, r_ORIGIN_NAV), // initialPosition
+                    Vector3d(0, 0, depthRef), // initialPosition
                     Vector3d(0, 0, 0), // initialVelocity
                     referenceGravityVector,    // Gravity vector from file or equation
                     attRef,    //
@@ -73,7 +69,7 @@ void NavigationComputer::TryInit(ros::Time currentTime, Vector3d w_body, Vector3
                     covariance,
                     alpha, beta, kappa, bias_var_f, bias_var_w,
                     white_noise_sigma_f, white_noise_sigma_w, T_f,
-                    T_w, depth_sigma, conf.dvl_sigma, conf.att_sigma,
+                    T_w, depth_sigma, conf.vel_sigma, conf.att_sigma,
                     currentTime
             ));
 
@@ -134,7 +130,7 @@ void NavigationComputer::resetErrors()
     z = Vector7d::Zero();
 }
 
-void NavigationComputer::GetNavInfo(LPOSVSSInfo& info)
+LPOSVSSInfo NavigationComputer::GetNavInfo()
 {
     assert(initialized);
 
@@ -142,36 +138,26 @@ void NavigationComputer::GetNavInfo(LPOSVSSInfo& info)
     boost::shared_ptr<KalmanData> kdata = kFilter->GetData();
     INSData insdata = ins->GetData();
 
+    LPOSVSSInfo info;
     info.timestamp = insdata.time;
-
-    // Do angular values first
     info.quaternion_NED_B = MILQuaternionOps::QuatMultiply(insdata.Orientation_NED_B, kdata->ErrorQuaternion);
     info.angularRate_BODY = insdata.AngularRate_BODY - kdata->Gyro_bias;
-
-    // Transform position and velocity to the sub origin. Assuming rigid body motion
-    Vector3d r_O_N_NED = MILQuaternionOps::QuatRotate(info.quaternion_NED_B, r_ORIGIN_NAV);
-    info.position_NED = (insdata.Position_NED - (kdata->PositionErrorEst + (insdata.time - kdata->time).toSec() * kdata->VelocityError)) - r_O_N_NED;
-    info.velocity_NED = (insdata.Velocity_NED - kdata->VelocityError) - info.angularRate_BODY.cross(r_O_N_NED);
-
-    //cout << "INS V\n" << insdata.Velocity_NED << endl;
-    //cout<<"RPY:" << endl;
-    //cout << MILQuaternionOps::Quat2Euler(info.quaternion_NED_B)*180.0/boost::math::constants::pi<double>() << endl;
+    info.position_NED = insdata.Position_NED - (kdata->PositionErrorEst + (insdata.time - kdata->time).toSec() * kdata->VelocityError);
+    info.velocity_NED = insdata.Velocity_NED - kdata->VelocityError;
+    
+    return info;
 }
 
 void NavigationComputer::UpdateIMU(const IMUInfo& imu)
 {
-    Vector3d w_body = MILQuaternionOps::QuatRotate(q_SUB_IMU, imu.ang_rate);
-    Vector3d a_body = MILQuaternionOps::QuatRotate(q_SUB_IMU, imu.acceleration);
-    Vector3d m_body = MILQuaternionOps::QuatRotate(q_SUB_IMU, imu.mag_field);
-    
-    Acceleration_BODY_RAW = a_body;
+    Acceleration_BODY_RAW = imu.acceleration; // used in updateKalmanTo
     
     if(initialized && (imu.timestamp < ins->GetData().time || imu.timestamp > ins->GetData().time + ros::Duration(0.1))) // reinitialize if time goes backwards or forwards too far
         reset();
     
     // The INS has the rotation info already, so just push the packet through
     if(initialized) {
-        ins->Update(imu.timestamp, w_body, a_body);
+        ins->Update(imu.timestamp, imu.ang_rate, imu.acceleration);
     }
     
     if(attCount == 0) {
@@ -182,8 +168,8 @@ void NavigationComputer::UpdateIMU(const IMUInfo& imu)
 
     // We just do a very basic average over the last 10 samples (reduces to 20Hz)
     // the magnetometer and accelerometer
-    magSum += m_body;
-    accSum += a_body;
+    magSum += imu.mag_field;
+    accSum += imu.acceleration;
 
     attCount = (attCount + 1) % 10;
     if(attCount == 0) {
@@ -204,7 +190,7 @@ void NavigationComputer::UpdateIMU(const IMUInfo& imu)
             attRefAvailable = true;
 
             if(!initialized)
-                TryInit(imu.timestamp, w_body, a_body);
+                TryInit(imu.timestamp, imu.ang_rate, imu.acceleration);
         }
     }
     
@@ -223,18 +209,16 @@ void NavigationComputer::UpdateDepth(double depth)
     depthRefAvailable = true;
 }
 
-void NavigationComputer::UpdateDVL(const DVLVelocity& dvl)
+void NavigationComputer::UpdateVel(Vector3d vel, bool is_world_frame)
 {
-    // DVL data is expected in the NED down frame by the error measurement
-    // for the Kalman filter. It comes in the DVL frame, which needs to be rotated
-    // to the sub frame, and then transformed by the current best quaternion estimate
-    // of SUB to NED
-    Vector3d dvl_vel = MILQuaternionOps::QuatRotate(q_SUB_DVL, dvl.vel);
-
     if(!initialized)
         return;
-    LPOSVSSInfo navinfo; GetNavInfo(navinfo);
-    // Rotate dvl data from SUB to NED
-    velRef = MILQuaternionOps::QuatRotate(navinfo.quaternion_NED_B, dvl_vel);
+    
+    if(is_world_frame) {
+        velRef = vel;
+    } else {
+        // Rotate dvl data from SUB to NED
+        velRef = MILQuaternionOps::QuatRotate(GetNavInfo().quaternion_NED_B, vel);
+    }
     velRefAvailable = true;
 }

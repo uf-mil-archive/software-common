@@ -5,7 +5,6 @@
 
 #include "EigenUtils.h"
 
-#include "DataObjects/DVLVelocity.h"
 #include "DataObjects/IMUInfo.h"
 #include "DataObjects/LPOSVSSInfo.h"
 #include "INS.h"
@@ -18,7 +17,7 @@ namespace subjugator {
             Vector3d referenceNorthVector;
             double latitudeDeg;
 
-            Vector3d dvl_sigma;
+            Vector3d vel_sigma;
             Vector3d att_sigma;
         };
         
@@ -26,10 +25,11 @@ namespace subjugator {
         
         void UpdateIMU(const IMUInfo& imu);
         void UpdateDepth(double depth);
-        void UpdateDVL(const DVLVelocity& dvl);
+        void UpdateVel(Vector3d vel, bool is_world_frame);
         
         bool getInitialized() { return initialized; }
-        void GetNavInfo(LPOSVSSInfo& info);
+        LPOSVSSInfo GetNavInfo();
+        void reset();
         
         Vector4d getAttRef() {
             return attRef;
@@ -48,13 +48,10 @@ namespace subjugator {
         static const double depth_sigma = 0.02;
 
         static const double MAX_DEPTH = 15; // m
-        static const double MAX_DVL_NORM = 10; // Sub can't run at 10m/s
 
         Vector3d referenceGravityVector;
         Vector3d white_noise_sigma_f;
         Vector3d white_noise_sigma_w;
-        Vector4d q_SUB_DVL;
-        Vector4d q_SUB_IMU;
 
         bool depthRefAvailable;
         bool attRefAvailable;
@@ -63,7 +60,6 @@ namespace subjugator {
         Vector4d attRef;
         Vector3d velRef;
         Vector7d z;
-        Vector3d r_ORIGIN_NAV;
 
         int attCount;
         Vector3d magSum;
@@ -78,7 +74,6 @@ namespace subjugator {
         ros::Time nextKalmanTime;
         int kalmanCount;
 
-        void reset();
         void TryInit(ros::Time currentTime, Vector3d w_body, Vector3d a_body);
         void updateKalmanTo(ros::Time time);
         void resetErrors();
