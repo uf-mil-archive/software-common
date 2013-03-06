@@ -8,7 +8,7 @@
 
 #include <uf_common/param_helpers.h>
 #include <uf_common/msg_helpers.h>
-#include <depth_driver/Float64Stamped.h>
+#include <uf_common/Float64Stamped.h>
 
 #include "NavigationComputer.h"
 #include "Quaternion.h"
@@ -18,7 +18,6 @@ using namespace sensor_msgs;
 using namespace message_filters;
 using namespace geometry_msgs;
 using namespace nav_msgs;
-using namespace depth_driver;
 using namespace uf_common;
 
 struct Node {
