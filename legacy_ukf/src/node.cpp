@@ -20,6 +20,10 @@ using namespace geometry_msgs;
 using namespace nav_msgs;
 using namespace uf_common;
 
+static Eigen::Vector3d NED_from_ENU(Eigen::Vector3d x) {
+    return Eigen::Vector3d(x[1], x[0], -x[2]);
+}
+
 struct Node {
     ros::NodeHandle nh;
     ros::NodeHandle private_nh;
@@ -59,7 +63,7 @@ struct Node {
         worldvel_filter.setTargetFrame(fixed_frame);
         
         subjugator::NavigationComputer::Config navconf;
-        navconf.referenceNorthVector = get_Vector3(private_nh, "referenceNorthVector");
+        navconf.referenceNorthVector = NED_from_ENU(get_Vector3(private_nh, "localMagneticVector"));
         ROS_ASSERT(private_nh.getParam("latitudeDeg", navconf.latitudeDeg));
         navconf.vel_sigma = get_Vector3(private_nh, "vel_sigma");
         navconf.att_sigma = get_Vector3(private_nh, "att_sigma");
