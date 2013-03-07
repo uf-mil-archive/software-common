@@ -1,7 +1,6 @@
 #ifndef KALMAN_H
 #define KALMAN_H
 
-#include <boost/shared_ptr.hpp>
 #include <Eigen/Dense>
 #include <ros/time.h>
 
@@ -54,19 +53,21 @@ namespace subjugator
         void Update(const Vector7d& z, const Eigen::Vector3d& f_IMU,
                      const Eigen::Vector3d& v_INS, const Eigen::Vector4d& q_INS, ros::Time currentTime);
         void Reset();
-        boost::shared_ptr<KalmanData> GetData()
+        KalmanData GetData()
         {
-            boost::shared_ptr<KalmanData> temp(prevData);
-
-            return temp;
+            Eigen::Vector3d x_hat_57 = x_hat.block<3,1>(4,0);
+            Eigen::Vector4d q_hat_tilde_inverse(sqrt(1-(x_hat_57.transpose()*x_hat_57)(0,0)),
+                    -1.0*x_hat_57(0), -1.0*x_hat_57(1), -1.0*x_hat_57(2));
+            
+            return KalmanData(x_hat(0),
+                x_hat.block<3,1>(1,0),
+                q_hat_tilde_inverse,
+                x_hat.block<3,1>(7,0),
+                x_hat.block<3,1>(10,0),
+                P_est_error, prevTime);
         }
     private:
         static const double g0 = 9.80665;
-
-        bool initialized;
-
-        RowVector27d ones2LXp1;
-        RowVector26d ones2LX;
 
         int L;
 
@@ -78,11 +79,7 @@ namespace subjugator
 
         Matrix13d P_hat;
         Matrix7d R;
-        Matrix13x7d K;
         Eigen::Vector3d P_est_error;
-
-        Matrix13x12d gamma;
-        Matrix12x13d gammaTransposed;
 
         double alpha;
         double beta;
@@ -103,8 +100,6 @@ namespace subjugator
         double T_f;
         double T_w;
         ros::Time prevTime;
-
-        boost::shared_ptr<KalmanData> prevData;
     };
 }
 

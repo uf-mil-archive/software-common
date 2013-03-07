@@ -123,9 +123,7 @@ void NavigationComputer::updateKalmanTo(ros::Time time)
 
 void NavigationComputer::resetErrors()
 {
-    boost::shared_ptr<KalmanData> kdata = kFilter->GetData();
-
-    ins->Reset(*kdata.get());
+    ins->Reset(kFilter->GetData());
     kFilter->Reset();
     z = Vector7d::Zero();
 }
@@ -135,15 +133,15 @@ LPOSVSSInfo NavigationComputer::GetNavInfo()
     assert(initialized);
 
     // Subtract errors to build best current estimate
-    boost::shared_ptr<KalmanData> kdata = kFilter->GetData();
+    KalmanData kdata = kFilter->GetData();
     INSData insdata = ins->GetData();
 
     LPOSVSSInfo info;
     info.timestamp = insdata.time;
-    info.quaternion_NED_B = MILQuaternionOps::QuatMultiply(insdata.Orientation_NED_B, kdata->ErrorQuaternion);
-    info.angularRate_BODY = insdata.AngularRate_BODY - kdata->Gyro_bias;
-    info.position_NED = insdata.Position_NED - (kdata->PositionErrorEst + (insdata.time - kdata->time).toSec() * kdata->VelocityError);
-    info.velocity_NED = insdata.Velocity_NED - kdata->VelocityError;
+    info.quaternion_NED_B = MILQuaternionOps::QuatMultiply(insdata.Orientation_NED_B, kdata.ErrorQuaternion);
+    info.angularRate_BODY = insdata.AngularRate_BODY - kdata.Gyro_bias;
+    info.position_NED = insdata.Position_NED - (kdata.PositionErrorEst + (insdata.time - kdata.time).toSec() * kdata.VelocityError);
+    info.velocity_NED = insdata.Velocity_NED - kdata.VelocityError;
     
     return info;
 }

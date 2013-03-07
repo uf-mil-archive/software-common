@@ -36,11 +36,6 @@ KalmanFilter::KalmanFilter(int L, Vector4d q_hat, Matrix13d P_hat,
     T_f_inv = 1.0 / T_f * Matrix3d::Identity();
     T_w_inv = 1.0 / T_w * Matrix3d::Identity();
 
-    // Shallow transpose, they share data
-    gamma = Matrix13x12d::Zero();
-    gamma.block<12,12>(1,0).setIdentity();
-    gammaTransposed = gamma.transpose();
-
     // Build the R Matrix
     Matrix3d W_dvl = AttitudeHelpers::DiagMatrixFromVector(dvl_sigma.cwiseProduct(dvl_sigma));
     Matrix3d W_att = (boost::math::constants::pi<double>()/180.0)*(boost::math::constants::pi<double>()/180.0)*AttitudeHelpers::DiagMatrixFromVector(att_sigma.cwiseProduct(att_sigma));
@@ -50,21 +45,7 @@ KalmanFilter::KalmanFilter(int L, Vector4d q_hat, Matrix13d P_hat,
     R.block<3,3>(1,1) = W_dvl;
     R.block<3,3>(4,4) = W_att;
 
-    K = Matrix13x7d::Zero();
-
     P_est_error = Vector3d::Zero();
-
-    ones2LX = RowVector26d::Ones();
-    ones2LXp1 = RowVector27d::Ones();
-
-    prevData = boost::shared_ptr<KalmanData>(new KalmanData(x_hat(0),
-            x_hat.block<3,1>(1,0),
-            Vector4d(1.0,0.0,0.0,0.0),
-            x_hat.block<3,1>(7,0),
-            x_hat.block<3,1>(10,0),
-            P_est_error, prevTime));
-
-    initialized = true;
 }
 
 void KalmanFilter::Update(const Vector7d& z, const Vector3d& f_IMU,
@@ -102,7 +83,7 @@ void KalmanFilter::Update(const Vector7d& z, const Vector3d& f_IMU,
     Q.block<3,3>(9,9) = Q_w;
 
     // Replicate x_hat into a matrix form
-    Matrix13x27d x_hat_mat = x_hat * ones2LXp1;
+    Matrix13x27d x_hat_mat = x_hat * RowVector27d::Ones();
 
     int limit = 2 * L + 1;
 
@@ -157,13 +138,16 @@ void KalmanFilter::Update(const Vector7d& z, const Vector3d& f_IMU,
 
     Vector13d chi_pred_a1 = chi_pred.col(0);
     Vector13d x_pred = (W_s[0]*chi_pred_a1) + (W_s[1] * sum_W2);
-    Matrix13x26d x_pred_mat = x_pred * ones2LX;
+    Matrix13x26d x_pred_mat = x_pred * RowVector26d::Ones();
 
     Vector13d P_int1 = chi_pred_a1 - x_pred;
     Matrix13x26d P_int2 = chi_pred.block<13,26>(0,1) - x_pred_mat;
     Matrix13d P_int = W_c[0] * P_int1 * P_int1.transpose()
             + W_c[1] * P_int2 * P_int2.transpose();
-    Matrix13d P_pred = P_int + gamma*Q*gammaTransposed;
+
+    Matrix13x12d gamma = Matrix13x12d::Zero();
+    gamma.block<12,12>(1,0).setIdentity();
+    Matrix13d P_pred = P_int + gamma*Q*gamma.transpose();
 
     // Predict the measurement
     Matrix3x27d gamma_2 = Matrix3x27d::Zero();
@@ -188,7 +172,7 @@ void KalmanFilter::Update(const Vector7d& z, const Vector3d& f_IMU,
 
     Vector7d gamma_mat_a1 = gamma_mat.col(0);
     Vector7d z_pred = W_s[0] * gamma_mat_a1 + W_s[1] * sum_Z2;
-    Matrix7x26d z_pred_mat = z_pred * ones2LX;
+    Matrix7x26d z_pred_mat = z_pred * RowVector26d::Ones();
 
     Vector7d X_zz1 = gamma_mat_a1 - z_pred;
     Matrix7x26d X_zz2 = gamma_mat.block<7,26>(0,1) - z_pred_mat;
@@ -198,7 +182,7 @@ void KalmanFilter::Update(const Vector7d& z, const Vector3d& f_IMU,
     Matrix13x7d X_xz = W_c[0] * P_int1 * X_zz1.transpose()
             + W_c[1] * P_int2 * X_zz2.transpose();
 
-    K = X_xz * X_zz.inverse();
+    Matrix13x7d K = X_xz * X_zz.inverse();
 
     Vector7d innovation = z - z_pred;
 
@@ -206,34 +190,16 @@ void KalmanFilter::Update(const Vector7d& z, const Vector3d& f_IMU,
 
     P_hat = P_pred - K * X_zz * K.transpose();
 
-    Vector3d x_hat_57 = x_hat.block<3,1>(4,0);
-    Vector4d q_hat_tilde_inverse(sqrt(1-(x_hat_57.transpose()*x_hat_57)(0,0)),
-            -1.0*x_hat_57(0), -1.0*x_hat_57(1), -1.0*x_hat_57(2));
-
     // This was reversed in the sub, but matlab says this way?
-    q_hat = MILQuaternionOps::QuatMultiply(q_INS, q_hat_tilde_inverse);
+    q_hat = MILQuaternionOps::QuatMultiply(q_INS, GetData().ErrorQuaternion);
 
     // Lastly, approximate the position (x,y) error by integrating the velocity errors
     P_est_error.block<2,1>(0,0) += dt * x_hat.block<2,1>(1,0);
     P_est_error(2) = x_hat(0);
-
-    prevData = boost::shared_ptr<KalmanData>(new KalmanData(x_hat(0),
-            x_hat.block<3,1>(1,0),
-            q_hat_tilde_inverse,
-            x_hat.block<3,1>(7,0),
-            x_hat.block<3,1>(10,0),
-            P_est_error, prevTime));
 }
 
 void KalmanFilter::Reset()
 {
     x_hat.block<7,1>(0,0) = Vector7d::Zero();
     P_est_error = Vector3d::Zero();
-
-    prevData = boost::shared_ptr<KalmanData>(new KalmanData(x_hat(0),
-            x_hat.block<3,1>(1,0),
-            Vector4d(1.0,0.0,0.0,0.0),
-            x_hat.block<3,1>(7,0),
-            x_hat.block<3,1>(10,0),
-            P_est_error, prevTime));
 }
