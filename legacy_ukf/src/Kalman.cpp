@@ -104,9 +104,9 @@ void KalmanFilter::Update(const Vector7d& z, const Vector3d& f_IMU,
 
     for(int i = 0; i < limit; i++)
     {
-        Vector3d chi_57 = chi.block<3,1>(4,i);
-        Vector3d chi_810 = chi.block<3,1>(7,i);
-        Vector3d chi_1113 = chi.block<3,1>(10,i);
+        Vector3d chi_57 = chi.block<3,1>(4,i); // orientation
+        Vector3d chi_810 = chi.block<3,1>(7,i); // a bias
+        Vector3d chi_1113 = chi.block<3,1>(10,i); // w bias
 
         Vector4d q_tilde_inverse(sqrt(1.0 - (chi_57.transpose()*chi_57)(0,0)),
                 -1.0*chi_57(0), -1.0*chi_57(1), -1.0*chi_57(2));

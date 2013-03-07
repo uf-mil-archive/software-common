@@ -20,7 +20,7 @@ double AttitudeHelpers::Markov_wStdDev(double dt, double T, double sigma)
 {
     assert(T != 0);
 
-    return (sigma*sqrt(2*dt/T - pow((dt/T),2)));
+    return sigma * sqrt(2*dt/T - pow(dt/T,2));
 }
 
 Vector4d AttitudeHelpers::RotationToQuaternion(const Matrix3d& R)
