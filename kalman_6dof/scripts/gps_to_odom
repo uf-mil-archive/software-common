@@ -10,7 +10,7 @@ import roslib
 roslib.load_manifest('kalman_6dof')
 roslib.load_manifest('gps_common')
 import rospy
-from geometry_msgs.msg import WrenchStamped, Wrench, Vector3, Twist, Pose, Point, Quaternion, PoseStamped, PoseWithCovariance, TwistWithCovariance
+from geometry_msgs.msg import WrenchStamped, Wrench, Vector3, Twist, Pose, Point, Quaternion, PoseStamped, PoseWithCovariance, TwistWithCovariance, Vector3Stamped
 from std_msgs.msg import Header
 from nav_msgs.msg import Odometry
 from gps_common.msg import GPSFix
@@ -36,6 +36,7 @@ def ecef_from_latlongheight(latitude, longitude, height):
     ])
 
 pub = rospy.Publisher('gps_odom', Odometry)
+velpub = rospy.Publisher('gps_vel', Vector3Stamped)
 prev_msg_position = None
 
 start_pos = None
@@ -87,11 +88,18 @@ def callback(msg):
         ),
         twist=TwistWithCovariance(
             twist=Twist(
-                linear=Vector3(*vel),
+                linear=Vector3(*vel), # XXX should be in child_frame_id frame
                 angular=Vector3(0, 0, 0),
             ),
             covariance=numpy.diag([1, 2, 3, 1e10, 1e10, 1e10]).flatten(),
         ),
+    ))
+    velpub.publish(Vector3Stamped(
+        header=Header(
+            stamp=msg.header.stamp,
+            frame_id='/map',
+        ),
+        vector=Vector3(*vel),
     ))
 rospy.Subscriber('extended_fix', GPSFix, callback)
 
