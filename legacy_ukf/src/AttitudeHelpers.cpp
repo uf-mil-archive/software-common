@@ -1,8 +1,3 @@
-#include <stdexcept>
-#include <iostream>
-
-#include <boost/math/constants/constants.hpp>
-
 #include "Quaternion.h"
 
 #include "AttitudeHelpers.h"
@@ -26,63 +21,6 @@ double AttitudeHelpers::Markov_wStdDev(double dt, double T, double sigma)
     assert(T != 0);
 
     return (sigma*sqrt(2*dt/T - pow((dt/T),2)));
-}
-
-Vector3d AttitudeHelpers::RotationToEuler(const Matrix3d& R)
-{
-    if(R(2,0) == 1.0)
-    {
-        throw std::runtime_error("Euler angles are at singularity!");
-    }
-
-    Vector3d res(atan2(R(2,1),R(2,2)),
-            -asin(R(2,0)),
-            atan2(R(1,0),R(0,0)));
-
-    return res;
-}
-
-Matrix3d AttitudeHelpers::EulerToRotation(const Vector3d& rpy)
-{
-    double sphi = sin(rpy(0));
-    double cphi = cos(rpy(0));
-
-    double stheta = sin(rpy(1));
-    double ctheta = cos(rpy(1));
-
-    double spsi = sin(rpy(2));
-    double cpsi = cos(rpy(2));
-
-    return (Matrix3d() <<
-        cpsi*ctheta, -spsi*cphi + cpsi*stheta*sphi, spsi*sphi + cphi*cphi*stheta,
-        spsi*ctheta, cpsi*cphi + sphi*stheta*spsi, -cpsi*sphi + stheta*spsi*cphi,
-            -stheta, ctheta*sphi, ctheta*cphi).finished();
-
-}
-
-double AttitudeHelpers::DAngleDiff(double a, double b)
-{
-    static double Pi = boost::math::constants::pi<double>();
-    static double TwoPi = 2*Pi;
-
-    double res = b-a;
-    while(res < -1*Pi) res += TwoPi;
-    while(res > Pi) res-= TwoPi;
-
-    return res;
-}
-
-double AttitudeHelpers::DAngleClamp(double a)
-{
-    static double Pi = boost::math::constants::pi<double>();
-    static double TwoPi = 2*Pi;
-
-    double res = a;
-
-    while(res < -1*Pi) res+=TwoPi;
-    while(res > Pi) res-=TwoPi;
-
-    return res;
 }
 
 Vector4d AttitudeHelpers::RotationToQuaternion(const Matrix3d& R)
@@ -175,36 +113,6 @@ MatrixXd AttitudeHelpers::DiagMatrixFromVector(const VectorXd& v)
     res.fill(0.0);
     for(int i = 0; i < v.rows(); i++)
         res(i,i) = v(i);
-
-    return res;
-}
-
-VectorXd AttitudeHelpers::Tanh(const VectorXd& v)
-{
-    VectorXd res(v.rows(), 1);
-    res.fill(0.0);
-    if(v.cols() > 1)
-    {
-        cout << "AttitudeHelpers Error: Tanh only accepts vectors with 1 column!" << endl;
-        return res;
-    }
-    for(int i=0; i<v.rows(); i++)
-        res(i,0) = tanh(v(i,0));
-
-    return res;
-}
-
-VectorXd AttitudeHelpers::Sech(const VectorXd& v)
-{
-    VectorXd res(v.rows(), 1);
-    res.fill(0.0);
-    if(v.cols() > 1)
-    {
-        cout << "AttitudeHelpers Error: Sech only accepts vectors with 1 column!" << endl;
-        return res;
-    }
-    for(int i=0; i<v.rows(); i++)
-        res(i,0) = 1.0/cosh(v(i,0));
 
     return res;
 }

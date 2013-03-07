@@ -18,7 +18,6 @@ namespace subjugator
         static Eigen::Vector4d QuatConjugate(const Eigen::Vector4d& q);
         static Eigen::Vector4d QuatInverse(const Eigen::Vector4d& q);
         static Eigen::Vector3d QuatRotate(const Eigen::Vector4d& q, const Eigen::Vector3d vec);
-        static Eigen::Vector3d Quat2Euler(const Eigen::Vector4d& q);
         static Eigen::Vector4d RotVec2Quat(const Eigen::Vector3d& sigma);
     };
 }

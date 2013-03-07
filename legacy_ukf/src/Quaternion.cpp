@@ -85,11 +85,6 @@ Vector3d MILQuaternionOps::QuatRotate(const Vector4d& q, const Vector3d vec)
     return res;
 }
 
-Vector3d MILQuaternionOps::Quat2Euler(const Vector4d& q)
-{
-    return AttitudeHelpers::RotationToEuler(Quat2Rot(q));
-}
-
 Vector4d MILQuaternionOps::RotVec2Quat(const Vector3d& sigma) {
     // only valid for small angles!
     /* Explanation using Mathematica code:
