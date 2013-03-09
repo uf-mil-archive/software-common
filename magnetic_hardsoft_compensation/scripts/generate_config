@@ -73,7 +73,7 @@ rot = P1
 print 'rot =', rot
 
 q = transformations.quaternion_from_matrix(
-    [[c1, c2, c3, 0] for [c1, c2, c3] in rot.T] +
+    [[c1, c2, c3, 0] for [c1, c2, c3] in rot] +
     [[0,  0,  0,  1]])
 
 c = 1 + x0[0]**2*a2[0] + x0[1]**2*a2[1] + x0[2]**2*a2[2]
