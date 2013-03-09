@@ -90,7 +90,7 @@ def mesh_from_obj(file):
         if line[0] == "vn":
             normals.append(V(float(x) for x in line[1:]))
         elif line[0] == "f":
-            indices.append(tuple(tuple(int(y)-1 if y else None for y in x.split('/')) for x in line[1:]))
+            indices.append(tuple(tuple(int(y)-1 if y else None for y in (x.split('/')+['',''])[:3]) for x in line[1:]))
     return Mesh(vertices, texcoords, normals, indices)
 
 class Mesh(object):
@@ -118,6 +118,12 @@ class Mesh(object):
         x = ode.TriMeshData()
         x.build(self.vertices, [[p[0] for p in t] for t in self.indices])
         return x
+    
+    def translate(self, dx):
+        return Mesh([x+dx for x in self.vertices], self.texcoords, self.normals, self.indices)
+    
+    def rotate(self, q):
+        return Mesh([q.quat_rot(x) for x in self.vertices], self.texcoords, self.normals, self.indices)
 
 
 def rotate_to_body(body, inv=False):
@@ -205,7 +211,6 @@ class Interface(object):
                     self.pitch = min(max(self.pitch, -math.pi/2), math.pi/2)
             
             elif event.type == pygame.KEYDOWN:
-                print event.key
                 if event.key == pygame.K_TAB:
                     self.grabbed = not self.grabbed
                     pygame.event.set_grab(self.grabbed)
@@ -320,6 +325,7 @@ class Interface(object):
             msg = Odometry()
             msg.header.stamp = t
             msg.header.frame_id = '/simmap'
+            msg.child_frame_id = '/base_link'
             msg.pose.pose.position = Point(*ENU_from_NED(obj.body.getPosition()))
             ENU_from_NED_q = v(0, 1, 1, 0).unit()
             FRD_from_FLU_q = v(0, 1, 0, 0).unit()

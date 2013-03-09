@@ -19,6 +19,8 @@
 #include <uf_common/msg_helpers.h>
 
 #include "sphere_finding.h"
+#include "obj_finding.h"
+#include "image.h"
 
 using namespace std;
 using namespace std_msgs;
@@ -43,39 +45,61 @@ double uniform() {
     return boost::uniform_real<double>()(m);
 }
 
+Affine3d eigen_from_tf(tf::Transform transform) {
+    Affine3d x;
+    x = Translation3d(transform.getOrigin().x(), transform.getOrigin().y(), transform.getOrigin().z());
+    tf::Quaternion q = transform.getRotation();
+    x *= Quaterniond(q.w(), q.x(), q.y(), q.z());
+    return x;
+}
+
+static Obj model = Obj::from_file("shooter.obj");
+
 struct Particle {
-    btVector3 pos;
+    Vector3d pos;
+    Quaterniond q;
     Particle() {
-        pos = btVector3(-2+gauss(), 2+gauss(), -1+gauss());
+        pos = Vector3d(-3+gauss(), 10+gauss(), -4+gauss());
+        q = AngleAxisd(uniform()*2*M_PI, Vector3d(0, 0, 1));
     }
-    Particle(btVector3 pos) :
-        pos(pos) {
+    Particle(Vector3d pos, Quaterniond q) :
+        pos(pos), q(q) {
     }
     Particle predict(double dt) {
         Particle p(*this);
         // diffusion to model INS's position drift and to test near solutions to try to find a better fit
-        p.pos += btVector3(gauss(), gauss(), gauss()) * sqrt(.001 * dt);
+        p.pos += Vector3d(gauss(), gauss(), gauss()) * sqrt(.001 * dt);
+        p.q *= Quaterniond(AngleAxisd(gauss()*.1, Vector3d(0, 0, 1)));
         return p;
     }
-    double P(const vector<Vector3d>& sumimage, const CameraInfoConstPtr& cam_info, const tf::StampedTransform& transform, vector<int>* dbg_image=NULL) {
-        tf::Vector3 pos_camera_ = transform.inverse() * pos;
-        Vector3d pos_camera(pos_camera_[0], pos_camera_[1], pos_camera_[2]);
+    double P(const TaggedImage &img, vector<int>* dbg_image=NULL) {
+        vector<Result> results;
+        model.query(img, pos, q, results, dbg_image);
         
-        Vector3d inner_total_color; double inner_count;
-        sphere_query(sumimage, cam_info, pos_camera, buoy_r, inner_total_color, inner_count, dbg_image);
-        
-        Vector3d both_total_color; double both_count;
-        sphere_query(sumimage, cam_info, pos_camera, 2*buoy_r, both_total_color, both_count);
-        
-        Vector3d outer_total_color = both_total_color - inner_total_color;
-        double outer_count = both_count - inner_count;
+        Vector3d inner_total_color = results[2].total_color;
+        double inner_count = results[2].count;
+        Vector3d outer_total_color = results[3].total_color;
+        double outer_count = results[3].count;
         
         //cout << "count: " << count << endl;
         if(inner_count > 10 && outer_count > 10) {
             Vector3d inner_color = inner_total_color/inner_count;
             Vector3d outer_color = outer_total_color/outer_count;
             
-            return (inner_color - outer_color).norm();
+            if(inner_color.norm() < 1e-3) return 1e-6;
+            if(outer_color.norm() < 1e-3) return 1e-6;
+            
+            if(dbg_image) {
+                cout << inner_color << endl;
+                cout << endl;
+                cout << outer_color << endl;
+            }
+            
+            double p = 1-inner_color.dot(outer_color)/inner_color.norm()/outer_color.norm() + 1e-6;
+            //cout << p << endl;
+            assert(p >= -.1 && p <= 1.1);
+            //return pow((inner_color - outer_color).norm(), 5);
+            return p;
             
             //cout << "color: " << color << endl;
             
@@ -85,7 +109,7 @@ struct Particle {
                 + 1e-6; // 1e-6 is to make sure every particle doesn't go to 0 at the same time
         } else {
             // not visible
-            return .3; // expected value of above expression
+            return pow(.3, 5); // expected value of above expression
         }
     }
 };
@@ -95,7 +119,7 @@ struct Node {
     ros::NodeHandle private_nh;
     tf::TransformListener listener;
     string fixed_frame;
-    message_filters::Subscriber<Image> image_sub;
+    message_filters::Subscriber<sensor_msgs::Image> image_sub;
     message_filters::Subscriber<CameraInfo> info_sub;
     TimeSynchronizer<Image, CameraInfo> sync;
     ros::Publisher particles_pub;
@@ -112,8 +136,8 @@ struct Node {
     Node() :
         private_nh("~"),
         fixed_frame("/map"),
-        image_sub(nh, "camera/image_rect_color", 1),
-        info_sub(nh, "camera/camera_info", 1),
+        image_sub(nh, "sim_camera/image_rect_color", 1),
+        info_sub(nh, "sim_camera/camera_info", 1),
         sync(image_sub, info_sub, 10) {
         
         private_nh.getParam("fixed_frame", fixed_frame);
@@ -121,7 +145,7 @@ struct Node {
         particles_pub = nh.advertise<Marker>("particles", 1);
         pose_pub = nh.advertise<PoseStamped>("buoy", 1);
         marker_pub = nh.advertise<Marker>("buoy_rviz", 1);
-        image_pub = nh.advertise<Image>("camera/image_debug", 1);
+        image_pub = nh.advertise<sensor_msgs::Image>("camera/image_debug", 1);
         
         sync.registerCallback(boost::bind(&Node::callback, this, _1, _2));
     }
@@ -129,7 +153,7 @@ struct Node {
     void init_particles(ros::Time t) {
         particles.clear();
         
-        for(int i = 0; i < 2000; i++)
+        for(int i = 0; i < 1000; i++)
             particles.push_back(make_pair(1, Particle()));
         
         double total_weight = 0; BOOST_FOREACH(pair_type &pair, particles) total_weight += pair.first;
@@ -194,29 +218,10 @@ struct Node {
             BOOST_FOREACH(pair_type &pair, particles) pair.second = pair.second.predict(dt);
         }
         
-        static vector<Vector3d> sumimage; // static so not reallocated every frame
-        sumimage.resize(image->width * image->height);
-        
-        int step;
-        if(image->encoding == "rgba8") step = 4;
-        else if(image->encoding == "rgb8") step = 3;
-        else assert(false);
-        for(uint32_t row = 0; row < image->height; row++) {
-            Vector3d row_cumulative_sum(0, 0, 0);
-            for(uint32_t col = 0; col < image->width; col++) {
-                const uint8_t *pixel = image->data.data() + image->step * row + step * col;
-                double r = pixel[0] / 255.;
-                double g = pixel[1] / 255.;
-                double b = pixel[2] / 255.;
-                
-                row_cumulative_sum += Vector3d(r, g, b);
-                
-                sumimage[image->width * row + col] = row_cumulative_sum;
-            }
-        }
+        TaggedImage img(*image, *cam_info, eigen_from_tf(transform));
         
         // update weights
-        BOOST_FOREACH(pair_type &pair, particles) pair.first *= pair.second.P(sumimage, cam_info, transform);
+        BOOST_FOREACH(pair_type &pair, particles) pair.first *= pair.second.P(img);
         
         // normalize weights
         double total_weight = 0; BOOST_FOREACH(pair_type &pair, particles) total_weight += pair.first;
@@ -224,7 +229,7 @@ struct Node {
         
         pair_type max_p; max_p.first = -1; BOOST_FOREACH(pair_type &pair, particles) if(pair.first > max_p.first) max_p = pair;
         
-        btVector3 mean_position(0, 0, 0); BOOST_FOREACH(pair_type &pair, particles) mean_position += pair.first * pair.second.pos;
+        Vector3d mean_position(0, 0, 0); BOOST_FOREACH(pair_type &pair, particles) mean_position += pair.first * pair.second.pos;
         
         // send marker message for particle visualization
         Marker msg;
@@ -250,7 +255,7 @@ struct Node {
         Marker msg3;
         msg3.header.frame_id = fixed_frame;
         msg3.header.stamp = image->header.stamp;
-        msg3.pose.position = vec2xyz<Point>(mean_position);
+        msg3.pose.position = vec2xyz<Point>(max_p.second.pos);
         msg3.pose.orientation = make_xyzw<geometry_msgs::Quaternion>(0, 0, 0, 1);
         msg3.type = Marker::SPHERE;
         msg3.scale = make_xyz<Vector3>(2*buoy_r, 2*buoy_r, 2*buoy_r);
@@ -259,7 +264,8 @@ struct Node {
         
         if(image_pub.getNumSubscribers()) {
             vector<int> dbg_image(image->width*image->height, 0);
-            Particle(mean_position).P(sumimage, cam_info, transform, &dbg_image);
+            //Particle(mean_position).P(img, &dbg_image);
+            max_p.second.P(img, &dbg_image);
             
             Image msg4;
             msg4.header = image->header;
@@ -269,6 +275,10 @@ struct Node {
             msg4.is_bigendian = 0;
             msg4.step = image->width*3;
             msg4.data.resize(image->width*image->height*3);
+            int step;
+            if(image->encoding == "rgba8") step = 4;
+            else if(image->encoding == "rgb8") step = 3;
+            else assert(false);
             for(unsigned int y = 0; y < image->height; y++) {
                 for(unsigned int x = 0; x < image->width; x++) {
                     msg4.data[msg4.step*y + 3*x + 0] = 100*dbg_image[image->width*y + x];

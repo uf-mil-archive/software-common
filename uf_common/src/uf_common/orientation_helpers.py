@@ -82,3 +82,6 @@ test_triad()
 def lookat(forward, upish=[0, 0, 1]):
     # assumes standard forward-left-up body coordinate system
     return triad((forward, upish), ([1, 0, 0], [0, 0, 1]))
+def lookat_camera(forward, upish=[0, 0, 1]):
+    # assumes camera right-down-forward coordinate system
+    return triad((forward, upish), ([0, 0, 1], [0, -1, 0]))
