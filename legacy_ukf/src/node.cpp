@@ -85,8 +85,8 @@ struct Node {
         
         assert(imu->header.frame_id == mag->header.frame_id);
         
-        if(imu->header.frame_id != imu_frame)
-            navComputer->reset();
+        if(imu->header.frame_id != imu_frame && navComputer->getInitialized())
+            navComputer->reset(navComputer->GetNavInfo().position_NED);
         imu_frame = imu->header.frame_id;
         bodyvel_filter.setTargetFrame(imu_frame);
         

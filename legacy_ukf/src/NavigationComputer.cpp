@@ -2,6 +2,8 @@
 
 #include <boost/math/constants/constants.hpp>
 
+#include <ros/ros.h>
+
 #include "AttitudeHelpers.h"
 #include "Quaternion.h"
 #include "Triad.h"
@@ -17,10 +19,12 @@ NavigationComputer::NavigationComputer(const Config &conf):
     white_noise_sigma_f(0.0005,0.0005,0.0005), white_noise_sigma_w(0.05,0.05,0.05)
 {
     referenceGravityVector = AttitudeHelpers::LocalGravity(conf.latitudeDeg*boost::math::constants::pi<double>()/180.0, 0);
-    reset();
+    reset(Vector3d::Zero());
 }
 
-void NavigationComputer::reset() {
+void NavigationComputer::reset(Vector3d initialPosition) {
+    this->initialPosition = initialPosition;
+    
     depthRefAvailable = false;
     attRefAvailable = false;
     velRefAvailable = false;
@@ -43,7 +47,7 @@ void NavigationComputer::TryInit(ros::Time currentTime, Vector3d w_body, Vector3
                     conf.latitudeDeg*boost::math::constants::pi<double>()/180.0,
                     w_body,
                     a_body,    // a_body prev MUST be taken from a valid IMU packet!
-                    Vector3d(0, 0, depthRef), // initialPosition
+                    Vector3d(initialPosition[0], initialPosition[1], depthRef), // initialPosition
                     Vector3d(0, 0, 0), // initialVelocity
                     referenceGravityVector,    // Gravity vector from file or equation
                     attRef,    //
@@ -150,8 +154,10 @@ void NavigationComputer::UpdateIMU(const IMUInfo& imu)
 {
     Acceleration_BODY_RAW = imu.acceleration; // used in updateKalmanTo
     
-    if(initialized && (imu.timestamp < ins->GetData().time || imu.timestamp > ins->GetData().time + ros::Duration(0.1))) // reinitialize if time goes backwards or forwards too far
-        reset();
+    if(initialized && (imu.timestamp < ins->GetData().time || imu.timestamp > ins->GetData().time + ros::Duration(0.1))) { // reinitialize if time goes backwards or forwards too far
+        reset(GetNavInfo().position_NED);
+        ROS_WARN("legacy_ukf: reset due to IMU timestamp changing");
+    }
     
     // The INS has the rotation info already, so just push the packet through
     if(initialized) {

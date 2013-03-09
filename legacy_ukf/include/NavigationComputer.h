@@ -29,7 +29,7 @@ namespace subjugator {
         
         bool getInitialized() { return initialized; }
         LPOSVSSInfo GetNavInfo();
-        void reset();
+        void reset(Vector3d initialPosition);
         
         Vector4d getAttRef() {
             return attRef;
@@ -49,6 +49,8 @@ namespace subjugator {
 
         static const double MAX_DEPTH = 15; // m
 
+        Vector3d initialPosition;
+        
         Vector3d referenceGravityVector;
         Vector3d white_noise_sigma_f; // g's
         Vector3d white_noise_sigma_w; // 60ths of a degree??
