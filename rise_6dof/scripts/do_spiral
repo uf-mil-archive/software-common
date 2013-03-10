@@ -20,15 +20,23 @@ from uf_common.msg import PoseTwist, PoseTwistStamped
 
 rospy.init_node('do_spiral')
 
-RADIUS = 2 # meter
-PERIOD = 30 # second
+RADIUS = 4 # meter
+SPEED = .55 # meter/second
+PERIOD = 2*math.pi*RADIUS/SPEED # second
 DESCENT = 0.5 # meter/revolution
 dt = 1e-3 # second (used for numerical derivatives)
 
-def position_generator(t):
-    r = RADIUS*(1 - math.e**(-t/30))
+print 'waiting for current position...'
+current = rospy.wait_for_message('/odom', Odometry)
+start = orientation_helpers.xyz_array(current.pose.pose.position)
+print '...got', start
+
+def position_generator_orig(t):
+    r = RADIUS #*(1 - math.e**(-t/30))
     w = 2*math.pi / PERIOD
-    return numpy.array([r*math.cos(w*t), r*math.sin(w*t), -DESCENT*t/PERIOD])
+    return start + numpy.array([r*math.sin(w*t), r*-math.cos(w*t), -DESCENT*t/PERIOD])
+
+position_generator = lambda t: position_generator_orig(t) - position_generator_orig(0)
 
 def positionvelocity_generator(t):
     pos = position_generator(t)
@@ -50,11 +58,6 @@ def positionorientationvelocityangularvelocity_generator(t):
     return pos, orient, vel, angvel
 
 
-print 'waiting for current position...'
-current = rospy.wait_for_message('/odom', Odometry)
-start = orientation_helpers.xyz_array(current.pose.pose.position)
-print '...got', start
-
 pub = rospy.Publisher('/trajectory', PoseTwistStamped)
 
 start_time = rospy.Time.now()
@@ -65,6 +68,8 @@ while not rospy.is_shutdown():
     
     t = (now_time - start_time).to_sec()
     pos, orient, vel, angvel = positionorientationvelocityangularvelocity_generator(t)
+    if pos[2] < -5:
+        break
     
     world_from_body = transformations.quaternion_matrix(orient)[:3, :3]
     
@@ -75,7 +80,7 @@ while not rospy.is_shutdown():
         ),
         posetwist=PoseTwist(
             pose=Pose(
-                position=Point(*pos + start),
+                position=Point(*pos),
                 orientation=Quaternion(*orient),
             ),
             twist=Twist(
