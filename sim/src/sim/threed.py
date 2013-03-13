@@ -16,7 +16,7 @@ import tf
 from tf import transformations
 from sensor_msgs.msg import Image, CameraInfo
 from nav_msgs.msg import Odometry
-from geometry_msgs.msg import Point
+from geometry_msgs.msg import Point, Vector3, Quaternion
 
 from vector import v, V
 
@@ -315,10 +315,18 @@ class Interface(object):
                              t,
                              "/sim_camera",
                              "/base_link")
+			 
+            ENU_from_NED = lambda (e, n, u): (n, e, -u)
             msg = Odometry()
             msg.header.stamp = t
             msg.header.frame_id = '/simmap'
-            msg.pose.pose.position = Point(*obj.body.getPosition())
+            msg.pose.pose.position = Point(*ENU_from_NED(obj.body.getPosition()))
+            ENU_from_NED_q = v(0, 1, 1, 0).unit()
+            FRD_from_FLU_q = v(0, 1, 0, 0).unit()
+            q = ENU_from_NED_q % V(obj.body.getQuaternion()) % FRD_from_FLU_q
+            msg.pose.pose.orientation = Quaternion(q[1], q[2], q[3], q[0])
+            msg.twist.twist.linear = Vector3(*q.conj().quat_rot(ENU_from_NED(obj.body.getLinearVel())))
+            msg.twist.twist.angular = Vector3(*q.conj().quat_rot(ENU_from_NED(obj.body.getAngularVel())))
             self.odom_pub.publish(msg)
         
         
