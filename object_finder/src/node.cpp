@@ -92,7 +92,9 @@ struct Particle {
 
 struct Node {
     ros::NodeHandle nh;
+    ros::NodeHandle private_nh;
     tf::TransformListener listener;
+    string fixed_frame;
     message_filters::Subscriber<Image> image_sub;
     message_filters::Subscriber<CameraInfo> info_sub;
     TimeSynchronizer<Image, CameraInfo> sync;
@@ -108,9 +110,13 @@ struct Node {
     
     
     Node() :
+        private_nh("~"),
+        fixed_frame("/map"),
         image_sub(nh, "camera/image_rect_color", 1),
         info_sub(nh, "camera/camera_info", 1),
         sync(image_sub, info_sub, 10) {
+        
+        private_nh.getParam("fixed_frame", fixed_frame);
         
         particles_pub = nh.advertise<Marker>("particles", 1);
         pose_pub = nh.advertise<PoseStamped>("buoy", 1);
@@ -153,8 +159,8 @@ struct Node {
         tf::StampedTransform transform;
         try {
             listener.setExtrapolationLimit(ros::Duration(0.3));
-            listener.waitForTransform("/map", image->header.frame_id, image->header.stamp, ros::Duration(0.05));
-            listener.lookupTransform("/map", image->header.frame_id, image->header.stamp, transform);
+            listener.waitForTransform(fixed_frame, image->header.frame_id, image->header.stamp, ros::Duration(0.05));
+            listener.lookupTransform(fixed_frame, image->header.frame_id, image->header.stamp, transform);
         } catch (tf::TransformException ex){
             ROS_ERROR("%s", ex.what());
             return;
@@ -222,7 +228,7 @@ struct Node {
         
         // send marker message for particle visualization
         Marker msg;
-        msg.header.frame_id = "/map";
+        msg.header.frame_id = fixed_frame;
         msg.header.stamp = image->header.stamp;
         msg.type = Marker::POINTS;
         msg.scale = make_xyz<Vector3>(buoy_r, buoy_r, 1);
@@ -235,14 +241,14 @@ struct Node {
         
         
         PoseStamped msg2;
-        msg2.header.frame_id = "/map";
+        msg2.header.frame_id = fixed_frame;
         msg2.header.stamp = image->header.stamp;
         msg2.pose.position = vec2xyz<Point>(max_p.second.pos);
         msg2.pose.orientation = make_xyzw<geometry_msgs::Quaternion>(0, 0, 0, 1);
         pose_pub.publish(msg2);
         
         Marker msg3;
-        msg3.header.frame_id = "/map";
+        msg3.header.frame_id = fixed_frame;
         msg3.header.stamp = image->header.stamp;
         msg3.pose.position = vec2xyz<Point>(mean_position);
         msg3.pose.orientation = make_xyzw<geometry_msgs::Quaternion>(0, 0, 0, 1);
