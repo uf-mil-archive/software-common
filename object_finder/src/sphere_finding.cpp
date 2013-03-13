@@ -66,7 +66,7 @@ bool intersect_plane_sphere(Vector3d plane_axis1, Vector3d plane_axis2,
     return true;
 }
 
-bool _accumulate_sphere_scanline(const vector<Vector3d>& sumimage, const CameraInfoConstPtr& cam_info, Vector3d sphere_pos_camera, double sphere_radius, const Matrix<double, 3, 4> &proj, uint32_t yy, Vector3d &total_color, double &count) {
+bool _accumulate_sphere_scanline(const vector<Vector3d>& sumimage, const CameraInfoConstPtr& cam_info, Vector3d sphere_pos_camera, double sphere_radius, const Matrix<double, 3, 4> &proj, uint32_t yy, Vector3d &total_color, double &count, vector<int>* dbg_image=NULL) {
     double y = yy;
     
     // solution space of project((X, Y, Z)) = (x, y, z) with y fixed
@@ -110,6 +110,11 @@ bool _accumulate_sphere_scanline(const vector<Vector3d>& sumimage, const CameraI
     
     total_color += (xend == 0 ? Vector3d::Zero() : sumimage[yy * cam_info->width + xend - 1]) - (xstart == 0 ? Vector3d::Zero() : sumimage[yy * cam_info->width + xstart - 1]);
     count += xend - xstart;
+    if(dbg_image) {
+        for(int X = xstart; X < xend; X++) {
+            (*dbg_image)[yy * cam_info->width + X] += 1;
+        }
+    }
     
     /*cout << yy << " "
         << "(" << point1_screen(0) << " " << point1_screen(1) << ") "
@@ -118,7 +123,7 @@ bool _accumulate_sphere_scanline(const vector<Vector3d>& sumimage, const CameraI
     return true;
 }
 
-void sphere_query(const vector<Vector3d>& sumimage, const CameraInfoConstPtr& cam_info, Vector3d sphere_pos_camera, double sphere_radius, Vector3d &total_color, double &count) {
+void sphere_query(const vector<Vector3d>& sumimage, const CameraInfoConstPtr& cam_info, Vector3d sphere_pos_camera, double sphere_radius, Vector3d &total_color, double &count, vector<int>* dbg_image) {
     // get the sum of the color values (along with the count) of the pixels
     // that are included within the provided sphere specified by
     // sphere_pos_camera and sphere_radius
@@ -135,11 +140,11 @@ void sphere_query(const vector<Vector3d>& sumimage, const CameraInfoConstPtr& ca
     count = 0;
     
     for(int32_t yy = y_center_hint; yy >= 0; yy--) {
-        if(!_accumulate_sphere_scanline(sumimage, cam_info, sphere_pos_camera, sphere_radius, proj, yy, total_color, count))
+        if(!_accumulate_sphere_scanline(sumimage, cam_info, sphere_pos_camera, sphere_radius, proj, yy, total_color, count, dbg_image))
             break;
     }
     for(int32_t yy = y_center_hint + 1; yy < (int32_t)cam_info->height; yy++) {
-        if(!_accumulate_sphere_scanline(sumimage, cam_info, sphere_pos_camera, sphere_radius, proj, yy, total_color, count))
+        if(!_accumulate_sphere_scanline(sumimage, cam_info, sphere_pos_camera, sphere_radius, proj, yy, total_color, count, dbg_image))
             break;
     }
 }

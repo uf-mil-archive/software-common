@@ -48,18 +48,21 @@ struct Particle {
     Particle() {
         pos = btVector3(-2+gauss(), 2+gauss(), -1+gauss());
     }
+    Particle(btVector3 pos) :
+        pos(pos) {
+    }
     Particle predict(double dt) {
         Particle p(*this);
         // diffusion to model INS's position drift and to test near solutions to try to find a better fit
         p.pos += btVector3(gauss(), gauss(), gauss()) * sqrt(.001 * dt);
         return p;
     }
-    double P(const vector<Vector3d>& sumimage, const CameraInfoConstPtr& cam_info, const tf::StampedTransform& transform) {
+    double P(const vector<Vector3d>& sumimage, const CameraInfoConstPtr& cam_info, const tf::StampedTransform& transform, vector<int>* dbg_image=NULL) {
         tf::Vector3 pos_camera_ = transform.inverse() * pos;
         Vector3d pos_camera(pos_camera_[0], pos_camera_[1], pos_camera_[2]);
         
         Vector3d inner_total_color; double inner_count;
-        sphere_query(sumimage, cam_info, pos_camera, buoy_r, inner_total_color, inner_count);
+        sphere_query(sumimage, cam_info, pos_camera, buoy_r, inner_total_color, inner_count, dbg_image);
         
         Vector3d both_total_color; double both_count;
         sphere_query(sumimage, cam_info, pos_camera, 2*buoy_r, both_total_color, both_count);
@@ -96,6 +99,7 @@ struct Node {
     ros::Publisher particles_pub;
     ros::Publisher pose_pub;
     ros::Publisher marker_pub;
+    ros::Publisher image_pub;
     
     
     typedef std::pair<double, Particle> pair_type;
@@ -111,6 +115,7 @@ struct Node {
         particles_pub = nh.advertise<Marker>("particles", 1);
         pose_pub = nh.advertise<PoseStamped>("buoy", 1);
         marker_pub = nh.advertise<Marker>("buoy_rviz", 1);
+        image_pub = nh.advertise<Image>("camera/image_debug", 1);
         
         sync.registerCallback(boost::bind(&Node::callback, this, _1, _2));
     }
@@ -245,6 +250,28 @@ struct Node {
         msg3.scale = make_xyz<Vector3>(2*buoy_r, 2*buoy_r, 2*buoy_r);
         msg3.color = make_rgba<ColorRGBA>(0, 1, 0, 1);
         marker_pub.publish(msg3);
+        
+        if(image_pub.getNumSubscribers()) {
+            vector<int> dbg_image(image->width*image->height, 0);
+            Particle(mean_position).P(sumimage, cam_info, transform, &dbg_image);
+            
+            Image msg4;
+            msg4.header = image->header;
+            msg4.height = image->height;
+            msg4.width = image->width;
+            msg4.encoding = "rgb8";
+            msg4.is_bigendian = 0;
+            msg4.step = image->width*3;
+            msg4.data.resize(image->width*image->height*3);
+            for(unsigned int y = 0; y < image->height; y++) {
+                for(unsigned int x = 0; x < image->width; x++) {
+                    msg4.data[msg4.step*y + 3*x + 0] = 100*dbg_image[image->width*y + x];
+                    const uint8_t *pixel = image->data.data() + image->step * y + step * x;
+                    msg4.data[msg4.step*y + 3*x + 1] = pixel[1];
+                }
+            }
+            image_pub.publish(msg4);
+        }
     }
 };
 
