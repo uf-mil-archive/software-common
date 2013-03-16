@@ -4,6 +4,7 @@ from __future__ import division
 
 import math
 import sys
+import collections
 
 import numpy
 
@@ -33,13 +34,21 @@ class Node(object):
         self.config = sonarConfig.defaults
         server = DynamicReconfigureServer(sonarConfig, self.reconfigure)
         
+        q = collections.deque()
+        def recv_thread():
+            while not rospy.is_shutdown():
+                res = d.read_sonar_return_data()
+                q.append(res)
+        import threading
+        threading.Thread(target=recv_thread).start()
+        
         pub = rospy.Publisher('imagenex_852', PointCloud2)
         while not rospy.is_shutdown():
-            rospy.sleep(.03) # no response without this wait. why is this necessary?
-            
-            d.send_switch_data_command(**self.config)
-            res = d.read_sonar_return_data()
-            
+          d.send_switch_data_command(**self.config)
+          rospy.sleep(.06)
+          print len(q)
+          while q:
+            res = q.popleft()
             array = numpy.zeros(len(res['echo_data']), dtype=[('x', numpy.float32), ('y', numpy.float32), ('z', numpy.float32), ('intensity', numpy.float32)])
             for i, x in enumerate(res['echo_data']):
                 array[i]['x'] = res['range_meters'] * i/len(res['echo_data']) * math.cos(math.radians(res['head_position_degrees']))
