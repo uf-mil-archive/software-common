@@ -190,8 +190,8 @@ class Interface(object):
         self.objs = []
         
         rospy.init_node('sim')
-        self.image_pub = rospy.Publisher('/sim_camera/image_rect_color', Image)
-        self.info_pub = rospy.Publisher('/sim_camera/camera_info', CameraInfo)
+        self.image_pub = rospy.Publisher('/front_camera/image_rect_color', Image)
+        self.info_pub = rospy.Publisher('/front_camera/camera_info', CameraInfo)
         self.odom_pub = rospy.Publisher('/sim_odom', Odometry)
         self.tf_br = tf.TransformBroadcaster()
         

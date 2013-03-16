@@ -15,9 +15,11 @@
 #include <sensor_msgs/CameraInfo.h>
 #include <geometry_msgs/PoseStamped.h>
 #include <visualization_msgs/Marker.h>
+#include <actionlib/server/simple_action_server.h>
 
 #include <uf_common/msg_helpers.h>
 
+#include "object_finder/FindSphereAction.h"
 #include "sphere_finding.h"
 #include "obj_finding.h"
 #include "image.h"
@@ -58,8 +60,14 @@ static Obj model = Obj::from_file("shooter.obj");
 struct Particle {
     Vector3d pos;
     Quaterniond q;
-    Particle() {
-        pos = Vector3d(-3+gauss(), 10+gauss(), -4+gauss());
+    Particle() { }
+    Particle(const object_finder::FindSphereGoal &goal) {
+        pos = xyz2vec(goal.guess.pose.position);
+        pos += Vector3d(
+            gauss() * sqrt(goal.guess.covariance[0+6*0]),
+            gauss() * sqrt(goal.guess.covariance[1+6*1]),
+            gauss() * sqrt(goal.guess.covariance[2+6*2]));
+        //pos = Vector3d(-3+gauss(), 10+gauss(), -4+gauss());
         q = AngleAxisd(uniform()*2*M_PI, Vector3d(0, 0, 1));
     }
     Particle(Vector3d pos, Quaterniond q) :
@@ -68,11 +76,21 @@ struct Particle {
     Particle predict(double dt) {
         Particle p(*this);
         // diffusion to model INS's position drift and to test near solutions to try to find a better fit
-        p.pos += Vector3d(gauss(), gauss(), gauss()) * sqrt(.001 * dt);
+        p.pos += Vector3d(gauss(), gauss(), gauss()) * sqrt(.01 * dt);
         p.q *= Quaterniond(AngleAxisd(gauss()*.1, Vector3d(0, 0, 1)));
         return p;
     }
     double P(const TaggedImage &img, vector<int>* dbg_image=NULL) {
+        Vector3d inner_total_color; double inner_count;
+        sphere_query(img, pos, buoy_r, inner_total_color, inner_count, dbg_image);
+        
+        Vector3d both_total_color; double both_count;
+        sphere_query(img, pos, 2*buoy_r, both_total_color, both_count, dbg_image);
+        
+        Vector3d outer_total_color = both_total_color - inner_total_color;
+        double outer_count = both_count - inner_count;
+        
+        /*
         vector<Result> results;
         model.query(img, pos, q, results, dbg_image);
         
@@ -80,11 +98,14 @@ struct Particle {
         double inner_count = results[2].count;
         Vector3d outer_total_color = results[3].total_color;
         double outer_count = results[3].count;
+        */
         
         //cout << "count: " << count << endl;
         if(inner_count > 10 && outer_count > 10) {
             Vector3d inner_color = inner_total_color/inner_count;
             Vector3d outer_color = outer_total_color/outer_count;
+            
+            return (inner_color - outer_color).norm();
             
             if(inner_color.norm() < 1e-3) return 1e-6;
             if(outer_color.norm() < 1e-3) return 1e-6;
@@ -109,7 +130,7 @@ struct Particle {
                 + 1e-6; // 1e-6 is to make sure every particle doesn't go to 0 at the same time
         } else {
             // not visible
-            return pow(.3, 5); // expected value of above expression
+            return .1; // expected value of above expression
         }
     }
 };
@@ -117,8 +138,8 @@ struct Particle {
 struct Node {
     ros::NodeHandle nh;
     ros::NodeHandle private_nh;
+    actionlib::SimpleActionServer<object_finder::FindSphereAction> actionserver;
     tf::TransformListener listener;
-    string fixed_frame;
     message_filters::Subscriber<sensor_msgs::Image> image_sub;
     message_filters::Subscriber<CameraInfo> info_sub;
     TimeSynchronizer<Image, CameraInfo> sync;
@@ -127,6 +148,8 @@ struct Node {
     ros::Publisher marker_pub;
     ros::Publisher image_pub;
     
+    bool have_goal;
+    object_finder::FindSphereGoal goal;
     
     typedef std::pair<double, Particle> pair_type;
     std::vector<pair_type> particles;
@@ -135,12 +158,11 @@ struct Node {
     
     Node() :
         private_nh("~"),
-        fixed_frame("/map"),
-        image_sub(nh, "sim_camera/image_rect_color", 1),
-        info_sub(nh, "sim_camera/camera_info", 1),
-        sync(image_sub, info_sub, 10) {
-        
-        private_nh.getParam("fixed_frame", fixed_frame);
+        actionserver(nh, "findsphere", false),
+        image_sub(nh, "front_camera/image_rect_color", 1),
+        info_sub(nh, "front_camera/camera_info", 1),
+        sync(image_sub, info_sub, 10),
+        have_goal(false) {
         
         particles_pub = nh.advertise<Marker>("particles", 1);
         pose_pub = nh.advertise<PoseStamped>("buoy", 1);
@@ -148,13 +170,15 @@ struct Node {
         image_pub = nh.advertise<sensor_msgs::Image>("camera/image_debug", 1);
         
         sync.registerCallback(boost::bind(&Node::callback, this, _1, _2));
+        
+        actionserver.start();
     }
     
     void init_particles(ros::Time t) {
         particles.clear();
         
         for(int i = 0; i < 1000; i++)
-            particles.push_back(make_pair(1, Particle()));
+            particles.push_back(make_pair(1, Particle(goal)));
         
         double total_weight = 0; BOOST_FOREACH(pair_type &pair, particles) total_weight += pair.first;
         BOOST_FOREACH(pair_type &pair, particles) pair.first /= total_weight;
@@ -165,6 +189,19 @@ struct Node {
     void callback(const ImageConstPtr& image, const CameraInfoConstPtr& cam_info) {
         assert(image->header.stamp == cam_info->header.stamp);
         assert(image->header.frame_id == cam_info->header.frame_id);
+        
+        
+        if(actionserver.isNewGoalAvailable()) {
+            have_goal = true;
+            boost::shared_ptr<const object_finder::FindSphereGoal> goal = actionserver.acceptNewGoal();
+            this->goal = *goal;
+            particles.clear();
+        } else if(actionserver.isPreemptRequested()) {
+            have_goal = false;
+        }
+        
+        if(!have_goal)
+            return;
         
         if(particles.size() == 0) {
             ROS_INFO("got first frame; initializing particles");
@@ -183,8 +220,8 @@ struct Node {
         tf::StampedTransform transform;
         try {
             listener.setExtrapolationLimit(ros::Duration(0.3));
-            listener.waitForTransform(fixed_frame, image->header.frame_id, image->header.stamp, ros::Duration(0.05));
-            listener.lookupTransform(fixed_frame, image->header.frame_id, image->header.stamp, transform);
+            listener.waitForTransform(goal.header.frame_id, image->header.frame_id, image->header.stamp, ros::Duration(0.05));
+            listener.lookupTransform(goal.header.frame_id, image->header.frame_id, image->header.stamp, transform);
         } catch (tf::TransformException ex){
             ROS_ERROR("%s", ex.what());
             return;
@@ -218,6 +255,11 @@ struct Node {
             BOOST_FOREACH(pair_type &pair, particles) pair.second = pair.second.predict(dt);
         }
         
+        for(int i = 0; i < particles.size()*.01; i++) {
+            int j = particles.size() * uniform();
+            particles[j] = make_pair(1./particles.size()/10, Particle(goal));
+        }
+        
         TaggedImage img(*image, *cam_info, eigen_from_tf(transform));
         
         // update weights
@@ -233,7 +275,7 @@ struct Node {
         
         // send marker message for particle visualization
         Marker msg;
-        msg.header.frame_id = fixed_frame;
+        msg.header.frame_id = goal.header.frame_id;
         msg.header.stamp = image->header.stamp;
         msg.type = Marker::POINTS;
         msg.scale = make_xyz<Vector3>(buoy_r, buoy_r, 1);
@@ -246,14 +288,14 @@ struct Node {
         
         
         PoseStamped msg2;
-        msg2.header.frame_id = fixed_frame;
+        msg2.header.frame_id = goal.header.frame_id;
         msg2.header.stamp = image->header.stamp;
         msg2.pose.position = vec2xyz<Point>(max_p.second.pos);
         msg2.pose.orientation = make_xyzw<geometry_msgs::Quaternion>(0, 0, 0, 1);
         pose_pub.publish(msg2);
         
         Marker msg3;
-        msg3.header.frame_id = fixed_frame;
+        msg3.header.frame_id = goal.header.frame_id;
         msg3.header.stamp = image->header.stamp;
         msg3.pose.position = vec2xyz<Point>(max_p.second.pos);
         msg3.pose.orientation = make_xyzw<geometry_msgs::Quaternion>(0, 0, 0, 1);
@@ -261,6 +303,12 @@ struct Node {
         msg3.scale = make_xyz<Vector3>(2*buoy_r, 2*buoy_r, 2*buoy_r);
         msg3.color = make_rgba<ColorRGBA>(0, 1, 0, 1);
         marker_pub.publish(msg3);
+        
+        object_finder::FindSphereFeedback feedback;
+        feedback.pose.position = vec2xyz<Point>(max_p.second.pos);
+        feedback.P = max_p.second.P(img);
+        feedback.P_within_10cm = 0; BOOST_FOREACH(pair_type &pair, particles) if((pair.second.pos - max_p.second.pos).norm() <= .1) feedback.P_within_10cm += pair.first;
+        actionserver.publishFeedback(feedback);
         
         if(image_pub.getNumSubscribers()) {
             vector<int> dbg_image(image->width*image->height, 0);
