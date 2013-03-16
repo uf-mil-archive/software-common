@@ -20,23 +20,24 @@ from uf_common.msg import PoseTwist, PoseTwistStamped
 
 rospy.init_node('do_spiral')
 
-RADIUS = 4 # meter
-SPEED = .55 # meter/second
+RADIUS = 4*.75 # meter
+SPEED = .55*.75 # meter/second
 PERIOD = 2*math.pi*RADIUS/SPEED # second
-DESCENT = 0.5 # meter/revolution
+DESCENT = 0.5*.75 # meter/revolution
 dt = 1e-3 # second (used for numerical derivatives)
 
 print 'waiting for current position...'
 current = rospy.wait_for_message('/odom', Odometry)
 start = orientation_helpers.xyz_array(current.pose.pose.position)
 print '...got', start
+start[2] = -.25
 
 def position_generator_orig(t):
     r = RADIUS #*(1 - math.e**(-t/30))
     w = 2*math.pi / PERIOD
     return start + numpy.array([r*math.sin(w*t), r*-math.cos(w*t), -DESCENT*t/PERIOD])
 
-position_generator = lambda t: position_generator_orig(t) - position_generator_orig(0)
+position_generator = lambda t: start + position_generator_orig(t) - position_generator_orig(0)
 
 def positionvelocity_generator(t):
     pos = position_generator(t)
