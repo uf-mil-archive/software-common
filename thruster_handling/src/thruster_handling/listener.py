@@ -16,18 +16,15 @@ class ThrusterListener(object):
         self._thruster_cache = {}
         self._sub = rospy.Subscriber('thrusters/info', ThrusterInfo, self._thrusterinfo_callback)
         
-        self._command_pub = rospy.Publisher('thrusters/command', ThrusterCommand)
+        self._command_pubs = {}
     
     def get_thrusters(self):
         t = rospy.Time.now()
         return [thruster for thruster in self._thruster_cache.values() if thruster.header.stamp + thruster.lifetime >= t and thruster.active]
     
-    def send_command(self, stamp, frame_id, id, force):
-        self._command_pub.publish(ThrusterCommand(
-            header=Header(
-                stamp=stamp,
-                frame_id=frame_id,
-            ),
-            id=id,
+    def send_command(self, id, force):
+        if id not in self._command_pubs:
+            self._command_pubs[id] = rospy.Publisher('thrusters/command/' + id, ThrusterCommand)
+        self._command_pubs[id].publish(ThrusterCommand(
             force=force,
         ))

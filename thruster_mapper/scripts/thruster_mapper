@@ -60,7 +60,7 @@ def wrench_callback(msg):
         efforts = efforts / scaled_max
     
     for (ti, _, _), effort in zip(good_thrusterinfos, efforts):
-        thruster_listener.send_command(msg.header.stamp, ti.header.frame_id, ti.id, effort)
+        thruster_listener.send_command(ti.id, effort)
 rospy.Subscriber('wrench', WrenchStamped, wrench_callback)
 
 

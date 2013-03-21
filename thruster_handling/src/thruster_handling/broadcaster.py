@@ -6,9 +6,6 @@ from thruster_handling.msg import ThrusterCommand, ThrusterInfo
 
 class ThrusterBroadcaster(object):
     def _command_callback(self, msg):
-        if msg.id != self.id:
-            return
-        
         self.command_callback(msg.force)
     
     def __init__(self, frame_id, id, lifetime, position, direction, min_force, max_force, command_callback):
@@ -22,7 +19,7 @@ class ThrusterBroadcaster(object):
         self.command_callback = command_callback
         
         self.pub = rospy.Publisher('thrusters/info', ThrusterInfo)
-        self._command_sub = rospy.Subscriber('thrusters/command', ThrusterCommand, self._command_callback)
+        self._command_sub = rospy.Subscriber('thrusters/command/' + id, ThrusterCommand, self._command_callback)
     
     def send(self, active=True):
         self.pub.publish(ThrusterInfo(
