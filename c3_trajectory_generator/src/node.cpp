@@ -6,6 +6,7 @@
 
 #include <uf_common/PoseTwistStamped.h>
 #include <uf_common/msg_helpers.h>
+#include <uf_common/param_helpers.h>
 #include <kill_handling/Kill.h>
 #include <kill_handling/listener.h>
 
@@ -89,24 +90,17 @@ struct Node {
         kill_listener(boost::bind(&Node::killed_callback, this)),
         actionserver(nh, "moveto", false) {
         
-        limits.vmin_b << -.2, -.5, -.4, -.75, -.5, -1;
-        limits.vmax_b << .75,  .5,  .4,  .75,  .5,  1;
-        limits.amin_b << -.1,-.05, -.1, -1.5, -.2,-.15;
-        limits.amax_b << .18, .05,.125,  1.5,  .2, .15;
-        limits.arevoffset_b << .05, 0, 0;
-        limits.umax_b << .25, .25, .25, .1, .1, .1;
-        traj_dt = ros::Duration(0.0001);
-        
         ROS_ASSERT(private_nh.getParam("fixed_frame", fixed_frame));
         ROS_ASSERT(private_nh.getParam("body_frame", body_frame));
-        /*
         
-        subjugator::NavigationComputer::Config navconf;
-        navconf.referenceNorthVector = get_Vector3(private_nh, "referenceNorthVector");
-        ROS_ASSERT(private_nh.getParam("latitudeDeg", navconf.latitudeDeg));
-        navconf.dvl_sigma = get_Vector3(private_nh, "dvl_sigma");
-        navconf.att_sigma = get_Vector3(private_nh, "att_sigma");
-        */
+        limits.vmin_b = get_Vector(private_nh, "vmin_b");
+        limits.vmax_b = get_Vector(private_nh, "vmax_b");
+        limits.amin_b = get_Vector(private_nh, "amin_b");
+        limits.amax_b = get_Vector(private_nh, "amax_b");
+        limits.arevoffset_b = get_Vector(private_nh, "arevoffset_b");
+        limits.umax_b = get_Vector(private_nh, "umax_b");
+        double traj_dt_ = 0.0001; private_nh.getParam("traj_dt", traj_dt_);
+        traj_dt = ros::Duration(traj_dt_);
         
         odom_sub = nh.subscribe<Odometry>("odom", 1, boost::bind(&Node::odom_callback, this, _1));
         

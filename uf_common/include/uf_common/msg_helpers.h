@@ -1,3 +1,6 @@
+#ifndef UF_COMMON__MSG_HELPERS_H
+#define UF_COMMON__MSG_HELPERS_H
+
 #include <Eigen/Dense>
 #include <tf/tf.h>
 
@@ -43,7 +46,9 @@ inline Eigen::Vector3d vec2vec(tf::Vector3 v) {
 inline tf::Vector3 vec2vec(Eigen::Vector3d v) {
     return tf::Vector3(v[0], v[1], v[2]);
 }
-
+inline tf::Quaternion vec2quat(Eigen::Vector4d v) {
+    return tf::Quaternion(v[0], v[1], v[2], v[3]);
+}
 
 
 template <class T>
@@ -64,3 +69,5 @@ inline T vec2wxyz(Eigen::Vector4d v) {
 
 
 }
+
+#endif
