@@ -38,16 +38,18 @@ def ecef_from_latlongheight(latitude, longitude, height):
 pub = rospy.Publisher('gps_odom', Odometry)
 velpub = rospy.Publisher('gps_vel', Vector3Stamped)
 prev_msg_position = None
+prev_msg_track = None
+prev_relpos = None
+prev_ts = None
 
 start_pos = None
 
 def callback(msg):
-    global prev_msg_position
+    global prev_msg_position, prev_msg_track, prev_relpos, prev_ts
     # gpsd_client seems to send duplicate messages ... filter them out
-    if msg.latitude == prev_msg_position:
-        #print 'ignored!'
+    if msg.latitude == prev_msg_position and msg.track == prev_msg_track:
+        print 'ignored!'
         return
-    prev_msg_position = msg.latitude
     
     pos = ecef_from_latlongheight(
         math.radians(msg.latitude),
@@ -65,11 +67,19 @@ def callback(msg):
     
     relpos = enu_from_ecef.dot(pos - start_pos)
     
+    
     vel = numpy.array([
         msg.speed * math.sin(math.radians(msg.track)),
         msg.speed * math.cos(math.radians(msg.track)),
-        msg.climb,
+        msg.climb if not math.isnan(msg.climb) else 0,
     ])
+    if prev_relpos is not None:
+        vel2 = (relpos - prev_relpos)/(msg.header.stamp - prev_ts).to_sec()
+        if msg.track == prev_msg_track:
+            print 'differentiating'
+            a = msg.speed * transformations.unit_vector(vel2[0:2])
+            vel = numpy.concatenate([a, vel[2:]])
+    
     #print pos
     print relpos, vel
     
@@ -101,6 +111,11 @@ def callback(msg):
         ),
         vector=Vector3(*vel),
     ))
+    
+    prev_msg_position = msg.latitude
+    prev_msg_track = msg.track
+    prev_ts = msg.header.stamp
+    prev_relpos = relpos
 rospy.Subscriber('extended_fix', GPSFix, callback)
 
 rospy.spin()
