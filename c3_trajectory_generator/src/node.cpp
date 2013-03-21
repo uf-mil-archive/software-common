@@ -136,8 +136,8 @@ struct Node {
         
         if(actionserver.isNewGoalAvailable()) {
             boost::shared_ptr<const c3_trajectory_generator::MoveToGoal> goal = actionserver.acceptNewGoal();
-            current_waypoint = Point_from_PoseTwist(goal->pose, Twist());
-            current_waypoint_t = now; // goal->pose.stamp;
+            current_waypoint = Point_from_PoseTwist(goal->pose, goal->twist);
+            current_waypoint_t = now; // goal->header.stamp;
         }
         if(actionserver.isPreemptRequested()) {
             current_waypoint = c3trajectory->getCurrentPoint();
@@ -157,7 +157,7 @@ struct Node {
 	    
 	    trajectory_pub.publish(msg);
 	    
-	    if(actionserver.isActive() && c3trajectory->getCurrentPoint().is_approximately(current_waypoint)) {
+	    if(actionserver.isActive() && c3trajectory->getCurrentPoint().is_approximately(current_waypoint) && current_waypoint.qdot == subjugator::Vector6d::Zero()) {
 	        actionserver.setSucceeded();
         }
     }

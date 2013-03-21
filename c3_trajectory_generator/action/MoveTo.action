@@ -1,6 +1,7 @@
 # goal
 Header header # only used for frame_id
 geometry_msgs/Pose pose
+geometry_msgs/Twist twist
 ---
 # result
 ---
