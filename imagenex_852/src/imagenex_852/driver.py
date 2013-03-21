@@ -10,7 +10,7 @@ class Device(object):
         ('reverse', False, [False, True]),
         ('start_gain_dB', 32, range(0, 40+1)),
         ('train_angle_degrees', 0, [x for x in xrange(-210, 210+1) if x % 3 == 0]),
-        ('sector_width_degrees', 30, [x for x in xrange(0, 360+1) if x % 3 == 0]),
+        ('sector_width_degrees', 360, [x for x in xrange(0, 360+1) if x % 3 == 0]),
         ('step_size_degrees', 3, [0, 3, 6]),
         ('pulse_length_usec', 1, range(1, 255+1)),
         ('data_points', 500, [250, 500]),
@@ -60,6 +60,7 @@ class Device(object):
         
         header = self.port.read(3) # Byte 0 - 2
         while header not in ['IMX', 'IGX']:
+            #print 'garbage', repr(header[0])
             header = header[1:] + self.port.read(1)
         
         head_id = ord(self.port.read(1)) # Byte 3

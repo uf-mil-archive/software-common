@@ -1,0 +1,15 @@
+<package>
+  <description brief="RViz plugin tutorials">
+
+     Tutorials showing how to write plugins for RViz.
+
+  </description>
+  <author>Dave Hershberger</author>
+  <license>BSD</license>
+  <review status="unreviewed" notes=""/>
+  <url>http://ros.org/wiki/uf_rviz_plugins</url>
+  <depend package="rviz"/>
+  <export>
+      <rviz plugin="${prefix}/plugin_description.xml"/>
+  </export>
+</package>

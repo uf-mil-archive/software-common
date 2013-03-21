@@ -7,7 +7,7 @@ include($ENV{ROS_ROOT}/core/rosbuild/rosbuild.cmake)
 #  Release        : w/o debug symbols, w/ optimization
 #  RelWithDebInfo : w/ debug symbols, w/ optimization
 #  MinSizeRel     : w/o debug symbols, w/ optimization, stripped binaries
-#set(ROS_BUILD_TYPE RelWithDebInfo)
+set(ROS_BUILD_TYPE RelWithDebInfo)
 
 rosbuild_init()
 
@@ -28,6 +28,7 @@ include_directories(${Eigen_INCLUDE_DIRS})
 #rosbuild_add_library(${PROJECT_NAME} src/example.cpp)
 #target_link_libraries(${PROJECT_NAME} another_library)
 rosbuild_add_boost_directories()
-rosbuild_add_executable(object_finder src/node.cpp)
+file(GLOB_RECURSE sources "src/*.cpp")
+rosbuild_add_executable(object_finder ${sources})
 rosbuild_link_boost(${PROJECT_NAME} signals)
 #target_link_libraries(example ${PROJECT_NAME})
