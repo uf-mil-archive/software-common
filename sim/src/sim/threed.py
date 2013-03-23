@@ -77,20 +77,27 @@ def mesh_from_obj(file):
     texcoords = []
     normals = []
     indices = []
+    ignore = False
     for line in file:
         line = line.strip()
         if '#' in line:
             line = line[:line.index("#")]
         if not line: continue
         line = line.split(' ')
-        if line[0] == "v":
+        if line[0] == "o":
+            if line[1].startswith('ignore'):
+                ignore = True
+            else:
+                ignore = False
+        elif line[0] == "v":
             vertices.append(V(float(x) for x in line[1:]))
         if line[0] == "vt":
             texcoords.append(V(float(x) for x in line[1:]))
         if line[0] == "vn":
             normals.append(V(float(x) for x in line[1:]))
         elif line[0] == "f":
-            indices.append(tuple(tuple(int(y)-1 if y else None for y in (x.split('/')+['',''])[:3]) for x in line[1:]))
+            if not ignore:
+                indices.append(tuple(tuple(int(y)-1 if y else None for y in (x.split('/')+['',''])[:3]) for x in line[1:]))
     return Mesh(vertices, texcoords, normals, indices)
 
 class Mesh(object):
@@ -174,7 +181,7 @@ def perspective(fovy, aspect, zNear):
     ])
 
 class Interface(object):
-    def init(self):
+    def init(self, pos=v(-10, 0, -2)):
         self.display_flags = pygame.DOUBLEBUF|pygame.OPENGL|pygame.RESIZABLE
         self.display = pygame.display.set_mode((700, 400), self.display_flags)
         self.clock = pygame.time.Clock()
@@ -185,7 +192,7 @@ class Interface(object):
         self.fovy = 100
         
         self.t = 0
-        self.pos = v(-10, 0, -2)
+        self.pos = pos
         
         self.objs = []
         
