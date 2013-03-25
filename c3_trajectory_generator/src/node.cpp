@@ -10,7 +10,7 @@
 #include <kill_handling/Kill.h>
 #include <kill_handling/listener.h>
 
-#include "c3_trajectory_generator/MoveToAction.h"
+#include "uf_common/MoveToAction.h"
 #include "C3Trajectory.h"
 
 using namespace std;
@@ -70,7 +70,7 @@ struct Node {
     ros::Duration traj_dt;
     
     ros::Subscriber odom_sub;
-    actionlib::SimpleActionServer<c3_trajectory_generator::MoveToAction> actionserver;
+    actionlib::SimpleActionServer<uf_common::MoveToAction> actionserver;
     ros::Publisher trajectory_pub;
     
     ros::Timer update_timer;
@@ -135,8 +135,8 @@ struct Node {
         ros::Time now = ros::Time::now();
         
         if(actionserver.isNewGoalAvailable()) {
-            boost::shared_ptr<const c3_trajectory_generator::MoveToGoal> goal = actionserver.acceptNewGoal();
-            current_waypoint = Point_from_PoseTwist(goal->pose, goal->twist);
+            boost::shared_ptr<const uf_common::MoveToGoal> goal = actionserver.acceptNewGoal();
+            current_waypoint = Point_from_PoseTwist(goal->posetwist.pose, goal->posetwist.twist);
             current_waypoint_t = now; // goal->header.stamp;
         }
         if(actionserver.isPreemptRequested()) {

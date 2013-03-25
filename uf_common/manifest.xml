@@ -11,6 +11,7 @@
 
   <depend package="geometry_msgs"/>
   <depend package="tf"/>
+  <depend package="actionlib"/>
   
   <rosdep name="eigen" />
 

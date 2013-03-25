@@ -1,0 +1,7 @@
+# goal. copies PoseTwistStamped
+Header header
+uf_common/PoseTwist posetwist
+---
+# result
+---
+# feedback
