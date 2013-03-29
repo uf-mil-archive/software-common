@@ -18,6 +18,9 @@ from thruster_handling.listener import ThrusterListener
 
 
 rospy.init_node('thruster_mapper')
+tradeoff_distance = rospy.get_param('tradeoff_distance', 0.5) # meters
+# higher tradeoff_distance -> care more about force
+# lower tradeoff_distance -> care more about torque
 
 
 # listen for wrenches and send out ThrusterCommand messages
@@ -61,12 +64,19 @@ def wrench_callback(msg):
         numpy.cross(position, direction), # torque = (position X direction) * effort
     ]) for ti, position, direction in good_thrusterinfos]).T
     
+    # divide torques by 1/tradeoff_distance to make units match and provide
+    #     a tunable parameter for the tradeoff between force and torque error
+    # this section has no effect unless thrust limits are being reached
+    pseudowrench_from_wrench = numpy.diag([1, 1, 1, 1/tradeoff_distance, 1/tradeoff_distance, 1/tradeoff_distance])
+    pseudowrench = pseudowrench_from_wrench.dot(wrench)
+    pseudowrench_from_efforts = pseudowrench_from_wrench.dot(wrench_from_efforts)
+    
     # solve for efforts using box-constrained least squares
-    efforts = lstsq_box(wrench_from_efforts, wrench,
+    efforts = lstsq_box(pseudowrench_from_efforts, pseudowrench,
         numpy.array([ti[0].min_force for ti in good_thrusterinfos]),
         numpy.array([ti[0].max_force for ti in good_thrusterinfos]))
     
-    error = numpy.linalg.norm(wrench_from_efforts.dot(efforts) - wrench)
+    error = numpy.linalg.norm(pseudowrench_from_efforts.dot(efforts) - pseudowrench)
     if error > 0.01: # N
         rospy.loginfo("Thruster efforts don't exactly match desired wrench. Error: %.2f N", error)
     
