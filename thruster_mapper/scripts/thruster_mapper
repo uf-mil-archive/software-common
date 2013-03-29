@@ -3,6 +3,7 @@
 from __future__ import division
 
 import numpy
+import scipy.optimize
 
 import roslib
 roslib.load_manifest('thruster_mapper')
@@ -22,6 +23,15 @@ rospy.init_node('thruster_mapper')
 # listen for wrenches and send out ThrusterCommand messages
 tf_listener = tf.TransformListener()
 thruster_listener = ThrusterListener()
+
+def lstsq_box(A, b, x_mins, x_maxs):
+    return scipy.optimize.fmin_slsqp(
+        func=lambda x: numpy.linalg.norm(A.dot(x) - b)**2,
+        x0=(x_mins + x_maxs)/2,
+        bounds=zip(x_mins, x_maxs),
+        fprime=lambda x: 2*A.T.dot(A.dot(x) - b),
+        disp=0,
+    )
 
 def wrench_callback(msg):
     wrench = numpy.concatenate([xyz_array(msg.wrench.force), xyz_array(msg.wrench.torque)])
@@ -51,13 +61,14 @@ def wrench_callback(msg):
         numpy.cross(position, direction), # torque = (position X direction) * effort
     ]) for ti, position, direction in good_thrusterinfos]).T
     
-    efforts, residues, rank, s = numpy.linalg.lstsq(wrench_from_efforts, wrench)
-    assert len(efforts) == len(good_thrusterinfos)
+    # solve for efforts using box-constrained least squares
+    efforts = lstsq_box(wrench_from_efforts, wrench,
+        numpy.array([ti[0].min_force for ti in good_thrusterinfos]),
+        numpy.array([ti[0].max_force for ti in good_thrusterinfos]))
     
-    scaled_max = max(effort/ti.max_force if effort >= 0 else -effort/-ti.min_force for (ti, _, _), effort in zip(good_thrusterinfos, efforts))
-    if scaled_max > 1:
-        rospy.loginfo('Desired effort exceeded maximum by %i%%.', (scaled_max - 1) * 100)
-        efforts = efforts / scaled_max
+    error = numpy.linalg.norm(wrench_from_efforts.dot(efforts) - wrench)
+    if error > 0.01: # N
+        rospy.loginfo("Thruster efforts don't exactly match desired wrench. Error: %.2f N", error)
     
     for (ti, _, _), effort in zip(good_thrusterinfos, efforts):
         thruster_listener.send_command(ti.id, effort)
