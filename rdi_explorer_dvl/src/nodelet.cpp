@@ -26,6 +26,7 @@ namespace rdi_explorer_dvl {
                 frame_id = "/dvl"; getPrivateNodeHandle().getParam("frame_id", frame_id);
                 
                 pub = getNodeHandle().advertise<geometry_msgs::Vector3Stamped>("dvl", 10);
+                range_pub = getNodeHandle().advertise<uf_common::Float64Stamped>("dvl/range", 10);
                 
                 device = boost::make_shared<Device>(port, baudrate);
                 heartbeat_timer = getNodeHandle().createTimer(ros::Duration(0.5), boost::bind(&Nodelet::heartbeat_callback, this, _1));
@@ -41,15 +42,19 @@ namespace rdi_explorer_dvl {
             void polling_thread() {
                 while(running) {
                     geometry_msgs::Vector3Stamped msg;
-                    if(!device->read(msg))
+                    uf_common::Float64Stamped range_msg;
+                    if(!device->read(msg, range_msg))
                         continue;
                     msg.header.frame_id = frame_id;
+                    range_msg.header.frame_id = frame_id;
                     pub.publish(msg);
+                    range_pub.publish(range_msg);
                 }
             }
             
             std::string frame_id;
             ros::Publisher pub;
+            ros::Publisher range_pub;
             boost::shared_ptr<Device> device;
             ros::Timer heartbeat_timer;
             bool running;

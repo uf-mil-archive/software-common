@@ -8,6 +8,7 @@
 #include <boost/foreach.hpp>
 
 #include <geometry_msgs/Vector3Stamped.h>
+#include <uf_common/Float64Stamped.h>
 
 
 namespace rdi_explorer_dvl {
@@ -59,7 +60,7 @@ namespace rdi_explorer_dvl {
                 // open is called on first read() in the _polling_ thread
             }
             
-            bool read(geometry_msgs::Vector3Stamped &res) {
+            bool read(geometry_msgs::Vector3Stamped &res, uf_common::Float64Stamped &height_res) {
                 if(!p.is_open()) {
                     open();
                     return false;
@@ -71,6 +72,8 @@ namespace rdi_explorer_dvl {
                 if(ensemble[0] != 0x7F) return false;
                 
                 ros::Time stamp = ros::Time::now();
+                res.header.stamp = stamp;
+                height_res.header.stamp = stamp;
                 
                 if(!read_byte(ensemble[1])) return false; // Data Source ID
                 if(ensemble[1] != 0x7F) return false;
@@ -90,22 +93,36 @@ namespace rdi_explorer_dvl {
                     return false;
                 }
                 
+                bool found_vel = false;
+                bool found_height = false;
+                if(ensemble.size() < 6) return false;
                 for(int dt = 0; dt < ensemble[5]; dt++) {
                     int offset = getu16le(ensemble.data() + 6 + 2*dt);
-                    if(ensemble.size() - offset < 2+4*4) continue;
-                    if(getu16le(ensemble.data() + offset) != 0x5803) continue;
-                    res.header.stamp = stamp;
-                    if(gets32le(ensemble.data() + offset + 2) == -3276801) { // -3276801 indicates no data
-                        ROS_ERROR("DVL didn't return bottom velocity");
-                        return false;
+                    if(ensemble.size() - offset < 2) continue;
+                    uint16_t section_id = getu16le(ensemble.data() + offset);
+                    
+                    if(section_id == 0x5803) { // Bottom Track High Resolution Velocity
+                        if(ensemble.size() - offset < 2 + 4*4) continue;
+                        if(gets32le(ensemble.data() + offset + 2) == -3276801) { // -3276801 indicates no data
+                            ROS_ERROR("DVL didn't return bottom velocity");
+                            continue;
+                        }
+                        res.vector.x = gets32le(ensemble.data() + offset + 2) * .01e-3;
+                        res.vector.y = gets32le(ensemble.data() + offset + 6) * .01e-3;
+                        res.vector.z = gets32le(ensemble.data() + offset + 10) * .01e-3;
+                        found_vel = true;
+                    } else if(section_id == 0x5804) { // Bottom Track Range
+                        if(ensemble.size() - offset < 2 + 4*3) continue;
+                        if(gets32le(ensemble.data() + offset + 10) <= 0) {
+                            ROS_ERROR("DVL didn't return height over bottom");
+                            continue;
+                        }
+                        height_res.data = gets32le(ensemble.data() + offset + 10) * 0.1e-3;
+                        found_height = true;
                     }
-                    res.vector.x = gets32le(ensemble.data() + offset + 2) * .01e-3;
-                    res.vector.y = gets32le(ensemble.data() + offset + 6) * .01e-3;
-                    res.vector.z = gets32le(ensemble.data() + offset + 10) * .01e-3;
-                    return true;
                 }
                 
-                return false;
+                return found_vel && found_height;
             }
             
             
