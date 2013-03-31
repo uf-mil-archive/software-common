@@ -85,7 +85,7 @@ def mesh_from_obj(file):
         if not line: continue
         line = line.split(' ')
         if line[0] == "o":
-            if line[1].startswith('ignore'):
+            if line[1].startswith('background_'):
                 ignore = True
             else:
                 ignore = False
@@ -111,6 +111,7 @@ class Mesh(object):
     def draw(self):
         glBegin(GL_TRIANGLES)
         for triangle in self.indices:
+            assert len(triangle) == 3, len(triangle)
             for vert_index, tex_index, normal_index in triangle:
                 if tex_index is not None:
                     glTexCoord2f(*self.texcoords[tex_index])
@@ -130,7 +131,7 @@ class Mesh(object):
         return Mesh([x+dx for x in self.vertices], self.texcoords, self.normals, self.indices)
     
     def rotate(self, q):
-        return Mesh([q.quat_rot(x) for x in self.vertices], self.texcoords, self.normals, self.indices)
+        return Mesh([q.quat_rot(x) for x in self.vertices], self.texcoords, [q.quat_rot(x) for x in self.normals], self.indices)
 
 
 def rotate_to_body(body, inv=False):

@@ -33,7 +33,7 @@ int main() {
     double tmp[12] = {167.819926235456, 0.0, 349.5, 0.0, 0.0, 167.819926235456, 199.5, 0.0, 0.0, 0.0, 1.0, 0.0};
     for(int i = 0; i < 12; i++) camera_info.P[i] = tmp[i];
     
-    Obj obj = Obj::from_file("shooter.obj");
+    Obj obj = Obj("shooter.obj");
     TaggedImage img(image, camera_info, Affine3d());
     vector<Result> results;
     vector<int> dbg_image(width*height, 0);

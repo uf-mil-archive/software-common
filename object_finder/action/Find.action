@@ -1,0 +1,21 @@
+# goal
+Header header # only used for frame_id
+
+uint32 TYPE_OBJECT=0
+uint32 TYPE_SPHERE=1
+uint32 type
+
+string object_filename
+
+float64 sphere_radius
+
+geometry_msgs/PoseWithCovariance prior_distribution
+---
+# result
+# not used currently
+---
+# feedback
+geometry_msgs/Pose pose
+float64 P
+float64 P_within_10cm
+MarkerPoint[] markers

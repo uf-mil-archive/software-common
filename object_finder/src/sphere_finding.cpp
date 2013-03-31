@@ -66,17 +66,17 @@ bool intersect_plane_sphere(Vector3d plane_axis1, Vector3d plane_axis2,
     return true;
 }
 
-bool _accumulate_sphere_scanline(const vector<Vector3d>& sumimage, const CameraInfo &cam_info, Vector3d sphere_pos_camera, double sphere_radius, const Matrix<double, 3, 4> &proj, uint32_t yy, Vector3d &total_color, double &count, vector<int>* dbg_image=NULL) {
+bool _accumulate_sphere_scanline(const TaggedImage &image, Vector3d sphere_pos_camera, double sphere_radius, uint32_t yy, Result &result, vector<int>* dbg_image=NULL) {
     double y = yy;
     
     // solution space of project((X, Y, Z)) = (x, y, z) with y fixed
     Vector3d plane1(
         0,
-        -((cam_info.P[7] + cam_info.P[6]) - y*(cam_info.P[11] + cam_info.P[10]))/(cam_info.P[ 5] - y*cam_info.P[9]),
+        -((image.cam_info.P[7] + image.cam_info.P[6]) - y*(image.cam_info.P[11] + image.cam_info.P[10]))/(image.cam_info.P[ 5] - y*image.cam_info.P[9]),
         1);
     Vector3d plane2(
         1,
-        (y*cam_info.P[8] - cam_info.P[4])/(cam_info.P[5] - y*cam_info.P[9]),
+        (y*image.cam_info.P[8] - image.cam_info.P[4])/(image.cam_info.P[5] - y*image.cam_info.P[9]),
         0);
     
     double hit1_axis1, hit1_axis2;
@@ -90,13 +90,13 @@ bool _accumulate_sphere_scanline(const vector<Vector3d>& sumimage, const CameraI
     Vector3d point1 = hit1_axis1 * plane1 + hit1_axis2 * plane2;
     Vector3d point2 = hit2_axis1 * plane1 + hit2_axis2 * plane2;
     
-    Vector3d point1_homo = proj * point1.homogeneous();
+    Vector3d point1_homo = image.proj * point1.homogeneous();
     if(point1_homo(2) <= 0)
         return true; // behind camera
     Vector2d point1_screen = point1_homo.hnormalized();
     assert(abs(point1_screen(1) - y) < 1e-3);
     
-    Vector3d point2_homo = proj * point2.homogeneous();
+    Vector3d point2_homo = image.proj * point2.homogeneous();
     if(point2_homo(2) <= 0)
         return true; // behind camera
     Vector2d point2_screen = point2_homo.hnormalized();
@@ -105,14 +105,15 @@ bool _accumulate_sphere_scanline(const vector<Vector3d>& sumimage, const CameraI
     double minx = min(point1_screen(0), point2_screen(0));
     double maxx = max(point1_screen(0), point2_screen(0));
     
-    int xstart = max(0, min((int)cam_info.width, (int)ceil(minx)));
-    int xend   = max(0, min((int)cam_info.width, (int)ceil(maxx))); // not inclusive
+    int xstart = max(0, min((int)image.cam_info.width, (int)ceil(minx)));
+    int xend   = max(0, min((int)image.cam_info.width, (int)ceil(maxx))); // not inclusive
     
-    total_color += (xend == 0 ? Vector3d::Zero() : sumimage[yy * cam_info.width + xend - 1]) - (xstart == 0 ? Vector3d::Zero() : sumimage[yy * cam_info.width + xstart - 1]);
-    count += xend - xstart;
+    result.total_color += (xend == 0 ? Vector3d::Zero() : image.sumimage[yy * image.cam_info.width + xend - 1]) - (xstart == 0 ? Vector3d::Zero() : image.sumimage[yy * image.cam_info.width + xstart - 1]);
+    result.total_color2 += (xend == 0 ? Vector3d::Zero() : image.sumimage2[yy * image.cam_info.width + xend - 1]) - (xstart == 0 ? Vector3d::Zero() : image.sumimage2[yy * image.cam_info.width + xstart - 1]);
+    result.count += xend - xstart;
     if(dbg_image) {
         for(int X = xstart; X < xend; X++) {
-            (*dbg_image)[yy * cam_info.width + X] += 1;
+            (*dbg_image)[yy * image.cam_info.width + X] += 1;
         }
     }
     
@@ -123,7 +124,7 @@ bool _accumulate_sphere_scanline(const vector<Vector3d>& sumimage, const CameraI
     return true;
 }
 
-void sphere_query(const TaggedImage &image, Eigen::Vector3d pos, double radius, Eigen::Vector3d &total_color, double &count, std::vector<int>* dbg_image) {
+void sphere_query(const TaggedImage &image, Eigen::Vector3d pos, double radius, Result &result, std::vector<int>* dbg_image) {
     // get the sum of the color values (along with the count) of the pixels
     // that are included within the provided sphere specified by
     // pos and radius
@@ -133,15 +134,16 @@ void sphere_query(const TaggedImage &image, Eigen::Vector3d pos, double radius, 
     Vector2d center_screen = (image.proj * pos_camera.homogeneous()).eval().hnormalized();
     int32_t y_center_hint = max(min(center_screen(1), (double)image.cam_info.height-1), 0.) + .5;
     
-    total_color = Vector3d(0, 0, 0);
-    count = 0;
+    result.total_color = Vector3d(0, 0, 0);
+    result.total_color2 = Vector3d(0, 0, 0);
+    result.count = 0;
     
     for(int32_t yy = y_center_hint; yy >= 0; yy--) {
-        if(!_accumulate_sphere_scanline(image.sumimage, image.cam_info, pos_camera, radius, image.proj, yy, total_color, count, dbg_image))
+        if(!_accumulate_sphere_scanline(image, pos_camera, radius, yy, result, dbg_image))
             break;
     }
     for(int32_t yy = y_center_hint + 1; yy < (int32_t)image.cam_info.height; yy++) {
-        if(!_accumulate_sphere_scanline(image.sumimage, image.cam_info, pos_camera, radius, image.proj, yy, total_color, count, dbg_image))
+        if(!_accumulate_sphere_scanline(image, pos_camera, radius, yy, result, dbg_image))
             break;
     }
 }

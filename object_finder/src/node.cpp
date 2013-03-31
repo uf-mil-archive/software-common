@@ -6,9 +6,11 @@
 #include <boost/random/uniform_real.hpp>
 #include <boost/random/mersenne_twister.hpp>
 #include <boost/random/variate_generator.hpp>
+#include <boost/shared_ptr.hpp>
 #include <Eigen/Dense>
 
 #include <tf/transform_listener.h>
+#include <tf/message_filter.h>
 #include <message_filters/subscriber.h>
 #include <message_filters/time_synchronizer.h>
 #include <sensor_msgs/Image.h>
@@ -19,7 +21,7 @@
 
 #include <uf_common/msg_helpers.h>
 
-#include "object_finder/FindSphereAction.h"
+#include "object_finder/FindAction.h"
 #include "sphere_finding.h"
 #include "obj_finding.h"
 #include "image.h"
@@ -29,16 +31,16 @@ using namespace std_msgs;
 using namespace sensor_msgs;
 using namespace geometry_msgs;
 using namespace message_filters;
-using namespace visualization_msgs;
 using namespace Eigen;
 using namespace uf_common;
 
 
-const double buoy_r = 0.095;
-
 double gauss() {
     static boost::variate_generator<boost::mt19937, boost::normal_distribution<> > generator(boost::mt19937(time(0)), boost::normal_distribution<>());
     return generator();
+}
+Vector3d gaussvec() {
+    return Vector3d(gauss(), gauss(), gauss());
 }
 
 
@@ -55,20 +57,40 @@ Affine3d eigen_from_tf(tf::Transform transform) {
     return x;
 }
 
-static Obj model = Obj::from_file("shooter.obj");
+typedef Eigen::Matrix<double, 6, 1> Vector6d;
+typedef Eigen::Matrix<double, 6, 6> Matrix6d;
+
+Matrix6d eigen_from_array(const double m[]) {
+    Matrix6d res;
+    for(int row = 0; row < 6; row++)
+        for(int col = 0; col < 6; col++)
+            res(row, col) = m[6*row + col];
+    return res;
+}
+Quaterniond quat_from_rotvec(Vector3d r) {
+    if(r.norm() == 0) return Quaterniond::Identity();
+    return Quaterniond(AngleAxisd(r.norm(), r.normalized()));
+}
 
 struct Particle {
+    static const double P_no_observation = 0.1;
+    
+    uint32_t type;
+    double sphere_radius;
+    boost::shared_ptr<const Obj> obj;
     Vector3d pos;
     Quaterniond q;
     Particle() { }
-    Particle(const object_finder::FindSphereGoal &goal) {
-        pos = xyz2vec(goal.guess.pose.position);
-        pos += Vector3d(
-            gauss() * sqrt(goal.guess.covariance[0+6*0]),
-            gauss() * sqrt(goal.guess.covariance[1+6*1]),
-            gauss() * sqrt(goal.guess.covariance[2+6*2]));
-        //pos = Vector3d(-3+gauss(), 10+gauss(), -4+gauss());
-        q = AngleAxisd(uniform()*2*M_PI, Vector3d(0, 0, 1));
+    Particle(const object_finder::FindGoal &goal, boost::shared_ptr<const Obj> obj) :
+        type(goal.type),
+        sphere_radius(goal.sphere_radius),
+        obj(obj) {
+        Matrix6d dist_from_iid = eigen_from_array(goal.prior_distribution.covariance.data()).llt().matrixL();
+        Vector6d iid; iid << gaussvec(), gaussvec();
+        Vector6d dx = dist_from_iid * iid;
+        
+        pos = dx.head(3) + xyz2vec(goal.prior_distribution.pose.position);
+        q = quat_from_rotvec(dx.tail(3)) * xyzw2quat(goal.prior_distribution.pose.orientation);
     }
     Particle(Vector3d pos, Quaterniond q) :
         pos(pos), q(q) {
@@ -76,61 +98,43 @@ struct Particle {
     Particle predict(double dt) {
         Particle p(*this);
         // diffusion to model INS's position drift and to test near solutions to try to find a better fit
-        p.pos += Vector3d(gauss(), gauss(), gauss()) * sqrt(.01 * dt);
-        p.q *= Quaterniond(AngleAxisd(gauss()*.1, Vector3d(0, 0, 1)));
+        p.pos += sqrt(.01 * dt) * gaussvec();
+        //p.q *= quat_from_rotvec(sqrt(.01 * dt) * gaussvec());
+        p.q = quat_from_rotvec(Vector3d(0, 0, sqrt(.001 * dt) * gauss())) * p.q;
         return p;
     }
     double P(const TaggedImage &img, vector<int>* dbg_image=NULL) {
-        Vector3d inner_total_color; double inner_count;
-        sphere_query(img, pos, buoy_r, inner_total_color, inner_count, dbg_image);
-        
-        Vector3d both_total_color; double both_count;
-        sphere_query(img, pos, 2*buoy_r, both_total_color, both_count, dbg_image);
-        
-        Vector3d outer_total_color = both_total_color - inner_total_color;
-        double outer_count = both_count - inner_count;
-        
-        /*
-        vector<Result> results;
-        model.query(img, pos, q, results, dbg_image);
-        
-        Vector3d inner_total_color = results[2].total_color;
-        double inner_count = results[2].count;
-        Vector3d outer_total_color = results[3].total_color;
-        double outer_count = results[3].count;
-        */
-        
-        //cout << "count: " << count << endl;
-        if(inner_count > 10 && outer_count > 10) {
-            Vector3d inner_color = inner_total_color/inner_count;
-            Vector3d outer_color = outer_total_color/outer_count;
+        Result inner_result;
+        Result outer_result;
+        if(type == object_finder::FindGoal::TYPE_SPHERE) {
+            sphere_query(img, pos, sphere_radius, inner_result, dbg_image);
             
-            return (inner_color - outer_color).norm();
+            Result both_result;
+            sphere_query(img, pos, 2*sphere_radius, both_result, dbg_image);
+            outer_result = both_result - inner_result;
+        } else if(type == object_finder::FindGoal::TYPE_OBJECT) {
+            inner_result.zero();
+            outer_result.zero();
             
-            if(inner_color.norm() < 1e-3) return 1e-6;
-            if(outer_color.norm() < 1e-3) return 1e-6;
+            vector<Result> results;
+            obj->query(img, pos, q, results, dbg_image);
             
-            if(dbg_image) {
-                cout << inner_color << endl;
-                cout << endl;
-                cout << outer_color << endl;
+            for(unsigned int i = 0; i < results.size(); i++) {
+                if(obj->components[i].name.find("solid_") == 0) {
+                    inner_result += results[i];
+                } else if(obj->components[i].name.find("background_") == 0) {
+                    outer_result += results[i];
+                }
             }
-            
-            double p = 1-inner_color.dot(outer_color)/inner_color.norm()/outer_color.norm() + 1e-6;
-            //cout << p << endl;
-            assert(p >= -.1 && p <= 1.1);
-            //return pow((inner_color - outer_color).norm(), 5);
-            return p;
-            
-            //cout << "color: " << color << endl;
-            
-            // assume that pixel color at object's center follows a triangular distribution with max at (0, 1, 0) and minimums at all other corners
-            return 2*(  inner_color(0)) * 2*(1-inner_color(1)) * 2*(1-inner_color(2)) *
-                   2*(1-outer_color(0)) * 2*(1-outer_color(1)) * 2*(  outer_color(2))
-                + 1e-6; // 1e-6 is to make sure every particle doesn't go to 0 at the same time
+        } else {
+            assert(false);
+        }
+        
+        if(inner_result.count > 10 && outer_result.count > 10) {
+            return (inner_result.avg_color() - outer_result.avg_color()).norm();
         } else {
             // not visible
-            return .1; // expected value of above expression
+            return P_no_observation; // expected value of above expression
         }
     }
 };
@@ -138,10 +142,11 @@ struct Particle {
 struct Node {
     ros::NodeHandle nh;
     ros::NodeHandle private_nh;
-    actionlib::SimpleActionServer<object_finder::FindSphereAction> actionserver;
+    actionlib::SimpleActionServer<object_finder::FindAction> actionserver;
     tf::TransformListener listener;
     message_filters::Subscriber<sensor_msgs::Image> image_sub;
     message_filters::Subscriber<CameraInfo> info_sub;
+    tf::MessageFilter<CameraInfo> info_tf_filter;
     TimeSynchronizer<Image, CameraInfo> sync;
     ros::Publisher particles_pub;
     ros::Publisher pose_pub;
@@ -149,55 +154,68 @@ struct Node {
     ros::Publisher image_pub;
     
     bool have_goal;
-    object_finder::FindSphereGoal goal;
+    object_finder::FindGoal goal;
+    
+    boost::shared_ptr<Obj> current_obj;
     
     typedef std::pair<double, Particle> pair_type;
     std::vector<pair_type> particles;
     ros::Time current_stamp;
+    double infinite_p;
     
     
     Node() :
         private_nh("~"),
-        actionserver(nh, "findsphere", false),
+        actionserver(nh, "find", false),
         image_sub(nh, "front_camera/image_rect_color", 1),
         info_sub(nh, "front_camera/camera_info", 1),
-        sync(image_sub, info_sub, 10),
+        info_tf_filter(info_sub, listener, "", 10),
+        sync(image_sub, info_tf_filter, 10),
         have_goal(false) {
         
-        particles_pub = nh.advertise<Marker>("particles", 1);
+        particles_pub = nh.advertise<visualization_msgs::Marker>("particles", 1);
         pose_pub = nh.advertise<PoseStamped>("buoy", 1);
-        marker_pub = nh.advertise<Marker>("buoy_rviz", 1);
+        marker_pub = nh.advertise<visualization_msgs::Marker>("buoy_rviz", 1);
         image_pub = nh.advertise<sensor_msgs::Image>("camera/image_debug", 1);
         
         sync.registerCallback(boost::bind(&Node::callback, this, _1, _2));
         
+        actionserver.registerGoalCallback(boost::bind(&Node::goalCallback, this));
         actionserver.start();
     }
     
     void init_particles(ros::Time t) {
         particles.clear();
         
-        for(int i = 0; i < 1000; i++)
-            particles.push_back(make_pair(1, Particle(goal)));
+        int N = 1000;
         
-        double total_weight = 0; BOOST_FOREACH(pair_type &pair, particles) total_weight += pair.first;
-        BOOST_FOREACH(pair_type &pair, particles) pair.first /= total_weight;
+        for(int i = 0; i < N; i++)
+            particles.push_back(make_pair(1./N, Particle(goal, current_obj)));
+        
+        infinite_p = 1./N;
         
         current_stamp = t;
+    }
+    
+    void goalCallback() {
+        have_goal = true;
+        boost::shared_ptr<const object_finder::FindGoal> new_goal = actionserver.acceptNewGoal();
+        goal = *new_goal;
+        particles.clear();
+        current_obj.reset();
+        if(goal.type == object_finder::FindGoal::TYPE_OBJECT) {
+            current_obj = boost::make_shared<Obj>(goal.object_filename);
+        }
+        info_tf_filter.setTargetFrame(goal.header.frame_id);
     }
     
     void callback(const ImageConstPtr& image, const CameraInfoConstPtr& cam_info) {
         assert(image->header.stamp == cam_info->header.stamp);
         assert(image->header.frame_id == cam_info->header.frame_id);
         
-        
-        if(actionserver.isNewGoalAvailable()) {
-            have_goal = true;
-            boost::shared_ptr<const object_finder::FindSphereGoal> goal = actionserver.acceptNewGoal();
-            this->goal = *goal;
-            particles.clear();
-        } else if(actionserver.isPreemptRequested()) {
+        if(actionserver.isPreemptRequested()) {
             have_goal = false;
+            current_obj.reset();
         }
         
         if(!have_goal)
@@ -219,8 +237,6 @@ struct Node {
         // get map from camera transform
         tf::StampedTransform transform;
         try {
-            listener.setExtrapolationLimit(ros::Duration(0.3));
-            listener.waitForTransform(goal.header.frame_id, image->header.frame_id, image->header.stamp, ros::Duration(0.05));
             listener.lookupTransform(goal.header.frame_id, image->header.frame_id, image->header.stamp, transform);
         } catch (tf::TransformException ex){
             ROS_ERROR("%s", ex.what());
@@ -255,30 +271,34 @@ struct Node {
             BOOST_FOREACH(pair_type &pair, particles) pair.second = pair.second.predict(dt);
         }
         
-        for(int i = 0; i < particles.size()*.01; i++) {
-            int j = particles.size() * uniform();
-            particles[j] = make_pair(1./particles.size()/10, Particle(goal));
-        }
-        
         TaggedImage img(*image, *cam_info, eigen_from_tf(transform));
         
         // update weights
         BOOST_FOREACH(pair_type &pair, particles) pair.first *= pair.second.P(img);
+        infinite_p *= Particle::P_no_observation * 1.0001;
+        
+        BOOST_FOREACH(pair_type &pair, particles) {
+            if(pair.first < infinite_p) {
+                pair.first = infinite_p;
+                pair.second = Particle(goal, current_obj);
+            }
+        }
         
         // normalize weights
         double total_weight = 0; BOOST_FOREACH(pair_type &pair, particles) total_weight += pair.first;
         BOOST_FOREACH(pair_type &pair, particles) pair.first /= total_weight;
+        infinite_p /= total_weight;
         
         pair_type max_p; max_p.first = -1; BOOST_FOREACH(pair_type &pair, particles) if(pair.first > max_p.first) max_p = pair;
         
         Vector3d mean_position(0, 0, 0); BOOST_FOREACH(pair_type &pair, particles) mean_position += pair.first * pair.second.pos;
         
         // send marker message for particle visualization
-        Marker msg;
+        visualization_msgs::Marker msg;
         msg.header.frame_id = goal.header.frame_id;
         msg.header.stamp = image->header.stamp;
-        msg.type = Marker::POINTS;
-        msg.scale = make_xyz<Vector3>(buoy_r, buoy_r, 1);
+        msg.type = visualization_msgs::Marker::POINTS;
+        msg.scale = make_xyz<Vector3>(.1, max(goal.sphere_radius, .1), 1);
         msg.color.a = 1;
         BOOST_FOREACH(pair_type &pair, particles) {
             msg.points.push_back(vec2xyz<Point>(pair.second.pos));
@@ -294,20 +314,28 @@ struct Node {
         msg2.pose.orientation = make_xyzw<geometry_msgs::Quaternion>(0, 0, 0, 1);
         pose_pub.publish(msg2);
         
-        Marker msg3;
+        visualization_msgs::Marker msg3;
         msg3.header.frame_id = goal.header.frame_id;
         msg3.header.stamp = image->header.stamp;
         msg3.pose.position = vec2xyz<Point>(max_p.second.pos);
         msg3.pose.orientation = make_xyzw<geometry_msgs::Quaternion>(0, 0, 0, 1);
-        msg3.type = Marker::SPHERE;
-        msg3.scale = make_xyz<Vector3>(2*buoy_r, 2*buoy_r, 2*buoy_r);
+        msg3.type = visualization_msgs::Marker::SPHERE;
+        msg3.scale = make_xyz<Vector3>(2*goal.sphere_radius, 2*goal.sphere_radius, 2*goal.sphere_radius);
         msg3.color = make_rgba<ColorRGBA>(0, 1, 0, 1);
         marker_pub.publish(msg3);
         
-        object_finder::FindSphereFeedback feedback;
+        object_finder::FindFeedback feedback;
         feedback.pose.position = vec2xyz<Point>(max_p.second.pos);
+        feedback.pose.orientation = quat2xyzw<geometry_msgs::Quaternion>(max_p.second.q);
         feedback.P = max_p.second.P(img);
         feedback.P_within_10cm = 0; BOOST_FOREACH(pair_type &pair, particles) if((pair.second.pos - max_p.second.pos).norm() <= .1) feedback.P_within_10cm += pair.first;
+        if(current_obj) {
+            BOOST_FOREACH(const Marker &marker, current_obj->markers) {
+                feedback.markers.push_back(object_finder::MarkerPoint());
+                feedback.markers[feedback.markers.size()-1].name = marker.name;
+                feedback.markers[feedback.markers.size()-1].position = vec2xyz<Point>(marker.position);
+            }
+        }
         actionserver.publishFeedback(feedback);
         
         if(image_pub.getNumSubscribers()) {
@@ -332,6 +360,7 @@ struct Node {
                     msg4.data[msg4.step*y + 3*x + 0] = 100*dbg_image[image->width*y + x];
                     const uint8_t *pixel = image->data.data() + image->step * y + step * x;
                     msg4.data[msg4.step*y + 3*x + 1] = pixel[1];
+                    msg4.data[msg4.step*y + 3*x + 2] = pixel[2];
                 }
             }
             image_pub.publish(msg4);
