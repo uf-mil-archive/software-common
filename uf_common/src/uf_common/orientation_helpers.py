@@ -84,17 +84,20 @@ def test_triad():
 test_triad()
 
 
-def lookat(forward, upish=[0, 0, 1]):
+def look_at(forward, upish=[0, 0, 1]):
     # assumes standard forward-left-up body coordinate system
     return triad((forward, upish), ([1, 0, 0], [0, 0, 1]))
+lookat = look_at # deprecated
 
-def lookat_without_pitching(forwardish, up=[0, 0, 1]):
+def look_at_without_pitching(forwardish, up=[0, 0, 1]):
     # assumes standard forward-left-up body coordinate system
     return triad((up, forwardish), ([0, 0, 1], [1, 0, 0]))
+lookat_without_pitching = look_at_without_pitching # deprecated
 
-def lookat_camera(forward, upish=[0, 0, 1]):
+def look_at_camera(forward, upish=[0, 0, 1]):
     # assumes camera right-down-forward coordinate system
     return triad((forward, upish), ([0, 0, 1], [0, -1, 0]))
+lookat_camera = look_at_camera # deprecated
 
 
 EAST, NORTH, WEST, SOUTH = [transformations.quaternion_about_axis(math.pi/2*i, [0, 0, 1]) for i in xrange(4)]
@@ -158,7 +161,7 @@ class PoseEditor(object):
     def body_down(self, distance): return self.relative([0, 0, -distance])
     
     def absolute(self, abs_pos):
-        return type(self)(self.frame_id, self.position + self._rot.dot(rel_pos), self.orientation)
+        return type(self)(self.frame_id, self.position + abs_pos, self.orientation)
     
     def  east(self, distance): return self.absolute([ distance, 0, 0])
     def  west(self, distance): return self.absolute([-distance, 0, 0])
