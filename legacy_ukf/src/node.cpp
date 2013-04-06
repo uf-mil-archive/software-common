@@ -106,10 +106,26 @@ struct Node {
     }
     
     void vel_callback(const Vector3StampedConstPtr& vel, bool is_world_frame) {
-        geometry_msgs::Vector3Stamped out;
-        tf_listener.transformVector(is_world_frame ? fixed_frame : imu_frame, *vel, out);
-        Eigen::Vector3d v = xyz2vec(out.vector);
-        navComputer->UpdateVel(is_world_frame ? NED_from_ENU(v) : v, is_world_frame);
+        // world-frame velocity messages' frame_id field is being abused for now
+        // to hold the point the measurement was taken. the frame of the vector
+        // is assumed to be ENU
+        
+        tf::StampedTransform transform;
+        tf_listener.lookupTransform(imu_frame, vel->header.frame_id, vel->header.stamp, transform);
+        
+        Eigen::Vector3d pos_body = vec2vec(transform.getOrigin());
+        
+        Eigen::Vector3d v;
+        if(is_world_frame) {
+            v = NED_from_ENU(xyz2vec(vel->vector));
+        } else {
+            geometry_msgs::Vector3Stamped out;
+            tf_listener.transformVector(imu_frame, *vel, out);
+            
+            v = xyz2vec(out.vector);
+        }
+        
+        navComputer->UpdateVel(v, is_world_frame, pos_body);
     }
     
     void publish() {

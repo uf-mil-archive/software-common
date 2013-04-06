@@ -25,7 +25,7 @@ namespace subjugator {
         
         void UpdateIMU(const IMUInfo& imu);
         void UpdateDepth(double depth);
-        void UpdateVel(Vector3d vel, bool is_world_frame);
+        void UpdateVel(Vector3d vel, bool is_world_frame, Vector3d measurement_point_body);
         
         bool getInitialized() { return initialized; }
         LPOSVSSInfo GetNavInfo();

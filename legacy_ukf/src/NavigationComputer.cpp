@@ -213,16 +213,17 @@ void NavigationComputer::UpdateDepth(double depth)
     depthRefAvailable = true;
 }
 
-void NavigationComputer::UpdateVel(Vector3d vel, bool is_world_frame)
+void NavigationComputer::UpdateVel(Vector3d vel, bool is_world_frame, Vector3d measurement_point_body)
 {
     if(!initialized)
         return;
     
-    if(is_world_frame) {
-        velRef = vel;
-    } else {
-        // Rotate dvl data from SUB to NED
-        velRef = MILQuaternionOps::QuatRotate(GetNavInfo().quaternion_NED_B, vel);
-    }
+    LPOSVSSInfo navinfo = GetNavInfo();
+    
+    Vector3d vel_measurement_body = is_world_frame ? MILQuaternionOps::QuatRotate(MILQuaternionOps::QuatConjugate(navinfo.quaternion_NED_B), vel) : vel;
+    
+    Vector3d vel_body = vel_measurement_body - navinfo.angularRate_BODY.cross(measurement_point_body);
+    
+    velRef = MILQuaternionOps::QuatRotate(navinfo.quaternion_NED_B, vel_body);
     velRefAvailable = true;
 }
