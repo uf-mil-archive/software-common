@@ -1,5 +1,6 @@
 #include <iostream>
 #include <time.h>
+#include <cmath>
 
 #include <boost/foreach.hpp>
 #include <boost/random/normal_distribution.hpp>
@@ -60,39 +61,33 @@ Affine3d eigen_from_tf(tf::Transform transform) {
 typedef Eigen::Matrix<double, 6, 1> Vector6d;
 typedef Eigen::Matrix<double, 6, 6> Matrix6d;
 
-Matrix6d eigen_from_array(const double m[]) {
-    Matrix6d res;
-    for(int row = 0; row < 6; row++)
-        for(int col = 0; col < 6; col++)
-            res(row, col) = m[6*row + col];
-    return res;
-}
 Quaterniond quat_from_rotvec(Vector3d r) {
     if(r.norm() == 0) return Quaterniond::Identity();
     return Quaterniond(AngleAxisd(r.norm(), r.normalized()));
 }
 
 struct Particle {
-    static const double P_no_observation = 0.1;
+    static const double P_no_observation = 1;
     
-    uint32_t type;
-    double sphere_radius;
+    object_finder::FindGoal goal;
     boost::shared_ptr<const Obj> obj;
     Vector3d pos;
     Quaterniond q;
     Particle() { }
     Particle(const object_finder::FindGoal &goal, boost::shared_ptr<const Obj> obj) :
-        type(goal.type),
-        sphere_radius(goal.sphere_radius),
+        goal(goal),
         obj(obj) {
-        Matrix6d dist_from_iid = eigen_from_array(goal.prior_distribution.covariance.data()).llt().matrixL();
+        Matrix6d cov = Map<const Matrix6d>(goal.prior_distribution.covariance.data());
+        Matrix6d dist_from_iid = cov.llt().matrixL();
         Vector6d iid; iid << gaussvec(), gaussvec();
         Vector6d dx = dist_from_iid * iid;
         
         pos = dx.head(3) + xyz2vec(goal.prior_distribution.pose.position);
         q = quat_from_rotvec(dx.tail(3)) * xyzw2quat(goal.prior_distribution.pose.orientation);
     }
-    Particle(Vector3d pos, Quaterniond q) :
+    Particle(const object_finder::FindGoal &goal, boost::shared_ptr<const Obj> obj,
+        Vector3d pos, Quaterniond q) :
+        goal(goal), obj(obj),
         pos(pos), q(q) {
     }
     Particle predict(double dt) {
@@ -100,23 +95,26 @@ struct Particle {
         // diffusion to model INS's position drift and to test near solutions to try to find a better fit
         p.pos += sqrt(.01 * dt) * gaussvec();
         //p.q *= quat_from_rotvec(sqrt(.01 * dt) * gaussvec());
-        p.q = quat_from_rotvec(Vector3d(0, 0, sqrt(.001 * dt) * gauss())) * p.q;
+        p.q = quat_from_rotvec(Vector3d(0, 0, sqrt(.01 * dt) * gauss())) * p.q;
+        if(goal.allow_pitching) {
+            p.q = p.q * quat_from_rotvec(Vector3d(0, sqrt(.01 * dt) * gauss(), 0));
+        }
         return p;
     }
     double P(const TaggedImage &img, vector<int>* dbg_image=NULL) {
         Result inner_result;
         Result outer_result;
-        if(type == object_finder::FindGoal::TYPE_SPHERE) {
-            sphere_query(img, pos, sphere_radius, inner_result, dbg_image);
+        vector<Result> results;
+        if(goal.type == object_finder::FindGoal::TYPE_SPHERE) {
+            sphere_query(img, pos, goal.sphere_radius, inner_result, dbg_image);
             
             Result both_result;
-            sphere_query(img, pos, 2*sphere_radius, both_result, dbg_image);
+            sphere_query(img, pos, 2*goal.sphere_radius, both_result, dbg_image);
             outer_result = both_result - inner_result;
-        } else if(type == object_finder::FindGoal::TYPE_OBJECT) {
-            inner_result.zero();
-            outer_result.zero();
+        } else if(goal.type == object_finder::FindGoal::TYPE_OBJECT) {
+            inner_result = Result::Zero();
+            outer_result = Result::Zero();
             
-            vector<Result> results;
             obj->query(img, pos, q, results, dbg_image);
             
             for(unsigned int i = 0; i < results.size(); i++) {
@@ -125,14 +123,86 @@ struct Particle {
                 } else if(obj->components[i].name.find("background_") == 0) {
                     outer_result += results[i];
                 }
+                if(dbg_image) {
+                    cout << obj->components[i].name << " " << results[i].count << " " << results[i].total_color << endl;
+                }
             }
         } else {
+            cout << "Invalid type:" << goal.type << endl;
             assert(false);
         }
         
-        if(inner_result.count > 10 && outer_result.count > 10) {
-            return (inner_result.avg_color() - outer_result.avg_color()).norm();
+        Result far_result = img.total_result - inner_result; // - outer_result;
+        
+        if(inner_result.count > 100 && outer_result.count > 100) {
+            Vector3d inner_color = inner_result.avg_color().normalized();
+            Vector3d outer_color = outer_result.avg_color().normalized();
+            Vector3d far_color = far_result.avg_color().normalized();
+            //double P2 = (inner_color - outer_color).norm();
+            //double P = P2* pow(far_color.dot(outer_color), 5);
+            double P = 1;
+            for(unsigned int i = 0; i < results.size(); i++) {
+                if(obj->components[i].name.find("solid_") != 0 &&
+                   obj->components[i].name.find("background_") != 0) {
+                    continue;
+                }
+                if(results[i].count < 100) {
+                    if(dbg_image) {
+                        cout << "TOO SMALL" << obj->components[i].name << endl;
+                    }
+                    P *= 0.5;
+                    continue;
+                }
+                Vector3d this_color = results[i].avg_color().normalized();
+                if(obj->components[i].name.find("solid_") == 0) {
+                    P *= exp(10*(
+                        (this_color - outer_color).norm() - (far_color - outer_color).norm() - .1
+                    ));
+                } else if(obj->components[i].name.find("background_") == 0) {
+                    P *= exp(10*(
+                        (inner_color - this_color).norm() - (far_color - this_color).norm() - .1
+                    ));
+                }
+            }
+            
+            if(goal.type == object_finder::FindGoal::TYPE_SPHERE) {
+                P = exp(10*(
+                    (inner_color - outer_color).norm() - (far_color - outer_color).norm()
+                ));
+            }
+            
+            if((pos-img.transform.translation()).norm() < 1)
+                P *= .001;
+            if(dbg_image) {
+                cout << endl;
+                cout << endl;
+                cout << "inner count" << inner_result.count << endl;
+                cout << "inner avg " << inner_color << endl;
+                cout << endl;
+                cout << "outer count" << outer_result.count << endl;
+                cout << "outer avg " << outer_color << endl;
+                cout << endl;
+                //cout << "P2 " << P2 << endl;
+                cout << "P " << P << endl;
+                /*
+                for(int x = .9*img.cam_info.width ; x < img.cam_info.width; x++) {
+                    for(int y = .9*img.cam_info.height ; y < img.cam_info.height; y++) {
+                        dbg_image[
+                dbg_image[
+                */
+            }
+            if(!(isfinite(P) && P >= 0)) {
+                cout << "bad P: " << P << endl;
+            }
+            assert(isfinite(P) && P >= 0);
+            return P;
         } else {
+            return 0.001;
+            if(dbg_image) {
+                cout << endl;
+                cout << endl;
+                cout << "NOT VISIBLE" << endl;
+            }
             // not visible
             return P_no_observation; // expected value of above expression
         }
@@ -150,7 +220,6 @@ struct Node {
     TimeSynchronizer<Image, CameraInfo> sync;
     ros::Publisher particles_pub;
     ros::Publisher pose_pub;
-    ros::Publisher marker_pub;
     ros::Publisher image_pub;
     
     bool have_goal;
@@ -167,16 +236,15 @@ struct Node {
     Node() :
         private_nh("~"),
         actionserver(nh, "find", false),
-        image_sub(nh, "front_camera/image_rect_color", 1),
-        info_sub(nh, "front_camera/camera_info", 1),
+        image_sub(nh, "camera/image_rect_color", 1),
+        info_sub(nh, "camera/camera_info", 1),
         info_tf_filter(info_sub, listener, "", 10),
         sync(image_sub, info_tf_filter, 10),
         have_goal(false) {
         
-        particles_pub = nh.advertise<visualization_msgs::Marker>("particles", 1);
-        pose_pub = nh.advertise<PoseStamped>("buoy", 1);
-        marker_pub = nh.advertise<visualization_msgs::Marker>("buoy_rviz", 1);
-        image_pub = nh.advertise<sensor_msgs::Image>("camera/image_debug", 1);
+        particles_pub = private_nh.advertise<visualization_msgs::Marker>("particles", 1);
+        pose_pub = private_nh.advertise<PoseStamped>("pose", 1);
+        image_pub = private_nh.advertise<sensor_msgs::Image>("debug_image", 1);
         
         sync.registerCallback(boost::bind(&Node::callback, this, _1, _2));
         
@@ -290,8 +358,34 @@ struct Node {
         infinite_p /= total_weight;
         
         pair_type max_p; max_p.first = -1; BOOST_FOREACH(pair_type &pair, particles) if(pair.first > max_p.first) max_p = pair;
+        cout << "max_p.first: " << max_p.first << endl;
+        cout << "particles.size(): " << particles.size() << endl;
+        cout << "particles[0].first: " << particles[0].first << endl;
+        assert(max_p.first >= 0);
         
-        Vector3d mean_position(0, 0, 0); BOOST_FOREACH(pair_type &pair, particles) mean_position += pair.first * pair.second.pos;
+        Vector3d mean_position(0, 0, 0);
+        Vector4d q_sum(0, 0, 0, 0);
+        BOOST_FOREACH(const pair_type &pair, particles) {
+            mean_position += pair.first * pair.second.pos;
+            
+            vector<Vector4d> qs;
+            qs.push_back(pair.second.q.coeffs());
+            qs.push_back(-pair.second.q.coeffs());
+            qs.push_back((pair.second.q*Quaterniond(0, 0, 1, 0)).coeffs());
+            qs.push_back(-(pair.second.q*Quaterniond(0, 0, 1, 0)).coeffs());
+            
+            Vector4d best_q;
+            double best_score = -1e300;
+            BOOST_FOREACH(const Vector4d &q, qs) {
+                double score = q.dot(q_sum);
+                if(score > best_score) {
+                    best_q = q;
+                    best_score = score;
+                }
+            }
+            q_sum += pair.first * best_q;
+        }
+        Quaterniond mean_orientation = Quaterniond(q_sum.normalized());
         
         // send marker message for particle visualization
         visualization_msgs::Marker msg;
@@ -306,29 +400,20 @@ struct Node {
         }
         particles_pub.publish(msg);
         
-        
         PoseStamped msg2;
         msg2.header.frame_id = goal.header.frame_id;
         msg2.header.stamp = image->header.stamp;
-        msg2.pose.position = vec2xyz<Point>(max_p.second.pos);
-        msg2.pose.orientation = make_xyzw<geometry_msgs::Quaternion>(0, 0, 0, 1);
+        msg2.pose.position = vec2xyz<Point>(mean_position);
+        msg2.pose.orientation = quat2xyzw<geometry_msgs::Quaternion>(mean_orientation);
         pose_pub.publish(msg2);
         
-        visualization_msgs::Marker msg3;
-        msg3.header.frame_id = goal.header.frame_id;
-        msg3.header.stamp = image->header.stamp;
-        msg3.pose.position = vec2xyz<Point>(max_p.second.pos);
-        msg3.pose.orientation = make_xyzw<geometry_msgs::Quaternion>(0, 0, 0, 1);
-        msg3.type = visualization_msgs::Marker::SPHERE;
-        msg3.scale = make_xyz<Vector3>(2*goal.sphere_radius, 2*goal.sphere_radius, 2*goal.sphere_radius);
-        msg3.color = make_rgba<ColorRGBA>(0, 1, 0, 1);
-        marker_pub.publish(msg3);
+        Particle mean_particle(goal, current_obj, mean_position, mean_orientation);
         
         object_finder::FindFeedback feedback;
-        feedback.pose.position = vec2xyz<Point>(max_p.second.pos);
-        feedback.pose.orientation = quat2xyzw<geometry_msgs::Quaternion>(max_p.second.q);
-        feedback.P = max_p.second.P(img);
-        feedback.P_within_10cm = 0; BOOST_FOREACH(pair_type &pair, particles) if((pair.second.pos - max_p.second.pos).norm() <= .1) feedback.P_within_10cm += pair.first;
+        feedback.pose.position = vec2xyz<Point>(mean_position);
+        feedback.pose.orientation = quat2xyzw<geometry_msgs::Quaternion>(mean_particle.q);
+        feedback.P = mean_particle.P(img);
+        feedback.P_within_10cm = 0; BOOST_FOREACH(pair_type &pair, particles) if((pair.second.pos - mean_particle.pos).norm() <= .2) feedback.P_within_10cm += pair.first;
         if(current_obj) {
             BOOST_FOREACH(const Marker &marker, current_obj->markers) {
                 feedback.markers.push_back(object_finder::MarkerPoint());
@@ -340,7 +425,7 @@ struct Node {
         
         if(image_pub.getNumSubscribers()) {
             vector<int> dbg_image(image->width*image->height, 0);
-            //Particle(mean_position).P(img, &dbg_image);
+            //mean_particle.P(img, &dbg_image);
             max_p.second.P(img, &dbg_image);
             
             Image msg4;

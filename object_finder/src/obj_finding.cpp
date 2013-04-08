@@ -13,6 +13,7 @@ using namespace std;
 using namespace Eigen;
 using namespace sensor_msgs;
 
+const int crop = 5;
 
 Obj::Obj(const string filename) {
     vector<Vector3d> vertices;
@@ -78,12 +79,8 @@ void Obj::query(const TaggedImage &image, Vector3d pos, Quaterniond orientation,
     BOOST_FOREACH(const Component &component, components) {
         int j = &component - components.data();
     
-        Vector3d &total_color = results[j].total_color;
-        Vector3d &total_color2 = results[j].total_color2;
-        double &count = results[j].count;
-        total_color = Vector3d::Zero();
-        total_color2 = Vector3d::Zero();
-        count = 0;
+        Result &result = results[j];
+        result = Result::Zero();
         
         BOOST_FOREACH(const Triangle &tri, component.triangles) {
             // XXX one corner being behind the camera does not mean the triangle is invisible!
@@ -123,20 +120,14 @@ void Obj::query(const TaggedImage &image, Vector3d pos, Quaterniond orientation,
                 }
                 
                 // draw region between c0->c2 and ca->cb edges
-                for(int Y = max(0, (int)ceil(ca[1] - 0.5)); Y + 0.5 < cb[1] && Y < (int)image.cam_info.height ; Y++) {
+                for(int Y = max(crop, (int)ceil(ca[1] - 0.5)); Y + 0.5 < cb[1] && Y < (int)image.cam_info.height-crop ; Y++) {
                     double y = Y + 0.5;
                     double x1 = (y - c0[1])*(c2[0] - c0[0])/(c2[1] - c0[1]) + c0[0];
                     double x2 = (y - ca[1])*(cb[0] - ca[0])/(cb[1] - ca[1]) + ca[0];
                     if(x2 < x1) swap(x2, x1); // sort x's
-                    int X1 = max(0, min((int)image.cam_info.width-1, (int)ceil(x1 - 0.5)));
-                    int X2 = max(0, min((int)image.cam_info.width-1, (int)ceil(x2 - 0.5)));
-                    total_color +=
-                        (X2 == 0 ? Vector3d::Zero() : image.sumimage[Y * image.cam_info.width + X2 - 1]) -
-                        (X1 == 0 ? Vector3d::Zero() : image.sumimage[Y * image.cam_info.width + X1 - 1]);
-                    total_color2 +=
-                        (X2 == 0 ? Vector3d::Zero() : image.sumimage2[Y * image.cam_info.width + X2 - 1]) -
-                        (X1 == 0 ? Vector3d::Zero() : image.sumimage2[Y * image.cam_info.width + X1 - 1]);
-                    count += X2 - X1;
+                    int X1 = max(crop, min((int)image.cam_info.width-1-crop, (int)ceil(x1 - 0.5)));
+                    int X2 = max(crop, min((int)image.cam_info.width-1-crop, (int)ceil(x2 - 0.5)));
+                    result += image.get_line_sum(Y, X1, X2);
                     if(dbg_image) {
                         for(int X = X1; X < X2; X++) {
                             (*dbg_image)[Y * image.cam_info.width + X] += j+1;

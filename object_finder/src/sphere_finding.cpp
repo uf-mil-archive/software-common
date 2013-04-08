@@ -108,9 +108,7 @@ bool _accumulate_sphere_scanline(const TaggedImage &image, Vector3d sphere_pos_c
     int xstart = max(0, min((int)image.cam_info.width, (int)ceil(minx)));
     int xend   = max(0, min((int)image.cam_info.width, (int)ceil(maxx))); // not inclusive
     
-    result.total_color += (xend == 0 ? Vector3d::Zero() : image.sumimage[yy * image.cam_info.width + xend - 1]) - (xstart == 0 ? Vector3d::Zero() : image.sumimage[yy * image.cam_info.width + xstart - 1]);
-    result.total_color2 += (xend == 0 ? Vector3d::Zero() : image.sumimage2[yy * image.cam_info.width + xend - 1]) - (xstart == 0 ? Vector3d::Zero() : image.sumimage2[yy * image.cam_info.width + xstart - 1]);
-    result.count += xend - xstart;
+    result += image.get_line_sum(yy, xstart, xend);
     if(dbg_image) {
         for(int X = xstart; X < xend; X++) {
             (*dbg_image)[yy * image.cam_info.width + X] += 1;

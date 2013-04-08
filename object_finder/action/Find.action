@@ -10,6 +10,8 @@ string object_filename
 float64 sphere_radius
 
 geometry_msgs/PoseWithCovariance prior_distribution
+
+bool allow_pitching
 ---
 # result
 # not used currently
