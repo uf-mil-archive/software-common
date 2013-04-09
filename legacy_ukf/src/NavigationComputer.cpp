@@ -202,14 +202,12 @@ void NavigationComputer::UpdateIMU(const IMUInfo& imu)
         updateKalmanTo(imu.timestamp);
 }
 
-void NavigationComputer::UpdateDepth(double depth)
+void NavigationComputer::UpdateDepth(double depth, Vector3d measurement_point_body)
 {
-    // The depth inside the packet is given in NED
-    
     if(std::abs(depth) > MAX_DEPTH)
         return;
 
-    depthRef = depth;
+    depthRef = depth - MILQuaternionOps::QuatRotate(attRef, measurement_point_body)[2];
     depthRefAvailable = true;
 }
 

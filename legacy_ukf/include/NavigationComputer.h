@@ -24,7 +24,7 @@ namespace subjugator {
         NavigationComputer(const Config &config);
         
         void UpdateIMU(const IMUInfo& imu);
-        void UpdateDepth(double depth);
+        void UpdateDepth(double depth, Vector3d measurement_point_body);
         void UpdateVel(Vector3d vel, bool is_world_frame, Vector3d measurement_point_body);
         
         bool getInitialized() { return initialized; }

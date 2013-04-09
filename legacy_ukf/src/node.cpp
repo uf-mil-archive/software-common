@@ -35,6 +35,7 @@ struct Node {
     message_filters::Subscriber<Vector3Stamped> mag_sub;
     TimeSynchronizer<Imu, Vector3Stamped> sync;
     message_filters::Subscriber<Float64Stamped> depth_sub;
+    tf::MessageFilter<Float64Stamped> depth_filter;
     message_filters::Subscriber<Vector3Stamped> worldvel_sub;
     tf::MessageFilter<geometry_msgs::Vector3Stamped> worldvel_filter;
     message_filters::Subscriber<Vector3Stamped> bodyvel_sub;
@@ -54,6 +55,7 @@ struct Node {
         mag_sub(nh, "imu/mag", 1),
         sync(imu_sub, mag_sub, 10),
         depth_sub(nh, "depth", 1),
+        depth_filter(depth_sub, tf_listener, "", 10),
         worldvel_sub(nh, "worldvel", 1),
         worldvel_filter(worldvel_sub, tf_listener, "", 10),
         bodyvel_sub(nh, "bodyvel", 1),
@@ -88,6 +90,7 @@ struct Node {
         if(imu->header.frame_id != imu_frame && navComputer->getInitialized())
             navComputer->reset(navComputer->GetNavInfo().position_NED);
         imu_frame = imu->header.frame_id;
+        depth_filter.setTargetFrame(imu_frame);
         bodyvel_filter.setTargetFrame(imu_frame);
         
         subjugator::IMUInfo imuinfo;
@@ -102,7 +105,9 @@ struct Node {
     }
     
     void depth_callback(const Float64StampedConstPtr& depth) {
-        navComputer->UpdateDepth(depth->data);
+        tf::StampedTransform transform;
+        tf_listener.lookupTransform(imu_frame, depth->header.frame_id, depth->header.stamp, transform);
+        navComputer->UpdateDepth(depth->data, vec2vec(transform.getOrigin()));
     }
     
     void vel_callback(const Vector3StampedConstPtr& vel, bool is_world_frame) {
