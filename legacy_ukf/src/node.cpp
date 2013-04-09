@@ -77,7 +77,7 @@ struct Node {
         attref_pub = private_nh.advertise<PoseStamped>("attref", 1);
         
         sync.registerCallback(boost::bind(&Node::imu_callback, this, _1, _2));
-        depth_sub.registerCallback(boost::bind(&Node::depth_callback, this, _1));
+        depth_filter.registerCallback(boost::bind(&Node::depth_callback, this, _1));
         bodyvel_filter.registerCallback(boost::bind(&Node::vel_callback, this, _1, false));
         worldvel_filter.registerCallback(boost::bind(&Node::vel_callback, this, _1, true));
     }
