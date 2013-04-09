@@ -204,9 +204,6 @@ void NavigationComputer::UpdateIMU(const IMUInfo& imu)
 
 void NavigationComputer::UpdateDepth(double depth, Vector3d measurement_point_body)
 {
-    if(std::abs(depth) > MAX_DEPTH)
-        return;
-
     depthRef = depth - MILQuaternionOps::QuatRotate(attRef, measurement_point_body)[2];
     depthRefAvailable = true;
 }

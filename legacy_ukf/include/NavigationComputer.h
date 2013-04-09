@@ -47,8 +47,6 @@ namespace subjugator {
         static const double T_w = 100; // seconds; TODO
         static const double depth_sigma = 0.02; // m
 
-        static const double MAX_DEPTH = 15; // m
-
         Vector3d initialPosition;
         
         Vector3d referenceGravityVector;
