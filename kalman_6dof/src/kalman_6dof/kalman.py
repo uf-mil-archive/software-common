@@ -21,7 +21,7 @@ skewmatrix = lambda (x, y, z): numpy.array([[0,-z,y],
 
 class Kalman(object):
     def __init__(self, t, # t is a rospy.Time
-            position, orientation, velocity_body, P,
+            position, orientation, velocity_body, clock_drift, P,
             angular_velocity_body, angular_velocity_body_cov,
             acceleration_felt_body, acceleration_felt_body_cov):
         assert .9 <= numpy.linalg.norm(orientation) <= 1.1
@@ -29,6 +29,7 @@ class Kalman(object):
         self.position = position
         self.orientation = orientation/numpy.linalg.norm(orientation)
         self.velocity_body = velocity_body
+        self.clock_drift = clock_drift
         self.P = P
         self.angular_velocity_body = angular_velocity_body
         self.angular_velocity_body_cov = angular_velocity_body_cov
@@ -70,7 +71,7 @@ class Kalman(object):
         velocity_oldbody = self.velocity_body + dt * (oldbody_from_accelbody.dot(acceleration_felt_accelbody) + world_from_oldbody.T.dot(G))
         velocity_newbody = oldbody_from_newbody.T.dot(velocity_oldbody)
         
-        F = numpy.zeros((9, 9))
+        F = numpy.zeros((10, 10))
         F[0:3, 0:3] = numpy.identity(3)
         F[0:3, 3:6] = dt * skewmatrix(world_from_oldbody.dot(self.velocity_body)).T + dt**2/2 * skewmatrix(acceleration_felt).T # orientation affecting position
         F[0:3, 6:9] = dt * world_from_oldbody # velocity affecting position
@@ -79,8 +80,9 @@ class Kalman(object):
         
         F[6:9, 3:6] = dt * world_from_newbody.T.dot(skewmatrix(G)) # orientation affecting velocity
         F[6:9, 6:9] = oldbody_from_newbody.T # velocity affecting velocity
+        F[  9,   9] = 1
         
-        L = numpy.zeros((9, 6))
+        L = numpy.zeros((10, 7))
         J_acceleration_newbody_angular_velocity_body = skewmatrix(acceleration_felt_body).T * dt_measurement
         L[0:3, 0:3] += dt**2/2 * world_from_newbody.dot(J_acceleration_newbody_angular_velocity_body) # gyro noise affecting position
         L[6:9, 0:3] += dt * J_acceleration_newbody_angular_velocity_body # gyro noise affecting velocity
@@ -89,15 +91,17 @@ class Kalman(object):
         L[3:6, 0:3] += dt * world_from_oldbody # gyro noise affecting orientation XXX approximation
         L[6:9, 0:3] += dt * oldbody_from_newbody.T.dot(skewmatrix(velocity_oldbody)) # gyro noise affecting velocity XXX approximation
         L[6:9, 3:6] += dt * oldbody_from_newbody.T.dot(oldbody_from_accelbody) # accel noise affecting velocity
+        L[  9,   6] += dt
         
-        Q = numpy.zeros((6, 6))
+        Q = numpy.zeros((7, 7))
         Q[0:3, 0:3] += angular_velocity_body_cov
         Q[3:6, 3:6] += acceleration_felt_body_cov
+        Q[  6,   6] += 10
         
         P = F.dot(self.P).dot(F.T) + L.dot(Q).dot(L.T)
         
         k = Kalman(t,
-            position, orientation, velocity_newbody, P,
+            position, orientation, velocity_newbody, self.clock_drift, P,
             angular_velocity_body, angular_velocity_body_cov,
             acceleration_felt_body, acceleration_felt_body_cov)
         
@@ -126,10 +130,10 @@ class Kalman(object):
         if debug: print 'K', K
         dx = K.dot(measurement_minus_predicted).flatten()
         if debug: print 'dx', dx
-        if debug: print 'Q', (numpy.identity(9) - K.dot(prediction_jacobian)).dot(self.P)
+        if debug: print 'Q', (numpy.identity(10) - K.dot(prediction_jacobian)).dot(self.P)
         if name is not None:
             print name, ' '.join('%8.5f' % _ for _ in dx)
-        return self._apply_dx(dx, (numpy.identity(9) - K.dot(prediction_jacobian)).dot(self.P))
+        return self._apply_dx(dx, (numpy.identity(10) - K.dot(prediction_jacobian)).dot(self.P))
     
     def _apply_dx(self, dx, P=None):
         if P is None:
@@ -139,6 +143,7 @@ class Kalman(object):
             position=self.position + dx[0:3],
             orientation=transformations.quaternion_multiply(rotvec_to_quat(dx[3:6]), self.orientation),
             velocity_body=self.velocity_body + dx[6:9],
+            clock_drift=self.clock_drift + dx[9],
             P=P,
             angular_velocity_body=self.angular_velocity_body,
             angular_velocity_body_cov=self.angular_velocity_body_cov,
@@ -148,4 +153,4 @@ class Kalman(object):
     
     def _get_dx(self, other):
         q = transformations.quaternion_multiply(self.orientation, transformations.quaternion_conjugate(other.orientation))
-        return self.position - other.position, quat_to_rotvec(q), self.velocity_body - other.velocity_body
+        return self.position - other.position, quat_to_rotvec(q), self.velocity_body - other.velocity_body, self.clock_drift - other.clock_drift
