@@ -11,6 +11,10 @@ import rospy
 
 rospy.init_node('param_saver', anonymous=True)
 
+class MyDumper(yaml.Dumper):
+    def represent_mapping(self, tag, mapping, flow_style=False):
+        return yaml.Dumper.represent_mapping(self, tag, mapping, flow_style)
+
 while not rospy.is_shutdown():
     rospy.sleep(rospy.Duration(3))
     
@@ -21,7 +25,7 @@ while not rospy.is_shutdown():
         param_paths = entry['param_paths']
         
         p = rospy.get_param(file_basepath)
-        data = yaml.dump(dict((k, v) for k, v in p.iteritems() if k in param_paths))
+        data = yaml.dump(dict((k, v) for k, v in p.iteritems() if k in param_paths), Dumper=MyDumper)
         
         if os.path.exists(filename):
             with open(filename, 'rb') as f:
