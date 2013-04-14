@@ -5,19 +5,17 @@
 #include <pluginlib/class_list_macros.h>
 #include <ros/ros.h>
 #include <geometry_msgs/Vector3Stamped.h>
-#include <tf/LinearMath/Quaternion.h>
-#include <tf/transform_datatypes.h>
 
 #include <uf_common/param_helpers.h>
+#include <uf_common/msg_helpers.h>
 
 
 namespace magnetic_hardsoft_compensation {
     class Nodelet : public nodelet::Nodelet {
         private:
             std::string frame_id;
-            tf::Vector3 shift;
-            tf::Quaternion correction;
-            tf::Vector3 scale;
+            Eigen::Matrix3d scale_inverse;
+            Eigen::Vector3d shift;
             ros::Subscriber sub;
             ros::Publisher pub;
             
@@ -27,14 +25,13 @@ namespace magnetic_hardsoft_compensation {
                     return;
                 }
                 
-                tf::Vector3 raw; tf::vector3MsgToTF(msg->vector, raw);
+                Eigen::Vector3d raw = uf_common::xyz2vec(msg->vector);
                 
-                tf::Vector3 processed = quatRotate(correction.inverse(), quatRotate(correction, raw - shift) / scale);
-            
+                Eigen::Vector3d processed = scale_inverse * (raw - shift);
+                
                 geometry_msgs::Vector3Stamped result;
-                result.header.frame_id = frame_id;
-                result.header.stamp = msg->header.stamp;
-                tf::vector3TFToMsg(processed, result.vector);
+                result.header = msg->header;
+                result.vector = uf_common::vec2xyz<geometry_msgs::Vector3>(processed);
                 
                 pub.publish(result);
             }
@@ -45,10 +42,9 @@ namespace magnetic_hardsoft_compensation {
             virtual void onInit() {
                 ros::NodeHandle& private_nh = getPrivateNodeHandle();
                 
-                frame_id = "/imu"; private_nh.getParam("frame_id", frame_id);
-                shift = uf_common::get_tfVector3(private_nh, "shift");
-                correction = uf_common::get_tfQuaternion(private_nh, "correction");
-                scale = uf_common::get_tfVector3(private_nh, "scale");
+                ROS_ASSERT(private_nh.getParam("frame_id", frame_id));
+                scale_inverse = uf_common::get_Matrix(private_nh, "scale").inverse();
+                shift = uf_common::get_Vector(private_nh, "shift");
                 
                 
                 ros::NodeHandle& nh = getNodeHandle();
