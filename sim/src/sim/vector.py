@@ -64,7 +64,7 @@ class V(tuple):
         axis, angle = self.quat_to_axisangle()
         return axis * angle
     def quat_rot(self, v):
-        return V((self % V([0] + list(v)) % self.conj())[1:])
+        return V((self % V([0] + list(v)) % self.conj())[1:])/self.mag2()
     def scale(self, other):
         return V(x*y for x, y in zip(self, other))
 

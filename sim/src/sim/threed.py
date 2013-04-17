@@ -2,6 +2,7 @@ from __future__ import division
 
 import math
 import sys
+import time
 import random
 
 import numpy
@@ -181,206 +182,43 @@ def perspective(fovy, aspect, zNear):
         [0, 0, -2*zNear, 0]
     ])
 
-class Interface(object):
-    def init(self, pos=v(-10, 0, -2)):
-        self.display_flags = pygame.DOUBLEBUF|pygame.OPENGL|pygame.RESIZABLE
-        self.display = pygame.display.set_mode((700, 400), self.display_flags)
-        self.clock = pygame.time.Clock()
-        
-        self.pitch = self.yaw = self.roll = 0
-        self.grabbed = False
-        
-        self.fovy = 100
-        
-        self.t = 0
-        self.pos = pos
-        
+class World(object):
+    def __init__(self):
         self.objs = []
-        
-        rospy.init_node('sim')
-        self.image_pub = rospy.Publisher('/front_camera/image_rect_color', Image)
-        self.info_pub = rospy.Publisher('/front_camera/camera_info', CameraInfo)
-        self.odom_pub = rospy.Publisher('/sim_odom', Odometry)
-        self.tf_br = tf.TransformBroadcaster()
-        
-        self.sub_view = False
     
-    def step(self):
-        dt = self.clock.tick()/1000
-        self.t += dt
-        
-        for event in pygame.event.get():
-            if event.type == pygame.MOUSEMOTION:
-                if self.grabbed:
-                    self.yaw += -event.rel[0]/100
-                    
-                    self.pitch += event.rel[1]/100
-                    # caps it to a quarter turn up or down
-                    self.pitch = min(max(self.pitch, -math.pi/2), math.pi/2)
-            
-            elif event.type == pygame.KEYDOWN:
-                if event.key == pygame.K_TAB:
-                    self.grabbed = not self.grabbed
-                    pygame.event.set_grab(self.grabbed)
-                    pygame.mouse.set_visible(not self.grabbed)
-                
-                elif event.key == pygame.K_RETURN:
-                    self.sub_view = not self.sub_view
-                
-                elif event.key == pygame.K_q:
-                    sys.exit()
-            
-            elif event.type == pygame.QUIT:
-                sys.exit()
-            
-            elif event.type == pygame.VIDEORESIZE:
-                self.display = pygame.display.set_mode(event.size, self.display_flags)
-        
-        rot_matrix = euler_matrix(self.yaw, self.pitch, self.roll)
-        
-        forward = rotate_vec(v(1,0,0), rot_matrix)
-        left = rotate_vec(v(0,-1,0), rot_matrix)
-        local_up = rotate_vec(v(0,0,-1), rot_matrix)
-        
-        keys = pygame.key.get_pressed()
-        
-        speed = 50 if keys[pygame.K_LSHIFT] else 5
-        speed *= (.1 if keys[pygame.K_LCTRL] else 1)
-        
-        if keys[pygame.K_w]: self.pos += forward*dt*speed
-        if keys[pygame.K_s]: self.pos += -forward*dt*speed
-        if keys[pygame.K_a]: self.pos += left*dt*speed
-        if keys[pygame.K_d]: self.pos += -left*dt*speed
-        if keys[pygame.K_SPACE]: self.pos += v(0, 0, -1)*dt*speed
-        if keys[pygame.K_c]: self.pos += v(0, 0, 1)*dt*speed
-        
-        glViewport(0, 0, self.display.get_width(), self.display.get_height())
+    def draw(self):
+        t = time.time()
+        pos = V(numpy.linalg.inv(glGetFloatv(GL_MODELVIEW_MATRIX))[3,0:3])
         
         glClearColor(0, 0, 1, 1)
         glClear(GL_COLOR_BUFFER_BIT|GL_DEPTH_BUFFER_BIT)
-        
-        glMatrixMode(GL_PROJECTION)
-        glLoadIdentity()
-        perspective(self.fovy, self.display.get_width()/self.display.get_height(), 0.1)
-        
-        glMatrixMode(GL_MODELVIEW)
-        glLoadIdentity()
-        # rotates into the FRD coordinate system
-        glMultMatrixf([
-            [ 0., 0.,-1., 0.],
-            [ 1., 0., 0., 0.],
-            [ 0.,-1., 0., 0.],
-            [ 0., 0., 0., 1.]
-        ])
-        # after that, +x is forward, +y is right, and +z is down
-        
-        for obj in self.objs:
-            if self.sub_view and getattr(obj, 'is_base_link', False):
-                glTranslate(-.4, -.2, +.3)
-                rotate_to_body(obj.body, inv=True)
-                pos = obj.body.getRelPointPos((.4, .2, -.3))
-                break
-        else:
-            glMultMatrixf(rot_matrix.T)
-            
-            glTranslate(*-self.pos)
-            pos = self.pos
         
         glEnable(GL_LIGHTING)
         glEnable(GL_LIGHT0)
         glEnable(GL_COLOR_MATERIAL)
         glMaterialfv(GL_FRONT_AND_BACK, GL_EMISSION, [0, 0, 0, 1])
         glMaterialfv(GL_FRONT_AND_BACK, GL_SPECULAR, [0, 0, 0, 1])
-        glLightfv(GL_LIGHT0, GL_POSITION, [math.sin(self.t/5)*100, math.cos(self.t/5)*100, -100, 1])
+        glLightfv(GL_LIGHT0, GL_POSITION, [math.sin(t/5)*100, math.cos(t/5)*100, -100, 1])
         glLightfv(GL_LIGHT0, GL_AMBIENT, [0, 0, 0, 1])
         glLightfv(GL_LIGHT0, GL_DIFFUSE, [.5, .5, .5, 1])
         glLightModelfv(GL_LIGHT_MODEL_AMBIENT, [.5, .5, .5])
         
-        self.draw(pos)
-        
-        #print 'start'
-        x = glReadPixels(0, 0, self.display.get_width(), self.display.get_height(), GL_RGBA, GL_UNSIGNED_BYTE, outputType=None)
-        x = numpy.reshape(x, (self.display.get_height(), self.display.get_width(), 4))
-        x = x[::-1]
-        #print 'end', type(x)
-        
-        t = rospy.Time.now()
-        
-        for obj in self.objs:
-            if not getattr(obj, 'is_base_link', False): continue
-            with GLMatrix:
-                rotate_to_body(obj.body)
-                glcamera_from_frdbody = glGetFloatv(GL_MODELVIEW_MATRIX).T
-                camera_from_body = numpy.array([ # camera from glcamera
-                    [1, 0, 0, 0],
-                    [0,-1, 0, 0],
-                    [0, 0,-1, 0],
-                    [0, 0, 0, 1],
-                ]).dot(glcamera_from_frdbody).dot(numpy.array([ # frdbody from body
-                    [1, 0, 0, 0],
-                    [0,-1, 0, 0],
-                    [0, 0,-1, 0],
-                    [0, 0, 0, 1],
-                ]))
-                body_from_camera = numpy.linalg.inv(camera_from_body)
-                self.tf_br.sendTransform(transformations.translation_from_matrix(body_from_camera),
-                             transformations.quaternion_from_matrix(body_from_camera),
-                             t,
-                             "/sim_camera",
-                             "/base_link")
-			 
-            ENU_from_NED = lambda (e, n, u): (n, e, -u)
-            msg = Odometry()
-            msg.header.stamp = t
-            msg.header.frame_id = '/simmap'
-            msg.child_frame_id = '/base_link'
-            msg.pose.pose.position = Point(*ENU_from_NED(obj.body.getPosition()))
-            ENU_from_NED_q = v(0, 1, 1, 0).unit()
-            FRD_from_FLU_q = v(0, 1, 0, 0).unit()
-            q = ENU_from_NED_q % V(obj.body.getQuaternion()) % FRD_from_FLU_q
-            msg.pose.pose.orientation = Quaternion(q[1], q[2], q[3], q[0])
-            msg.twist.twist.linear = Vector3(*q.conj().quat_rot(ENU_from_NED(obj.body.getLinearVel())))
-            msg.twist.twist.angular = Vector3(*q.conj().quat_rot(ENU_from_NED(obj.body.getAngularVel())))
-            self.odom_pub.publish(msg)
-        
-        
-        msg = Image()
-        msg.header.stamp = t
-        msg.header.frame_id = '/sim_camera'
-        msg.height = self.display.get_height()
-        msg.width = self.display.get_width()
-        msg.encoding = 'rgba8'
-        msg.is_bigendian = 0
-        msg.step = self.display.get_width() * 4
-        msg.data = x.tostring()
-        self.image_pub.publish(msg)
-        
-        msg = CameraInfo()
-        msg.header.stamp = t
-        msg.header.frame_id = '/sim_camera'
-        msg.height = self.display.get_height()
-        msg.width = self.display.get_width()
-        f = 1/math.tan(math.radians(self.fovy)/2)*self.display.get_height()/2
-        msg.P = [
-            f, 0, self.display.get_width()/2-.5, 0,
-            0, f, self.display.get_height()/2-.5, 0,
-            0, 0, 1, 0,
-        ]
-        self.info_pub.publish(msg)
-        
-        
-        pygame.display.flip()
-    
-    def draw(self, pos):
         glEnable(GL_DEPTH_TEST)
         glEnable(GL_CULL_FACE)
         
         for obj in self.objs:
             obj.draw()
-        
+        '''
+        q = gluNewQuadric()
+        for i in xrange(100):
+            with GLMatrix:
+                glColor3d(random.random(), random.random(), random.random())
+                glTranslate(*pos+5*V(random.gauss(0, 1) for i in xrange(3)))
+                gluSphere(q, .5, 10, 5)
+        '''
         # sun
         with GLMatrix:
-            glTranslate(math.sin(self.t/5)*100, math.cos(self.t/5)*100, -100)
+            glTranslate(math.sin(t/5)*100, math.cos(t/5)*100, -100)
             q = gluNewQuadric()
             glDisable(GL_LIGHTING)
             glColor3f(1, 1, 1)
@@ -452,8 +290,191 @@ class Interface(object):
             
             glPopMatrix()
 
+tf_br = tf.TransformBroadcaster()
+
+class Camera(object):
+    def __init__(self, world, name, set_pose_func, base_link_body, fovy=90):
+        self.world = world
+        self.name = name
+        self.set_pose_func = set_pose_func
+        self.base_link_body = base_link_body
+        self.fovy = fovy
+        
+        self.image_pub = rospy.Publisher('/%s/image_rect_color' % name, Image)
+        self.info_pub = rospy.Publisher('/%s/camera_info' % name, CameraInfo)
+    
+    def step(self):
+        t = rospy.Time.now()
+        _, _, width, height = glGetFloatv(GL_VIEWPORT)
+        
+        msg = CameraInfo()
+        msg.header.stamp = t
+        msg.header.frame_id = '/' + self.name
+        msg.height = height
+        msg.width = width
+        f = 1/math.tan(math.radians(self.fovy)/2)*height/2
+        msg.P = [
+            f, 0, width/2-.5, 0,
+            0, f, height/2-.5, 0,
+            0, 0, 1, 0,
+        ]
+        self.info_pub.publish(msg)
+        
+        glMatrixMode(GL_PROJECTION)
+        glLoadIdentity()
+        perspective(self.fovy, width/height, 0.1)
+        glMatrixMode(GL_MODELVIEW)
+        glLoadIdentity()
+        # rotates into the FRD coordinate system
+        glMultMatrixf([
+            [ 0., 0.,-1., 0.],
+            [ 1., 0., 0., 0.],
+            [ 0.,-1., 0., 0.],
+            [ 0., 0., 0., 1.]
+        ])
+        # after that, +x is forward, +y is right, and +z is down
+        self.set_pose_func()
+        
+        with GLMatrix:
+            rotate_to_body(self.base_link_body)
+            glcamera_from_frdbody = glGetFloatv(GL_MODELVIEW_MATRIX).T
+        camera_from_body = numpy.array([ # camera from glcamera
+            [1, 0, 0, 0],
+            [0,-1, 0, 0],
+            [0, 0,-1, 0],
+            [0, 0, 0, 1],
+        ]).dot(glcamera_from_frdbody).dot(numpy.array([ # frdbody from body
+            [1, 0, 0, 0],
+            [0,-1, 0, 0],
+            [0, 0,-1, 0],
+            [0, 0, 0, 1],
+        ]))
+        body_from_camera = numpy.linalg.inv(camera_from_body)
+        tf_br.sendTransform(transformations.translation_from_matrix(body_from_camera),
+                     transformations.quaternion_from_matrix(body_from_camera),
+                     t,
+                     "/" + self.name,
+                     "/base_link")
+		
+        if not self.image_pub.get_num_connections():
+            return
+		
+        self.world.draw()
+        
+        x = glReadPixels(0, 0, width, height, GL_RGBA, GL_UNSIGNED_BYTE, outputType=None)
+        x = numpy.reshape(x, (height, width, 4))
+        x = x[::-1]
+        
+        msg = Image()
+        msg.header.stamp = t
+        msg.header.frame_id = '/' + self.name
+        msg.height = height
+        msg.width = width
+        msg.encoding = 'rgba8'
+        msg.is_bigendian = 0
+        msg.step = width * 4
+        msg.data = x.tostring()
+        self.image_pub.publish(msg)
+
+class Interface(object):
+    def init(self, world, pos=v(-10, 0, -2)):
+        self.world = world
+        self.display_flags = pygame.DOUBLEBUF|pygame.OPENGL|pygame.RESIZABLE
+        self.display = pygame.display.set_mode((700, 400), self.display_flags)
+        self.clock = pygame.time.Clock()
+        
+        self.pitch = self.yaw = self.roll = 0
+        self.grabbed = False
+        
+        self.fovy = 100
+        
+        self.pos = pos
+        
+        self.sub_view = False
+    
+    def step(self):
+        dt = self.clock.tick()/1000
+        
+        for event in pygame.event.get():
+            if event.type == pygame.MOUSEMOTION:
+                if self.grabbed:
+                    self.yaw += -event.rel[0]/100
+                    
+                    self.pitch += event.rel[1]/100
+                    # caps it to a quarter turn up or down
+                    self.pitch = min(max(self.pitch, -math.pi/2), math.pi/2)
+            
+            elif event.type == pygame.KEYDOWN:
+                if event.key == pygame.K_TAB:
+                    self.grabbed = not self.grabbed
+                    pygame.event.set_grab(self.grabbed)
+                    pygame.mouse.set_visible(not self.grabbed)
+                
+                elif event.key == pygame.K_RETURN:
+                    self.sub_view = not self.sub_view
+                
+                elif event.key == pygame.K_q:
+                    sys.exit()
+            
+            elif event.type == pygame.QUIT:
+                sys.exit()
+            
+            elif event.type == pygame.VIDEORESIZE:
+                self.display = pygame.display.set_mode(event.size, self.display_flags)
+                glViewport(0, 0, self.display.get_width(), self.display.get_height())
+        
+        rot_matrix = euler_matrix(self.yaw, self.pitch, self.roll)
+        
+        forward = rotate_vec(v(1,0,0), rot_matrix)
+        left = rotate_vec(v(0,-1,0), rot_matrix)
+        local_up = rotate_vec(v(0,0,-1), rot_matrix)
+        
+        keys = pygame.key.get_pressed()
+        
+        speed = 50 if keys[pygame.K_LSHIFT] else 5
+        speed *= (.1 if keys[pygame.K_LCTRL] else 1)
+        
+        if keys[pygame.K_w]: self.pos += forward*dt*speed
+        if keys[pygame.K_s]: self.pos += -forward*dt*speed
+        if keys[pygame.K_a]: self.pos += left*dt*speed
+        if keys[pygame.K_d]: self.pos += -left*dt*speed
+        if keys[pygame.K_SPACE]: self.pos += v(0, 0, -1)*dt*speed
+        if keys[pygame.K_c]: self.pos += v(0, 0, 1)*dt*speed
+        
+        glMatrixMode(GL_PROJECTION)
+        glLoadIdentity()
+        perspective(self.fovy, self.display.get_width()/self.display.get_height(), 0.1)
+        
+        glMatrixMode(GL_MODELVIEW)
+        glLoadIdentity()
+        # rotates into the FRD coordinate system
+        glMultMatrixf([
+            [ 0., 0.,-1., 0.],
+            [ 1., 0., 0., 0.],
+            [ 0.,-1., 0., 0.],
+            [ 0., 0., 0., 1.]
+        ])
+        # after that, +x is forward, +y is right, and +z is down
+        
+        for obj in self.world.objs:
+            if self.sub_view and getattr(obj, 'is_base_link', False):
+                glTranslate(-.4, -.2, +.3)
+                rotate_to_body(obj.body, inv=True)
+                pos = obj.body.getRelPointPos((.4, .2, -.3))
+                break
+        else:
+            glMultMatrixf(rot_matrix.T)
+            
+            glTranslate(*-self.pos)
+            pos = self.pos
+        
+        self.world.draw()
+        
+        pygame.display.flip()
+
 if __name__ == '__main__':
+    w = World()
     i = Interface()
-    i.init()
+    i.init(w)
     while True:
         i.step()
