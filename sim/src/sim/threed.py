@@ -198,7 +198,7 @@ class World(object):
         glEnable(GL_COLOR_MATERIAL)
         glMaterialfv(GL_FRONT_AND_BACK, GL_EMISSION, [0, 0, 0, 1])
         glMaterialfv(GL_FRONT_AND_BACK, GL_SPECULAR, [0, 0, 0, 1])
-        glLightfv(GL_LIGHT0, GL_POSITION, [math.sin(t/5)*100, math.cos(t/5)*100, -100, 1])
+        glLightfv(GL_LIGHT0, GL_POSITION, [math.sin(t/5)*100, math.cos(t/5)*100, 100, 1])
         glLightfv(GL_LIGHT0, GL_AMBIENT, [0, 0, 0, 1])
         glLightfv(GL_LIGHT0, GL_DIFFUSE, [.5, .5, .5, 1])
         glLightModelfv(GL_LIGHT_MODEL_AMBIENT, [.5, .5, .5])
@@ -218,7 +218,7 @@ class World(object):
         '''
         # sun
         with GLMatrix:
-            glTranslate(math.sin(t/5)*100, math.cos(t/5)*100, -100)
+            glTranslate(math.sin(t/5)*100, math.cos(t/5)*100, 100)
             q = gluNewQuadric()
             glDisable(GL_LIGHTING)
             glColor3f(1, 1, 1)
@@ -231,34 +231,35 @@ class World(object):
         glEnable(GL_BLEND)
         glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA)
         
-        glBegin(GL_TRIANGLE_FAN)
-        glNormal3f(0, 0, -1)
-        glColor4f(0, 0, 0.5, 0.5)
-        glVertex4f(0, 0, 0, 1)
-        glVertex4f(-1, -1, 0, 0)
-        glVertex4f(-1, +1, 0, 0)
-        glVertex4f(+1, +1, 0, 0)
-        glVertex4f(+1, -1, 0, 0)
-        glVertex4f(-1, -1, 0, 0)
-        glEnd()
-        
-        glBegin(GL_TRIANGLE_FAN)
-        glNormal3f(0, 0, 1)
-        glColor4f(0, 0, 0.5, 0.5)
-        glVertex4f(0, 0, 0, 1)
-        glVertex4f(-1, -1, 0, 0)
-        glVertex4f(+1, -1, 0, 0)
-        glVertex4f(+1, +1, 0, 0)
-        glVertex4f(-1, +1, 0, 0)
-        glVertex4f(-1, -1, 0, 0)
-        glEnd()
+        if pos[2] > 0:
+            glBegin(GL_TRIANGLE_FAN)
+            glNormal3f(0, 0, 1)
+            glColor4f(0, 0, 0.5, 0.5)
+            glVertex4f(pos[0], pos[1], min(0, pos[2] - 0.15), 1)
+            glVertex4f(-1, -1, 0, 0)
+            glVertex4f(+1, -1, 0, 0)
+            glVertex4f(+1, +1, 0, 0)
+            glVertex4f(-1, +1, 0, 0)
+            glVertex4f(-1, -1, 0, 0)
+            glEnd()
+        else:
+            glBegin(GL_TRIANGLE_FAN)
+            glNormal3f(0, 0, -1)
+            glColor4f(0, 0, 0.5, 0.5)
+            glVertex4f(pos[0], pos[1], max(0, pos[2] + 0.15), 1)
+            glVertex4f(-1, -1, 0, 0)
+            glVertex4f(-1, +1, 0, 0)
+            glVertex4f(+1, +1, 0, 0)
+            glVertex4f(+1, -1, 0, 0)
+            glVertex4f(-1, -1, 0, 0)
+            glEnd()
         
         glDisable(GL_BLEND)
         
         glEnable(GL_LIGHTING)
         
         # underwater color
-        if pos[2] > 0:
+        if pos[2] < 0:
             glPushMatrix()
             glLoadIdentity()
             
@@ -325,30 +326,25 @@ class Camera(object):
         perspective(self.fovy, width/height, 0.1)
         glMatrixMode(GL_MODELVIEW)
         glLoadIdentity()
-        # rotates into the FRD coordinate system
+        # rotates into the FLU coordinate system
         glMultMatrixf([
             [ 0., 0.,-1., 0.],
-            [ 1., 0., 0., 0.],
-            [ 0.,-1., 0., 0.],
+            [-1., 0., 0., 0.],
+            [ 0., 1., 0., 0.],
             [ 0., 0., 0., 1.]
         ])
-        # after that, +x is forward, +y is right, and +z is down
+        # after that, +x is forward, +y is left, and +z is up
         self.set_pose_func()
         
         with GLMatrix:
             rotate_to_body(self.base_link_body)
-            glcamera_from_frdbody = glGetFloatv(GL_MODELVIEW_MATRIX).T
+            glcamera_from_body = glGetFloatv(GL_MODELVIEW_MATRIX).T
         camera_from_body = numpy.array([ # camera from glcamera
             [1, 0, 0, 0],
             [0,-1, 0, 0],
             [0, 0,-1, 0],
             [0, 0, 0, 1],
-        ]).dot(glcamera_from_frdbody).dot(numpy.array([ # frdbody from body
-            [1, 0, 0, 0],
-            [0,-1, 0, 0],
-            [0, 0,-1, 0],
-            [0, 0, 0, 1],
-        ]))
+        ]).dot(glcamera_from_body)
         body_from_camera = numpy.linalg.inv(camera_from_body)
         tf_br.sendTransform(transformations.translation_from_matrix(body_from_camera),
                      transformations.quaternion_from_matrix(body_from_camera),
@@ -377,20 +373,18 @@ class Camera(object):
         self.image_pub.publish(msg)
 
 class Interface(object):
-    def init(self, world, pos=v(-10, 0, -2)):
+    def init(self, world, pos=v(0, -10, 2)):
         self.world = world
+        self.pos = pos
+        
         self.display_flags = pygame.DOUBLEBUF|pygame.OPENGL|pygame.RESIZABLE
         self.display = pygame.display.set_mode((700, 400), self.display_flags)
         self.clock = pygame.time.Clock()
         
-        self.pitch = self.yaw = self.roll = 0
+        self.pitch = self.yaw = 0
         self.grabbed = False
         
         self.fovy = 100
-        
-        self.pos = pos
-        
-        self.sub_view = False
     
     def step(self):
         dt = self.clock.tick()/1000
@@ -398,9 +392,9 @@ class Interface(object):
         for event in pygame.event.get():
             if event.type == pygame.MOUSEMOTION:
                 if self.grabbed:
-                    self.yaw += -event.rel[0]/100
+                    self.yaw += event.rel[0]/100
                     
-                    self.pitch += event.rel[1]/100
+                    self.pitch += -event.rel[1]/100
                     # caps it to a quarter turn up or down
                     self.pitch = min(max(self.pitch, -math.pi/2), math.pi/2)
             
@@ -409,9 +403,6 @@ class Interface(object):
                     self.grabbed = not self.grabbed
                     pygame.event.set_grab(self.grabbed)
                     pygame.mouse.set_visible(not self.grabbed)
-                
-                elif event.key == pygame.K_RETURN:
-                    self.sub_view = not self.sub_view
                 
                 elif event.key == pygame.K_q:
                     sys.exit()
@@ -423,11 +414,11 @@ class Interface(object):
                 self.display = pygame.display.set_mode(event.size, self.display_flags)
                 glViewport(0, 0, self.display.get_width(), self.display.get_height())
         
-        rot_matrix = euler_matrix(self.yaw, self.pitch, self.roll)
+        rot_matrix = euler_matrix(self.yaw, self.pitch, 0)
         
-        forward = rotate_vec(v(1,0,0), rot_matrix)
-        left = rotate_vec(v(0,-1,0), rot_matrix)
-        local_up = rotate_vec(v(0,0,-1), rot_matrix)
+        forward  = rotate_vec(v(1,0,0), rot_matrix)
+        left     = rotate_vec(v(0,1,0), rot_matrix)
+        local_up = rotate_vec(v(0,0,1), rot_matrix)
         
         keys = pygame.key.get_pressed()
         
@@ -438,8 +429,8 @@ class Interface(object):
         if keys[pygame.K_s]: self.pos += -forward*dt*speed
         if keys[pygame.K_a]: self.pos += left*dt*speed
         if keys[pygame.K_d]: self.pos += -left*dt*speed
-        if keys[pygame.K_SPACE]: self.pos += v(0, 0, -1)*dt*speed
-        if keys[pygame.K_c]: self.pos += v(0, 0, 1)*dt*speed
+        if keys[pygame.K_SPACE]: self.pos += v(0, 0, 1)*dt*speed
+        if keys[pygame.K_c]: self.pos += v(0, 0, -1)*dt*speed
         
         glMatrixMode(GL_PROJECTION)
         glLoadIdentity()
@@ -447,26 +438,19 @@ class Interface(object):
         
         glMatrixMode(GL_MODELVIEW)
         glLoadIdentity()
-        # rotates into the FRD coordinate system
+        # rotates into the FLU coordinate system
         glMultMatrixf([
             [ 0., 0.,-1., 0.],
-            [ 1., 0., 0., 0.],
-            [ 0.,-1., 0., 0.],
+            [-1., 0., 0., 0.],
+            [ 0., 1., 0., 0.],
             [ 0., 0., 0., 1.]
         ])
-        # after that, +x is forward, +y is right, and +z is down
+        # after that, +x is forward, +y is left, and +z is up
         
-        for obj in self.world.objs:
-            if self.sub_view and getattr(obj, 'is_base_link', False):
-                glTranslate(-.4, -.2, +.3)
-                rotate_to_body(obj.body, inv=True)
-                pos = obj.body.getRelPointPos((.4, .2, -.3))
-                break
-        else:
-            glMultMatrixf(rot_matrix.T)
-            
-            glTranslate(*-self.pos)
-            pos = self.pos
+        glMultMatrixf(rot_matrix.T)
+        
+        glTranslate(*-self.pos)
+        pos = self.pos
         
         self.world.draw()
         
