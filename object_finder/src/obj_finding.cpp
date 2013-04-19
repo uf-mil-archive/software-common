@@ -86,17 +86,17 @@ void Obj::query(const TaggedImage &image, Vector3d pos, Quaterniond orientation,
             // XXX one corner being behind the camera does not mean the triangle is invisible!
             // instead, it is an "external triangle" that needs to be handled specially
             
-            Vector3d c0_camera = image.transform.inverse() * (pos + orientation._transformVector(tri.corners[0]));
+            Vector3d c0_camera = image.transform_inverse * (pos + orientation._transformVector(tri.corners[0]));
             Vector3d c0_homo = image.proj * c0_camera.homogeneous();
             if(c0_homo(2) <= 0) continue; // behind camera
             Vector2d c0 = c0_homo.hnormalized();
             
-            Vector3d c1_camera = image.transform.inverse() * (pos + orientation._transformVector(tri.corners[1]));
+            Vector3d c1_camera = image.transform_inverse * (pos + orientation._transformVector(tri.corners[1]));
             Vector3d c1_homo = image.proj * c1_camera.homogeneous();
             if(c1_homo(2) <= 0) continue; // behind camera
             Vector2d c1 = c1_homo.hnormalized();
             
-            Vector3d c2_camera = image.transform.inverse() * (pos + orientation._transformVector(tri.corners[2]));
+            Vector3d c2_camera = image.transform_inverse * (pos + orientation._transformVector(tri.corners[2]));
             Vector3d c2_homo = image.proj * c2_camera.homogeneous();
             if(c2_homo(2) <= 0) continue; // behind camera
             Vector2d c2 = c2_homo.hnormalized();

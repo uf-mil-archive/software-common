@@ -49,6 +49,7 @@ struct Result {
 struct TaggedImage {
     sensor_msgs::CameraInfo cam_info;
     Eigen::Affine3d transform;
+    Eigen::Affine3d transform_inverse;
     Eigen::Matrix<double, 3, 4> proj;
     std::vector<Eigen::Vector3d> sumimage;
     std::vector<Eigen::Vector3d> sumimage2;
@@ -56,7 +57,7 @@ struct TaggedImage {
     
     
     inline TaggedImage(const sensor_msgs::Image &image, const sensor_msgs::CameraInfo &cam_info, const Eigen::Affine3d &transform) :
-        cam_info(cam_info), transform(transform) {
+        cam_info(cam_info), transform(transform), transform_inverse(transform.inverse()) {
         
         proj = Eigen::Map<const Eigen::Matrix<double, 3, 4, Eigen::RowMajor> >(cam_info.P.data());
         

@@ -127,7 +127,7 @@ void sphere_query(const TaggedImage &image, Eigen::Vector3d pos, double radius, 
     // that are included within the provided sphere specified by
     // pos and radius
     
-    Vector3d pos_camera = image.transform.inverse() * pos;
+    Vector3d pos_camera = image.transform_inverse * pos;
     
     Vector2d center_screen = (image.proj * pos_camera.homogeneous()).eval().hnormalized();
     int32_t y_center_hint = max(min(center_screen(1), (double)image.cam_info.height-1), 0.) + .5;
