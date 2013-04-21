@@ -74,7 +74,7 @@ struct Particle {
     Vector3d pos;
     Quaterniond q;
     Particle() { }
-    Particle(const object_finder::FindGoal &goal, boost::shared_ptr<const Obj> obj) :
+    Particle(const object_finder::FindGoal &goal, boost::shared_ptr<const Obj> obj, const TaggedImage &image) :
         goal(goal),
         obj(obj) {
         Matrix6d cov = Map<const Matrix6d>(goal.prior_distribution.covariance.data());
@@ -83,6 +83,8 @@ struct Particle {
         Vector6d dx = dist_from_iid * iid;
         
         pos = dx.head(3) + xyz2vec(goal.prior_distribution.pose.position);
+        if(goal.max_dist)
+            pos = image.get_pixel_point(Vector2d(uniform()*image.cam_info.width, uniform()*image.cam_info.height), uniform()*(goal.max_dist-goal.min_dist)+goal.min_dist);
         q = quat_from_rotvec(dx.tail(3)) * xyzw2quat(goal.prior_distribution.pose.orientation);
     }
     Particle(const object_finder::FindGoal &goal, boost::shared_ptr<const Obj> obj,
@@ -156,23 +158,23 @@ struct Particle {
                 Vector3d this_color = results[i].avg_color().normalized();
                 if(obj->components[i].name.find("solid_") == 0) {
                     P *= exp(10*(
-                        (this_color - outer_color).norm() - (far_color - outer_color).norm() - .1
+                        (this_color - outer_color).norm() - (far_color - outer_color).norm() - .001
                     ));
                 } else if(obj->components[i].name.find("background_") == 0) {
                     P *= exp(10*(
-                        (inner_color - this_color).norm() - (far_color - this_color).norm() - .1
+                        (inner_color - this_color).norm() - (far_color - this_color).norm() - .001
                     ));
                 }
             }
             
             if(goal.type == object_finder::FindGoal::TYPE_SPHERE) {
                 P = exp(10*(
-                    (inner_color - outer_color).norm() - (far_color - outer_color).norm()
+                    (inner_color - outer_color).norm() - (far_color - outer_color).norm() - .01
                 ));
             }
             
-            if((pos-img.transform.translation()).norm() < 1)
-                P *= .001;
+            //if((pos-img.transform.translation()).norm() < 1)
+                //P *= .001;
             if(dbg_image) {
                 cout << endl;
                 cout << endl;
@@ -181,6 +183,9 @@ struct Particle {
                 cout << endl;
                 cout << "outer count" << outer_result.count << endl;
                 cout << "outer avg " << outer_color << endl;
+                cout << endl;
+                cout << "far count" << far_result.count << endl;
+                cout << "far avg " << far_color << endl;
                 cout << endl;
                 //cout << "P2 " << P2 << endl;
                 cout << "P " << P << endl;
@@ -232,6 +237,10 @@ struct Node {
     ros::Time current_stamp;
     double infinite_p;
     
+
+    static bool compare_weight(const pair_type a, const pair_type b) {
+        return a.first < b.first;
+    }
     
     Node() :
         private_nh("~"),
@@ -252,13 +261,13 @@ struct Node {
         actionserver.start();
     }
     
-    void init_particles(ros::Time t) {
+    void init_particles(ros::Time t, const TaggedImage &img) {
         particles.clear();
         
         int N = 1000;
         
         for(int i = 0; i < N; i++)
-            particles.push_back(make_pair(1./N, Particle(goal, current_obj)));
+            particles.push_back(make_pair(1./N, Particle(goal, current_obj, img)));
         
         infinite_p = 1./N;
         
@@ -289,16 +298,6 @@ struct Node {
         if(!have_goal)
             return;
         
-        if(particles.size() == 0) {
-            ROS_INFO("got first frame; initializing particles");
-            init_particles(image->header.stamp);
-        } else if(image->header.stamp < current_stamp - ros::Duration(1) || image->header.stamp > current_stamp + ros::Duration(5)) {
-            ROS_INFO("time jumped too far backwards or forwards; reinitializing particles");
-            init_particles(image->header.stamp);
-        } else if(image->header.stamp < current_stamp) {
-            ROS_ERROR("dropped out of order camera frame");
-            return;
-        }
         double dt = (image->header.stamp - current_stamp).toSec();
         current_stamp = image->header.stamp;
         
@@ -312,16 +311,29 @@ struct Node {
         }
         ROS_INFO("good");
         
+        TaggedImage img(*image, *cam_info, eigen_from_tf(transform));
+        
+        if(particles.size() == 0) {
+            ROS_INFO("got first frame; initializing particles");
+            init_particles(image->header.stamp, img);
+        } else if(image->header.stamp < current_stamp - ros::Duration(1) || image->header.stamp > current_stamp + ros::Duration(5)) {
+            ROS_INFO("time jumped too far backwards or forwards; reinitializing particles");
+            init_particles(image->header.stamp, img);
+        } else if(image->header.stamp < current_stamp) {
+            ROS_ERROR("dropped out of order camera frame");
+            return;
+        }
+        
         // decide whether resampling is necessary
         double weight2_sum = 0; BOOST_FOREACH(pair_type &pair, particles) weight2_sum += pair.first * pair.first;
         double N_eff = 1 / weight2_sum;
-        if(N_eff < particles.size()*1/2) {
+        if(N_eff < particles.size()*1/2 || true) {
             // residual resampling
             std::vector<std::pair<double, Particle> > new_particles;
             BOOST_FOREACH(pair_type &pair, particles) {
                 int count = particles.size() * pair.first;
                 for(int i = 0; i < count; i++)
-                    new_particles.push_back(std::make_pair(1./particles.size(), pair.second.predict(dt)));
+                    new_particles.push_back(std::make_pair(1./particles.size(), i==0? pair.second : pair.second.predict(dt)));
                 pair.first -= (double)count / particles.size();
             }
 
@@ -339,16 +351,16 @@ struct Node {
             BOOST_FOREACH(pair_type &pair, particles) pair.second = pair.second.predict(dt);
         }
         
-        TaggedImage img(*image, *cam_info, eigen_from_tf(transform));
-        
         // update weights
         BOOST_FOREACH(pair_type &pair, particles) pair.first *= pair.second.P(img);
         infinite_p *= Particle::P_no_observation * 1.0001;
         
-        BOOST_FOREACH(pair_type &pair, particles) {
+        sort(particles.begin(), particles.end(), compare_weight);
+        for(unsigned int i = 0; i < particles.size()/2; i++) {
+            pair_type &pair = particles[i];
             if(pair.first < infinite_p) {
                 pair.first = infinite_p;
-                pair.second = Particle(goal, current_obj);
+                pair.second = Particle(goal, current_obj, img);
             }
         }
         
@@ -408,6 +420,7 @@ struct Node {
         pose_pub.publish(msg2);
         
         Particle mean_particle(goal, current_obj, mean_position, mean_orientation);
+        mean_particle = max_p.second;
         
         object_finder::FindFeedback feedback;
         feedback.pose.position = vec2xyz<Point>(mean_position);

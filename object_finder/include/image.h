@@ -97,6 +97,20 @@ struct TaggedImage {
             sumimage2[Y * (cam_info.width+1) + X2] - sumimage2[Y * (cam_info.width+1) + X1],
             X2 - X1);
     }
+    
+    Eigen::Vector3d _get_pixel_point(Eigen::Vector2d pixel, double distancy) const {
+        Eigen::Vector3d res; res << pixel*distancy, distancy;
+        Eigen::Vector4d res_augmented; res_augmented << res, 1;
+        Eigen::Matrix4d proj_augmented; proj_augmented << proj, Eigen::Vector4d(0, 0, 0, 1).transpose();
+        Eigen::Vector4d p = proj_augmented.inverse() * res_augmented;
+        return transform * Eigen::Vector3d(p.head(3)); // p[3] will always be 1
+    }
+    
+    Eigen::Vector3d get_pixel_point(Eigen::Vector2d pixel, double distance) const {
+        Eigen::Vector3d start = _get_pixel_point(pixel, 0);
+        Eigen::Vector3d along = _get_pixel_point(pixel, 1);
+        return start + (along - start).normalized() * distance;
+    }
 };
 
 #endif

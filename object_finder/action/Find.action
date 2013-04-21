@@ -9,7 +9,9 @@ string object_filename
 
 float64 sphere_radius
 
-geometry_msgs/PoseWithCovariance prior_distribution
+geometry_msgs/PoseWithCovariance prior_distribution # currently only orientation is used
+float64 min_dist
+float64 max_dist
 
 bool allow_pitching
 ---
