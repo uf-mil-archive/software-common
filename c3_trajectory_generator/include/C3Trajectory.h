@@ -39,6 +39,7 @@ namespace subjugator {
 
             Waypoint() { }
             Waypoint(const Point &r) : r(r), speed(0), coordinate_unaligned(true) { }
+            Waypoint(const Point &r, double speed) : r(r), speed(speed), coordinate_unaligned(true) { }
         };
 
         C3Trajectory(const Point &start, const Limits &limits);

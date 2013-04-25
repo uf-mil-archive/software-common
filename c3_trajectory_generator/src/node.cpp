@@ -78,7 +78,7 @@ struct Node {
     boost::scoped_ptr<subjugator::C3Trajectory> c3trajectory;
     ros::Time c3trajectory_t;
     
-    subjugator::C3Trajectory::Point current_waypoint;
+    subjugator::C3Trajectory::Waypoint current_waypoint;
     ros::Time current_waypoint_t;
     
     void killed_callback() {
@@ -124,7 +124,7 @@ struct Node {
         c3trajectory_t = odom->header.stamp;
         
         current_waypoint = current;
-        current_waypoint.q[3] = current_waypoint.q[4] = 0; // zero roll and pitch
+        current_waypoint.r.q[3] = current_waypoint.r.q[4] = 0; // zero roll and pitch
         current_waypoint_t = odom->header.stamp;
     }
     
@@ -136,12 +136,14 @@ struct Node {
         
         if(actionserver.isNewGoalAvailable()) {
             boost::shared_ptr<const uf_common::MoveToGoal> goal = actionserver.acceptNewGoal();
-            current_waypoint = Point_from_PoseTwist(goal->posetwist.pose, goal->posetwist.twist);
+            current_waypoint = subjugator::C3Trajectory::Waypoint(
+                Point_from_PoseTwist(goal->posetwist.pose, goal->posetwist.twist),
+                goal->speed);
             current_waypoint_t = now; // goal->header.stamp;
         }
         if(actionserver.isPreemptRequested()) {
             current_waypoint = c3trajectory->getCurrentPoint();
-            current_waypoint.qdot = subjugator::Vector6d::Zero(); // zero velocities
+            current_waypoint.r.qdot = subjugator::Vector6d::Zero(); // zero velocities
             current_waypoint_t = now;
         }
         
@@ -157,7 +159,7 @@ struct Node {
         
         trajectory_pub.publish(msg);
         
-        if(actionserver.isActive() && c3trajectory->getCurrentPoint().is_approximately(current_waypoint) && current_waypoint.qdot == subjugator::Vector6d::Zero()) {
+        if(actionserver.isActive() && c3trajectory->getCurrentPoint().is_approximately(current_waypoint.r) && current_waypoint.r.qdot == subjugator::Vector6d::Zero()) {
             actionserver.setSucceeded();
         }
     }
