@@ -149,16 +149,16 @@ struct Node {
             c3trajectory->update(traj_dt.toSec(), current_waypoint, (c3trajectory_t - current_waypoint_t).toSec());
             c3trajectory_t += traj_dt;
         }
-	    
+        
         PoseTwistStamped msg;
         msg.header.stamp = c3trajectory_t;
         msg.header.frame_id = fixed_frame;
         msg.posetwist = PoseTwist_from_Point(c3trajectory->getCurrentPoint());
-	    
-	    trajectory_pub.publish(msg);
-	    
-	    if(actionserver.isActive() && c3trajectory->getCurrentPoint().is_approximately(current_waypoint) && current_waypoint.qdot == subjugator::Vector6d::Zero()) {
-	        actionserver.setSucceeded();
+        
+        trajectory_pub.publish(msg);
+        
+        if(actionserver.isActive() && c3trajectory->getCurrentPoint().is_approximately(current_waypoint) && current_waypoint.qdot == subjugator::Vector6d::Zero()) {
+            actionserver.setSucceeded();
         }
     }
 };

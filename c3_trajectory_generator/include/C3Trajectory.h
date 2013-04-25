@@ -6,63 +6,63 @@
 namespace subjugator {
     typedef Eigen::Matrix<double, 6, 1> Vector6d;
     
-	class C3Trajectory {
-		public:
-		struct Limits {
-			Vector6d vmin_b;
-			Vector6d vmax_b;
-			Vector6d amin_b;
-			Vector6d amax_b;
-			Eigen::Vector3d arevoffset_b;
-			Vector6d umax_b;
-		};
+    class C3Trajectory {
+        public:
+        struct Limits {
+            Vector6d vmin_b;
+            Vector6d vmax_b;
+            Vector6d amin_b;
+            Vector6d amax_b;
+            Eigen::Vector3d arevoffset_b;
+            Vector6d umax_b;
+        };
 
-		struct Point {
-			Vector6d q;
-			Vector6d qdot;
+        struct Point {
+            Vector6d q;
+            Vector6d qdot;
 
-			Point() { }
+            Point() { }
 
-			Point(const Vector6d &q, const Vector6d &qdot) :
-				q(q), qdot(qdot) { }
-			
-			bool is_approximately(const Point &other) {
-			    Vector6d q_difference = q - other.q;
-			    return q_difference.dot(q_difference) < 1e-6;
-		    }
-		};
+            Point(const Vector6d &q, const Vector6d &qdot) :
+                q(q), qdot(qdot) { }
+            
+            bool is_approximately(const Point &other) {
+                Vector6d q_difference = q - other.q;
+                return q_difference.dot(q_difference) < 1e-6;
+            }
+        };
 
-		struct Waypoint {
-			Point r;
-			double speed;
-			bool coordinate_unaligned;
+        struct Waypoint {
+            Point r;
+            double speed;
+            bool coordinate_unaligned;
 
-			Waypoint() { }
-		Waypoint(const Point &r) : r(r), speed(0), coordinate_unaligned(true) { }
-		};
+            Waypoint() { }
+            Waypoint(const Point &r) : r(r), speed(0), coordinate_unaligned(true) { }
+        };
 
-		C3Trajectory(const Point &start, const Limits &limits);
-		void update(double dt, const Waypoint &waypoint, double waypoint_t);
+        C3Trajectory(const Point &start, const Limits &limits);
+        void update(double dt, const Waypoint &waypoint, double waypoint_t);
 
-		Point getCurrentPoint() const;
+        Point getCurrentPoint() const;
 
-	private:
-		Vector6d q;
-		Vector6d qdot;
-		Vector6d qdotdot_b;
-		Vector6d u_b;
+    private:
+        Vector6d q;
+        Vector6d qdot;
+        Vector6d qdotdot_b;
+        Vector6d u_b;
 
-		Limits limits;
+        Limits limits;
 
-		static double c3filter(double q, double qdot, double qdotdot,
-		                       double r, double rdot, double rdotdot,
-		                       double vmin, double vmax,
-		                       double amin, double amax,
-		                       double umax);
+        static double c3filter(double q, double qdot, double qdotdot,
+                               double r, double rdot, double rdotdot,
+                               double vmin, double vmax,
+                               double amin, double amax,
+                               double umax);
 
-		static std::pair<Eigen::Matrix4d, Eigen::Matrix4d> transformation_pair(const Vector6d &q);
-		static std::pair<Eigen::Vector3d, Eigen::Vector3d> limit(const Eigen::Vector3d &vmin, const Eigen::Vector3d &vmax, const Eigen::Vector3d &delta);
-	};
+        static std::pair<Eigen::Matrix4d, Eigen::Matrix4d> transformation_pair(const Vector6d &q);
+        static std::pair<Eigen::Vector3d, Eigen::Vector3d> limit(const Eigen::Vector3d &vmin, const Eigen::Vector3d &vmax, const Eigen::Vector3d &delta);
+    };
 };
 
 #endif
