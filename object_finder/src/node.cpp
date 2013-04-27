@@ -383,8 +383,10 @@ struct Node {
             vector<Vector4d> qs;
             qs.push_back(pair.second.q.coeffs());
             qs.push_back(-pair.second.q.coeffs());
-            qs.push_back((pair.second.q*Quaterniond(0, 0, 1, 0)).coeffs());
-            qs.push_back(-(pair.second.q*Quaterniond(0, 0, 1, 0)).coeffs());
+            if(goal.is_180z_symmetric) {
+                qs.push_back((pair.second.q*Quaterniond(0, 0, 1, 0)).coeffs());
+                qs.push_back(-(pair.second.q*Quaterniond(0, 0, 1, 0)).coeffs());
+            }
             
             Vector4d best_q;
             double best_score = -1e300;

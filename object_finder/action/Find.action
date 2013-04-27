@@ -14,6 +14,7 @@ float64 min_dist
 float64 max_dist
 
 bool allow_pitching
+bool is_180z_symmetric
 ---
 # result
 # not used currently
