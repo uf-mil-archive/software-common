@@ -106,7 +106,7 @@ struct Particle {
     double P(const TaggedImage &img, vector<int>* dbg_image=NULL) {
         Result inner_result;
         Result outer_result;
-        vector<Result> results;
+        vector<ResultWithArea> results;
         if(goal.type == object_finder::FindGoal::TYPE_SPHERE) {
             sphere_query(img, pos, goal.sphere_radius, inner_result, dbg_image);
             

@@ -55,13 +55,19 @@ struct Marker {
     Eigen::Vector3d position;
 };
 
+struct ResultWithArea : public Result {
+    double area;
+    ResultWithArea() { }
+    ResultWithArea(Result result, double area) : Result(result), area(area) { }
+};
+
 struct Obj {
     std::vector<Component> components;
     std::vector<Marker> markers;
     
     Obj(const std::string filename);
     
-    void query(const TaggedImage &image, Eigen::Vector3d pos, Eigen::Quaterniond orientation, std::vector<Result> &results, std::vector<int>* dbg_image=NULL) const;
+    void query(const TaggedImage &image, Eigen::Vector3d pos, Eigen::Quaterniond orientation, std::vector<ResultWithArea> &results, std::vector<int>* dbg_image=NULL) const;
 };
 
 #endif

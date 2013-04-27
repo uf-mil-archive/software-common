@@ -35,7 +35,7 @@ int main() {
     
     Obj obj = Obj("shooter.obj");
     TaggedImage img(image, camera_info, Affine3d());
-    vector<Result> results;
+    vector<ResultWithArea> results;
     vector<int> dbg_image(width*height, 0);
     
     //write(dbg_image, width, height, "tmp.pgm");

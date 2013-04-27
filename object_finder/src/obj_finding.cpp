@@ -72,15 +72,18 @@ Obj::Obj(const string filename) {
     }
 }
 
+static Vector3d flat_vector(Vector2d x) {
+    return Vector3d(x[0], x[1], 0);
+}
 
-void Obj::query(const TaggedImage &image, Vector3d pos, Quaterniond orientation, vector<Result> &results, vector<int>* dbg_image) const {
+void Obj::query(const TaggedImage &image, Vector3d pos, Quaterniond orientation, vector<ResultWithArea> &results, vector<int>* dbg_image) const {
     results.resize(components.size());
     
     BOOST_FOREACH(const Component &component, components) {
         int j = &component - components.data();
-    
-        Result &result = results[j];
-        result = Result::Zero();
+        
+        Result result = Result::Zero();
+        double area = 0;
         
         BOOST_FOREACH(const Triangle &tri, component.triangles) {
             // XXX one corner being behind the camera does not mean the triangle is invisible!
@@ -100,6 +103,8 @@ void Obj::query(const TaggedImage &image, Vector3d pos, Quaterniond orientation,
             Vector3d c2_homo = image.proj * c2_camera.homogeneous();
             if(c2_homo(2) <= 0) continue; // behind camera
             Vector2d c2 = c2_homo.hnormalized();
+            
+            area += Triangle(flat_vector(c0), flat_vector(c1), flat_vector(c2)).area();
             
             // sort corners by y coordinate
             if(c1[1] < c0[1]) swap(c1, c0);
@@ -136,6 +141,7 @@ void Obj::query(const TaggedImage &image, Vector3d pos, Quaterniond orientation,
                 }
             }
         }
-    
+        
+        results[j] = ResultWithArea(result, area);
     }
 }
