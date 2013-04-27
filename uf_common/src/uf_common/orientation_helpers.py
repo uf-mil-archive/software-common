@@ -10,7 +10,7 @@ roslib.load_manifest('uf_common')
 import rospy
 from tf import transformations
 from nav_msgs.msg import Odometry
-from uf_common.msg import PoseTwistStamped, PoseTwist
+from uf_common.msg import PoseTwistStamped, PoseTwist, MoveToGoal
 from std_msgs.msg import Header
 from geometry_msgs.msg import Pose as Pose, Quaternion, Point, Vector3, Twist
 
@@ -237,6 +237,15 @@ class PoseEditor(object):
             posetwist=self.as_PoseTwist(*args, **kwargs),
         )
     
+    def as_MoveToGoal(self, speed=0, *args, **kwargs):
+        return MoveToGoal(
+            header=Header(
+                frame_id=self.frame_id,
+            ),
+            posetwist=self.as_PoseTwist(*args, **kwargs),
+            speed=speed,
+        )
+    
     # allow implicit usage in place of a PoseTwistStamped
     @property
     def header(self):
@@ -246,3 +255,7 @@ class PoseEditor(object):
     @property
     def posetwist(self):
         return self.as_PoseTwist()
+    # and in place of a MoveToGoal
+    @property
+    def speed(self):
+        return 0
