@@ -126,7 +126,7 @@ struct Particle {
                     outer_result += results[i];
                 }
                 if(dbg_image) {
-                    cout << obj->components[i].name << " " << results[i].count << " " << results[i].total_color << endl;
+                    cout << obj->components[i].name << " count: " << results[i].count << " " << results[i].total_color << "area: " << results[i].area << endl;
                 }
             }
         } else {
@@ -155,14 +155,17 @@ struct Particle {
                     P *= 0.5;
                     continue;
                 }
-                Vector3d this_color = results[i].avg_color().normalized();
                 if(obj->components[i].name.find("solid_") == 0) {
+                    Vector3d this_color = results[i].avg_color_assuming_unseen_is(
+                        outer_color).normalized();
                     P *= exp(10*(
-                        (this_color - outer_color).norm() - (far_color - outer_color).norm() - .001
+                        (this_color - outer_color).norm() - (far_color - outer_color).norm() - .05
                     ));
                 } else if(obj->components[i].name.find("background_") == 0) {
+                    Vector3d this_color = results[i].avg_color_assuming_unseen_is(
+                        inner_color).normalized();
                     P *= exp(10*(
-                        (inner_color - this_color).norm() - (far_color - this_color).norm() - .001
+                        (inner_color - this_color).norm() - (far_color - this_color).norm() - .05
                     ));
                 }
             }

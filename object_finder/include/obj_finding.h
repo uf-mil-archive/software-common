@@ -26,12 +26,9 @@ struct Triangle {
         return (corners[0] + corners[1] + corners[2])/3;
     }
     double area() const {
-        Eigen::Vector3d x = corners[1] - corners[0];
-        Eigen::Vector3d y = corners[2] - corners[0];
-        return .5*sqrt(
-            pow(x[1]*y[2] - x[2]*y[1], 2) +
-            pow(x[2]*y[0] - x[0]*y[2], 2) +
-            pow(x[0]*y[1] - x[1]*y[0], 2));
+        Eigen::Vector3d a = corners[1] - corners[0];
+        Eigen::Vector3d b = corners[2] - corners[0];
+        return a.cross(b).norm()/2;
     }
 };
 
@@ -59,6 +56,9 @@ struct ResultWithArea : public Result {
     double area;
     ResultWithArea() { }
     ResultWithArea(Result result, double area) : Result(result), area(area) { }
+    Eigen::Vector3d avg_color_assuming_unseen_is(Eigen::Vector3d unseen_color) {
+        return (total_color+(area-count)*unseen_color)/area;
+    }
 };
 
 struct Obj {
