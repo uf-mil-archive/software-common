@@ -186,6 +186,11 @@ class World(object):
     def __init__(self):
         self.objs = []
     
+    def step(self, dt):
+        for obj in self.objs:
+            if hasattr(obj, "step"):
+                obj.step(dt)
+    
     def draw(self):
         t = time.time()
         pos = V(numpy.linalg.inv(glGetFloatv(GL_MODELVIEW_MATRIX))[3,0:3])
