@@ -145,6 +145,10 @@ struct Node {
             current_waypoint = c3trajectory->getCurrentPoint();
             current_waypoint.r.qdot = subjugator::Vector6d::Zero(); // zero velocities
             current_waypoint_t = now;
+            
+            // don't try to make output c3 continuous when cancelled - instead stop as quickly as possible
+            c3trajectory.reset(new subjugator::C3Trajectory(current_waypoint.r, limits));
+            c3trajectory_t = now;
         }
         
         while(c3trajectory_t + traj_dt < now) {
