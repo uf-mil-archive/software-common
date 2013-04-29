@@ -87,7 +87,13 @@ class Node(object):
             self.controller.config = self.processed_config
             wrench = self.controller.update(dt, self.desired.posetwist, PoseTwist(pose=self.current.pose.pose, twist=self.current.twist.twist))
             
-            pub.publish(WrenchStamped(header=Header(frame_id='/base_link'), wrench=wrench))
+            pub.publish(WrenchStamped(
+                header=Header(
+                    stamp=rospy.Time.now(),
+                    frame_id='/base_link',
+                ),
+                wrench=wrench,
+            ))
 
 
 if __name__ == '__main__':
