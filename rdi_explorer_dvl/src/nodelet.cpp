@@ -1,5 +1,6 @@
 #include <boost/shared_ptr.hpp>
 #include <boost/thread.hpp>
+#include <boost/optional.hpp>
 
 #include <nodelet/nodelet.h>
 #include <pluginlib/class_list_macros.h>
@@ -41,14 +42,17 @@ namespace rdi_explorer_dvl {
             
             void polling_thread() {
                 while(running) {
-                    geometry_msgs::Vector3Stamped msg;
-                    uf_common::Float64Stamped range_msg;
-                    if(!device->read(msg, range_msg))
-                        continue;
-                    msg.header.frame_id = frame_id;
-                    range_msg.header.frame_id = frame_id;
-                    pub.publish(msg);
-                    range_pub.publish(range_msg);
+                    boost::optional<geometry_msgs::Vector3Stamped> msg;
+                    boost::optional<uf_common::Float64Stamped> range_msg;
+                    device->read(msg, range_msg);
+                    if(msg) {
+                        msg->header.frame_id = frame_id;
+                        pub.publish(*msg);
+                    }
+                    if(range_msg) {
+                        range_msg->header.frame_id = frame_id;
+                        range_pub.publish(*range_msg);
+                    }
                 }
             }
             

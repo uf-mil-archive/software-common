@@ -6,6 +6,7 @@
 
 #include <boost/asio/serial_port.hpp>
 #include <boost/foreach.hpp>
+#include <boost/none.hpp>
 
 #include <geometry_msgs/Vector3Stamped.h>
 #include <uf_common/Float64Stamped.h>
@@ -60,42 +61,42 @@ namespace rdi_explorer_dvl {
                 // open is called on first read() in the _polling_ thread
             }
             
-            bool read(geometry_msgs::Vector3Stamped &res, uf_common::Float64Stamped &height_res) {
+            void read(boost::optional<geometry_msgs::Vector3Stamped> &res,
+                      boost::optional<uf_common::Float64Stamped> &height_res) {
+                res = boost::none;
+                height_res = boost::none;
+                
                 if(!p.is_open()) {
                     open();
-                    return false;
+                    return;
                 }
                 
                 ByteVec ensemble; ensemble.resize(4);
                 
-                if(!read_byte(ensemble[0])) return false; // Header ID
-                if(ensemble[0] != 0x7F) return false;
+                if(!read_byte(ensemble[0])) return; // Header ID
+                if(ensemble[0] != 0x7F) return;
                 
                 ros::Time stamp = ros::Time::now();
-                res.header.stamp = stamp;
-                height_res.header.stamp = stamp;
                 
-                if(!read_byte(ensemble[1])) return false; // Data Source ID
-                if(ensemble[1] != 0x7F) return false;
+                if(!read_byte(ensemble[1])) return; // Data Source ID
+                if(ensemble[1] != 0x7F) return;
                 
-                if(!read_byte(ensemble[2])) return false; // Size low
-                if(!read_byte(ensemble[3])) return false; // Size high
+                if(!read_byte(ensemble[2])) return; // Size low
+                if(!read_byte(ensemble[3])) return; // Size high
                 uint16_t ensemble_size = getu16le(ensemble.data() + 2);
                 ensemble.resize(ensemble_size);
                 for(int i = 4; i < ensemble_size; i++) {
-                    if(!read_byte(ensemble[i])) return false;
+                    if(!read_byte(ensemble[i])) return;
                 }
                 
                 uint16_t checksum = 0; BOOST_FOREACH(uint16_t b, ensemble) checksum += b;
-                uint16_t received_checksum; if(!read_short(received_checksum)) return false;
+                uint16_t received_checksum; if(!read_short(received_checksum)) return;
                 if(received_checksum != checksum) {
                     ROS_ERROR("Invalid DVL ensemble checksum. received: %i calculated: %i size: %i", received_checksum, checksum, ensemble_size);
-                    return false;
+                    return;
                 }
                 
-                bool found_vel = false;
-                bool found_height = false;
-                if(ensemble.size() < 6) return false;
+                if(ensemble.size() < 6) return;
                 for(int dt = 0; dt < ensemble[5]; dt++) {
                     int offset = getu16le(ensemble.data() + 6 + 2*dt);
                     if(ensemble.size() - offset < 2) continue;
@@ -107,22 +108,22 @@ namespace rdi_explorer_dvl {
                             ROS_ERROR("DVL didn't return bottom velocity");
                             continue;
                         }
-                        res.vector.x = gets32le(ensemble.data() + offset + 2) * .01e-3;
-                        res.vector.y = gets32le(ensemble.data() + offset + 6) * .01e-3;
-                        res.vector.z = gets32le(ensemble.data() + offset + 10) * .01e-3;
-                        found_vel = true;
+                        res = boost::make_optional(geometry_msgs::Vector3Stamped());
+                        res->header.stamp = stamp;
+                        res->vector.x = gets32le(ensemble.data() + offset + 2) * .01e-3;
+                        res->vector.y = gets32le(ensemble.data() + offset + 6) * .01e-3;
+                        res->vector.z = gets32le(ensemble.data() + offset + 10) * .01e-3;
                     } else if(section_id == 0x5804) { // Bottom Track Range
                         if(ensemble.size() - offset < 2 + 4*3) continue;
                         if(gets32le(ensemble.data() + offset + 10) <= 0) {
                             ROS_ERROR("DVL didn't return height over bottom");
                             continue;
                         }
-                        height_res.data = gets32le(ensemble.data() + offset + 10) * 0.1e-3;
-                        found_height = true;
+                        height_res = boost::make_optional(uf_common::Float64Stamped());
+                        height_res->header.stamp = stamp;
+                        height_res->data = gets32le(ensemble.data() + offset + 10) * 0.1e-3;
                     }
                 }
-                
-                return found_vel && found_height;
             }
             
             
