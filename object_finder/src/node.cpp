@@ -455,8 +455,8 @@ struct Node {
             msg4.step = image->width*3;
             msg4.data.resize(image->width*image->height*3);
             int step;
-            if(image->encoding == "rgba8") step = 4;
-            else if(image->encoding == "rgb8") step = 3;
+            if(image->encoding == "rgba8" || image->encoding == "bgra8") step = 4;
+            else if(image->encoding == "rgb8" || image->encoding == "bgr8") step = 3;
             else assert(false);
             for(unsigned int y = 0; y < image->height; y++) {
                 for(unsigned int x = 0; x < image->width; x++) {

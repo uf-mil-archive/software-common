@@ -5,6 +5,7 @@
 
 #include <Eigen/Dense>
 
+#include <ros/ros.h>
 #include <sensor_msgs/Image.h>
 #include <sensor_msgs/CameraInfo.h>
 
@@ -62,9 +63,13 @@ struct TaggedImage {
         proj = Eigen::Map<const Eigen::Matrix<double, 3, 4, Eigen::RowMajor> >(cam_info.P.data());
         
         int step;
-        if(image.encoding == "rgba8") step = 4;
-        else if(image.encoding == "rgb8") step = 3;
-        else assert(false);
+        if(image.encoding == "rgba8" || image.encoding == "bgra8") step = 4;
+        else if(image.encoding == "rgb8" || image.encoding == "bgr8") step = 3;
+        else {
+            ROS_ERROR("unknown image encoding: %s", image.encoding.c_str());
+            assert(false);
+        }
+        bool reversed = image.encoding == "bgra8" || image.encoding == "bgr8";
         
         sumimage.resize((image.width+1) * image.height);
         sumimage2.resize((image.width+1) * image.height);
@@ -76,6 +81,7 @@ struct TaggedImage {
             for(uint32_t col = 0; col < image.width; col++) {
                 const uint8_t *pixel = image.data.data() + image.step * row + step * col;
                 Eigen::Vector3d color = Eigen::Vector3d(pixel[0] / 255., pixel[1] / 255., pixel[2] / 255.);
+                if(reversed) std::swap(color[0], color[2]);
                 
                 row_cumulative_sum += color;
                 sumimage[(image.width+1) * row + col+1] = row_cumulative_sum;
