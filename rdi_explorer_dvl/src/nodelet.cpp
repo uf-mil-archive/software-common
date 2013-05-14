@@ -32,7 +32,7 @@ namespace rdi_explorer_dvl {
                 ROS_ASSERT_MSG(getPrivateNodeHandle().getParam("frame_id", frame_id),
                     "\"frame_id\" param missing");
                 
-                pub = getNodeHandle().advertise<geometry_msgs::Vector3Stamped>("dvl", 10);
+                pub = getNodeHandle().advertise<uf_common::VelocityMeasurements>("dvl", 10);
                 range_pub = getNodeHandle().advertise<uf_common::Float64Stamped>("dvl/range", 10);
                 
                 device = boost::make_shared<Device>(port, baudrate);
@@ -48,7 +48,7 @@ namespace rdi_explorer_dvl {
             
             void polling_thread() {
                 while(running) {
-                    boost::optional<geometry_msgs::Vector3Stamped> msg;
+                    boost::optional<uf_common::VelocityMeasurements> msg;
                     boost::optional<uf_common::Float64Stamped> range_msg;
                     device->read(msg, range_msg);
                     if(msg) {
