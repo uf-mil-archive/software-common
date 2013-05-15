@@ -155,7 +155,7 @@ struct Particle {
         
         Result far_result = img.total_result - inner_result; //- outer_result;
         
-        if(inner_result.count < 100 && outer_result.count < 100) {
+        if(inner_result.count < 100 || outer_result.count < 100) {
             return 0.001;
             if(dbg_image) {
                 cout << endl;
