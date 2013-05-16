@@ -97,6 +97,8 @@ struct Particle {
         }
         q = quat_from_rotvec(dx.tail(3)) *
             xyzw2quat(goal.prior_distribution.pose.orientation);
+        if(goal.check_180z_flip && uniform() >= .5)
+            q = q * Quaterniond(0, 0, 1, 0);
     }
     Particle(const object_finder::FindGoal &goal,
              boost::shared_ptr<const Obj> obj,

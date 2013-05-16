@@ -9,15 +9,17 @@ string object_filename
 
 float64 sphere_radius
 
-geometry_msgs/PoseWithCovariance prior_distribution # currently only orientation is used
+geometry_msgs/PoseWithCovariance prior_distribution
 float64 min_dist
-float64 max_dist
+float64 max_dist # prior_distribution.pose.position ignored if this is nonzero
+bool check_180z_flip
 
 bool allow_pitching
+
 bool is_180z_symmetric
 ---
 # result
-# not used currently
+# not used
 ---
 # feedback
 geometry_msgs/Pose pose
