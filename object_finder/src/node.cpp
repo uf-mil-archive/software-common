@@ -35,6 +35,8 @@ using namespace message_filters;
 using namespace Eigen;
 using namespace uf_common;
 
+using namespace object_finder;
+
 
 double gauss() {
     static boost::variate_generator<boost::mt19937,
@@ -68,15 +70,13 @@ Quaterniond quat_from_rotvec(Vector3d r) {
     return Quaterniond(AngleAxisd(r.norm(), r.normalized()));
 }
 
-struct Particle {
-    static const double P_no_observation = 1;
-    
-    object_finder::FindGoal goal;
+struct PoseGuess {
+    TargetDesc goal;
     boost::shared_ptr<const Obj> obj;
     Vector3d pos;
     Quaterniond q;
-    Particle() { }
-    Particle(const object_finder::FindGoal &goal,
+    PoseGuess() { }
+    PoseGuess(const TargetDesc &goal,
              boost::shared_ptr<const Obj> obj,
              const TaggedImage &image) :
         goal(goal),
@@ -100,30 +100,30 @@ struct Particle {
         if(goal.check_180z_flip && uniform() >= .5)
             q = q * Quaterniond(0, 0, 1, 0);
     }
-    Particle(const object_finder::FindGoal &goal,
+    PoseGuess(const TargetDesc &goal,
              boost::shared_ptr<const Obj> obj,
              Vector3d pos, Quaterniond q) :
         goal(goal), obj(obj),
         pos(pos), q(q) {
     }
-    Particle predict(double dt) {
-        Particle p(*this);
+    PoseGuess predict(double dt) const {
+        PoseGuess p(*this);
         // diffusion to model INS's position drift and to test near solutions 
         // to try to find a better fit
-        p.pos += sqrt(.01 * dt) * gaussvec();
+        p.pos += .05 * gaussvec();
         //p.q *= quat_from_rotvec(sqrt(.01 * dt) * gaussvec());
-        p.q = quat_from_rotvec(Vector3d(0, 0, sqrt(.01*dt) * gauss())) * p.q;
+        p.q = quat_from_rotvec(Vector3d(0, 0, .05 * gauss())) * p.q;
         if(goal.allow_pitching) {
             p.q = p.q * quat_from_rotvec(
                 Vector3d(0, sqrt(.01 * dt) * gauss(), 0));
         }
         return p;
     }
-    double P(const TaggedImage &img, vector<int>* dbg_image=NULL) {
+    double P(const TaggedImage &img, vector<int>* dbg_image=NULL) const {
         Result inner_result;
         Result outer_result;
         vector<ResultWithArea> results;
-        if(goal.type == object_finder::FindGoal::TYPE_SPHERE) {
+        if(goal.type == TargetDesc::TYPE_SPHERE) {
             sphere_query(img, pos, goal.sphere_radius,
                 inner_result, dbg_image);
             
@@ -131,7 +131,7 @@ struct Particle {
             sphere_query(img, pos, 2*goal.sphere_radius,
                 both_result, dbg_image);
             outer_result = both_result - inner_result;
-        } else if(goal.type == object_finder::FindGoal::TYPE_OBJECT) {
+        } else if(goal.type == TargetDesc::TYPE_OBJECT) {
             inner_result = Result::Zero();
             outer_result = Result::Zero();
             
@@ -165,7 +165,6 @@ struct Particle {
                 cout << "NOT VISIBLE" << endl;
             }
             // not visible
-            return P_no_observation; // expected value of above expression
         }
         
         Vector3d inner_color = inner_result.avg_color().normalized();
@@ -203,7 +202,7 @@ struct Particle {
             }
         }
         
-        if(goal.type == object_finder::FindGoal::TYPE_SPHERE) {
+        if(goal.type == TargetDesc::TYPE_SPHERE) {
             P = exp(10*(
                 (inner_color - outer_color).norm() -
                 (  far_color - outer_color).norm() - .01
@@ -232,6 +231,43 @@ struct Particle {
     }
 };
 
+struct Particle {
+    vector<PoseGuess> poseguesses;
+    Particle() { }
+    Particle(const object_finder::FindGoal &goal,
+             const vector<boost::shared_ptr<Obj> > objs,
+             const TaggedImage &image) {
+        
+        BOOST_FOREACH(const TargetDesc &targetdesc, goal.targetdescs) {
+            poseguesses.push_back(PoseGuess(targetdesc,
+                objs[&targetdesc - goal.targetdescs.data()], image));
+        }
+    }
+    Particle predict(double dt) const {
+        Particle p(*this);
+        BOOST_FOREACH(PoseGuess &poseguess, p.poseguesses) {
+            poseguess = poseguess.predict(dt);
+        }
+        return p;
+    }
+    double P(const TaggedImage &img, vector<int>* dbg_image=NULL) const {
+        double P = 1;
+        BOOST_FOREACH(const PoseGuess &poseguess, poseguesses) {
+            P *= poseguess.P(img, dbg_image);
+        }
+        return P;
+    }
+    double dist(const Particle &other) {
+        assert(other.poseguesses.size() == poseguesses.size());
+        double max_dist = 0;
+        for(unsigned int i = 0; i < poseguesses.size(); i++) {
+            max_dist = max(max_dist,
+                (poseguesses[i].pos - other.poseguesses[i].pos).norm());
+        }
+        return max_dist;
+    }
+};
+
 struct Node {
     static const int N = 1000;
     
@@ -250,7 +286,7 @@ struct Node {
     bool have_goal;
     object_finder::FindGoal goal;
     
-    boost::shared_ptr<Obj> current_obj;
+    vector<boost::shared_ptr<Obj> > current_objs;
     
     typedef std::pair<double, Particle> pair_type;
     std::vector<pair_type> particles;
@@ -289,7 +325,7 @@ struct Node {
         
         for(int i = 0; i < N; i++)
             particles.push_back(
-                make_pair(1./N, Particle(goal, current_obj, img)));
+                make_pair(1./N, Particle(goal, current_objs, img)));
         
         infinite_p = 1./N;
         
@@ -302,9 +338,11 @@ struct Node {
             actionserver.acceptNewGoal();
         goal = *new_goal;
         particles.clear();
-        current_obj.reset();
-        if(goal.type == object_finder::FindGoal::TYPE_OBJECT) {
-            current_obj = boost::make_shared<Obj>(goal.object_filename);
+        current_objs.clear();
+        BOOST_FOREACH(const TargetDesc &targetdesc, goal.targetdescs) {
+            current_objs.push_back(targetdesc.type == TargetDesc::TYPE_OBJECT
+                ? boost::make_shared<Obj>(targetdesc.object_filename)
+                : boost::shared_ptr<Obj>());
         }
         info_tf_filter.setTargetFrame(goal.header.frame_id);
     }
@@ -316,7 +354,7 @@ struct Node {
         
         if(actionserver.isPreemptRequested()) {
             have_goal = false;
-            current_obj.reset();
+            current_objs.clear();
         }
         
         if(!have_goal)
@@ -368,7 +406,7 @@ struct Node {
         // update weights
         BOOST_FOREACH(pair_type &pair, particles)
             pair.first *= pair.second.P(img);
-        infinite_p *= Particle::P_no_observation * 1.0001;
+        infinite_p *= 1.0001; // no observation should result in a P of 1
         
         // replace particles doing worse than the median with new ones
         // drawn from the prior distribution
@@ -377,7 +415,7 @@ struct Node {
             pair_type &pair = particles[i];
             if(pair.first < infinite_p) {
                 pair.first = infinite_p;
-                pair.second = Particle(goal, current_obj, img);
+                pair.second = Particle(goal, current_objs, img);
             }
         }
         
@@ -401,10 +439,10 @@ struct Node {
             msg.header.frame_id = goal.header.frame_id;
             msg.header.stamp = image->header.stamp;
             msg.type = visualization_msgs::Marker::POINTS;
-            msg.scale = make_xyz<Vector3>(.1, max(goal.sphere_radius, .1), 1);
+            msg.scale = make_xyz<Vector3>(.1, .1, 1);
             msg.color.a = 1;
             BOOST_FOREACH(pair_type &pair, particles) {
-                msg.points.push_back(vec2xyz<Point>(pair.second.pos));
+                msg.points.push_back(vec2xyz<Point>(pair.second.poseguesses[0].pos));
                 msg.colors.push_back(make_rgba<ColorRGBA>(
                     pair.first/max_p.first, 0, 1-pair.first/max_p.first, 1));
             }
@@ -415,31 +453,36 @@ struct Node {
             PoseStamped msg;
             msg.header.frame_id = goal.header.frame_id;
             msg.header.stamp = image->header.stamp;
-            msg.pose.position = vec2xyz<Point>(max_p.second.pos);
+            msg.pose.position = vec2xyz<Point>(max_p.second.poseguesses[0].pos);
             msg.pose.orientation = quat2xyzw<geometry_msgs::Quaternion>(
-                max_p.second.q);
+                max_p.second.poseguesses[0].q);
             pose_pub.publish(msg);
         }
         
         { // send action feedback
             object_finder::FindFeedback feedback;
-            feedback.pose.position = vec2xyz<Point>(max_p.second.pos);
-            feedback.pose.orientation = quat2xyzw<geometry_msgs::Quaternion>(
-                max_p.second.q);
+            BOOST_FOREACH(const PoseGuess &poseguess,
+                    max_p.second.poseguesses) {
+                TargetRes targetres;
+                targetres.pose.position = vec2xyz<Point>(poseguess.pos);
+                targetres.pose.orientation =
+                     quat2xyzw<geometry_msgs::Quaternion>(poseguess.q);
+                if(poseguess.obj) {
+                    BOOST_FOREACH(const Marker &marker, poseguess.obj->markers) {
+                        targetres.markers.push_back(object_finder::MarkerPoint());
+                        targetres.markers[targetres.markers.size()-1].name =
+                            marker.name;
+                        targetres.markers[targetres.markers.size()-1].position =
+                            vec2xyz<Point>(marker.position);
+                    }
+                }
+                feedback.targetreses.push_back(targetres);
+            }
             feedback.P = max_p.second.P(img);
             feedback.P_within_10cm = 0;
             BOOST_FOREACH(pair_type &pair, particles)
-                if((pair.second.pos - max_p.second.pos).norm() <= .2)
+                if(pair.second.dist(max_p.second) <= .2)
                     feedback.P_within_10cm += pair.first;
-            if(current_obj) {
-                BOOST_FOREACH(const Marker &marker, current_obj->markers) {
-                    feedback.markers.push_back(object_finder::MarkerPoint());
-                    feedback.markers[feedback.markers.size()-1].name =
-                        marker.name;
-                    feedback.markers[feedback.markers.size()-1].position =
-                        vec2xyz<Point>(marker.position);
-                }
-            }
             actionserver.publishFeedback(feedback);
         }
         
