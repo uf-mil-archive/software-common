@@ -351,31 +351,19 @@ struct Node {
             return;
         }
         
-        // decide whether resampling is necessary
-        double weight2_sum = 0;
-        BOOST_FOREACH(pair_type &pair, particles)
-            weight2_sum += pair.first * pair.first;
-        
-        double N_eff = 1 / weight2_sum;
-        if(N_eff < particles.size()*1/2 || true) {
-            // residual resampling
-            std::vector<std::pair<double, Particle> > new_particles;
-            BOOST_FOREACH(pair_type &pair, particles) {
-                int count = N * pair.first + uniform();
-                for(int i = 0; i < count; i++) {
-                    new_particles.push_back(std::make_pair(-1, i==0?
-                        pair.second :
-                        pair.second.predict(dt)));
-                }
+        // residual resampling
+        std::vector<std::pair<double, Particle> > new_particles;
+        BOOST_FOREACH(pair_type &pair, particles) {
+            int count = N * pair.first + uniform();
+            for(int i = 0; i < count; i++) {
+                new_particles.push_back(std::make_pair(-1, i==0?
+                    pair.second :
+                    pair.second.predict(dt)));
             }
-            particles.swap(new_particles);
-            
-            BOOST_FOREACH(pair_type &pair, particles)
-                pair.first = 1./particles.size();
-        } else {
-            BOOST_FOREACH(pair_type &pair, particles)
-                pair.second = pair.second.predict(dt);
         }
+        particles.swap(new_particles);
+        BOOST_FOREACH(pair_type &pair, particles)
+            pair.first = 1./particles.size();
         
         // update weights
         BOOST_FOREACH(pair_type &pair, particles)
