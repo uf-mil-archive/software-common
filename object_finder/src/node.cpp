@@ -330,7 +330,7 @@ struct Node {
         try {
             listener.lookupTransform(goal.header.frame_id,
                 image->header.frame_id, image->header.stamp, transform);
-        } catch (tf::TransformException ex){
+        } catch (tf::TransformException ex) {
             ROS_ERROR("%s", ex.what());
             return;
         }
@@ -370,6 +370,8 @@ struct Node {
             pair.first *= pair.second.P(img);
         infinite_p *= Particle::P_no_observation * 1.0001;
         
+        // replace particles doing worse than the median with new ones
+        // drawn from the prior distribution
         sort(particles.begin(), particles.end(), compare_weight);
         for(unsigned int i = 0; i < particles.size()/2; i++) {
             pair_type &pair = particles[i];
@@ -386,14 +388,14 @@ struct Node {
         BOOST_FOREACH(pair_type &pair, particles) pair.first /= total_weight;
         infinite_p /= total_weight;
         
+        
+        // find mode
         pair_type max_p; max_p.first = -1;
         BOOST_FOREACH(pair_type &pair, particles)
             if(pair.first > max_p.first) max_p = pair;
-        cout << "max_p.first: " << max_p.first << endl;
-        cout << "particles.size(): " << particles.size() << endl;
-        cout << "particles[0].first: " << particles[0].first << endl;
         assert(max_p.first >= 0);
         
+        // find mean
         Vector3d mean_position(0, 0, 0);
         Vector4d q_sum(0, 0, 0, 0);
         BOOST_FOREACH(const pair_type &pair, particles) {
@@ -419,76 +421,80 @@ struct Node {
             q_sum += pair.first * best_q;
         }
         Quaterniond mean_orientation = Quaterniond(q_sum.normalized());
-        
-        // send marker message for particle visualization
-        visualization_msgs::Marker msg;
-        msg.header.frame_id = goal.header.frame_id;
-        msg.header.stamp = image->header.stamp;
-        msg.type = visualization_msgs::Marker::POINTS;
-        msg.scale = make_xyz<Vector3>(.1, max(goal.sphere_radius, .1), 1);
-        msg.color.a = 1;
-        BOOST_FOREACH(pair_type &pair, particles) {
-            msg.points.push_back(vec2xyz<Point>(pair.second.pos));
-            msg.colors.push_back(make_rgba<ColorRGBA>(
-                pair.first/max_p.first, 0, 1-pair.first/max_p.first, 1));
-        }
-        particles_pub.publish(msg);
-        
-        PoseStamped msg2;
-        msg2.header.frame_id = goal.header.frame_id;
-        msg2.header.stamp = image->header.stamp;
-        msg2.pose.position = vec2xyz<Point>(mean_position);
-        msg2.pose.orientation = quat2xyzw<geometry_msgs::Quaternion>(
-            mean_orientation);
-        pose_pub.publish(msg2);
-        
         Particle mean_particle(goal, current_obj,
             mean_position, mean_orientation);
-        mean_particle = max_p.second;
         
-        object_finder::FindFeedback feedback;
-        feedback.pose.position = vec2xyz<Point>(mean_position);
-        feedback.pose.orientation = quat2xyzw<geometry_msgs::Quaternion>(
-            mean_particle.q);
-        feedback.P = mean_particle.P(img);
-        feedback.P_within_10cm = 0;
-        BOOST_FOREACH(pair_type &pair, particles)
-            if((pair.second.pos - mean_particle.pos).norm() <= .2)
-                feedback.P_within_10cm += pair.first;
-        if(current_obj) {
-            BOOST_FOREACH(const Marker &marker, current_obj->markers) {
-                feedback.markers.push_back(object_finder::MarkerPoint());
-                feedback.markers[feedback.markers.size()-1].name =
-                    marker.name;
-                feedback.markers[feedback.markers.size()-1].position =
-                    vec2xyz<Point>(marker.position);
+        
+        { // send marker message for particle visualization
+            visualization_msgs::Marker msg;
+            msg.header.frame_id = goal.header.frame_id;
+            msg.header.stamp = image->header.stamp;
+            msg.type = visualization_msgs::Marker::POINTS;
+            msg.scale = make_xyz<Vector3>(.1, max(goal.sphere_radius, .1), 1);
+            msg.color.a = 1;
+            BOOST_FOREACH(pair_type &pair, particles) {
+                msg.points.push_back(vec2xyz<Point>(pair.second.pos));
+                msg.colors.push_back(make_rgba<ColorRGBA>(
+                    pair.first/max_p.first, 0, 1-pair.first/max_p.first, 1));
             }
+            particles_pub.publish(msg);
         }
-        actionserver.publishFeedback(feedback);
         
-        if(image_pub.getNumSubscribers()) {
+        { // send pose message for result visualization
+            PoseStamped msg;
+            msg.header.frame_id = goal.header.frame_id;
+            msg.header.stamp = image->header.stamp;
+            msg.pose.position = vec2xyz<Point>(mean_position);
+            msg.pose.orientation = quat2xyzw<geometry_msgs::Quaternion>(
+                mean_orientation);
+            pose_pub.publish(msg);
+        }
+        
+        { // send action feedback
+            object_finder::FindFeedback feedback;
+            feedback.pose.position = vec2xyz<Point>(mean_position);
+            feedback.pose.orientation = quat2xyzw<geometry_msgs::Quaternion>(
+                max_p.second.q);
+            feedback.P = max_p.second.P(img);
+            feedback.P_within_10cm = 0;
+            BOOST_FOREACH(pair_type &pair, particles)
+                if((pair.second.pos - max_p.second.pos).norm() <= .2)
+                    feedback.P_within_10cm += pair.first;
+            if(current_obj) {
+                BOOST_FOREACH(const Marker &marker, current_obj->markers) {
+                    feedback.markers.push_back(object_finder::MarkerPoint());
+                    feedback.markers[feedback.markers.size()-1].name =
+                        marker.name;
+                    feedback.markers[feedback.markers.size()-1].position =
+                        vec2xyz<Point>(marker.position);
+                }
+            }
+            actionserver.publishFeedback(feedback);
+        }
+        
+        if(image_pub.getNumSubscribers()) { // send debug image
             vector<int> dbg_image(image->width*image->height, 0);
             //mean_particle.P(img, &dbg_image);
             max_p.second.P(img, &dbg_image);
             
-            Image msg4;
-            msg4.header = image->header;
-            msg4.height = image->height;
-            msg4.width = image->width;
-            msg4.encoding = "rgb8";
-            msg4.is_bigendian = 0;
-            msg4.step = image->width*3;
-            msg4.data.resize(image->width*image->height*3);
+            Image msg;
+            msg.header = image->header;
+            msg.height = image->height;
+            msg.width = image->width;
+            msg.encoding = "rgb8";
+            msg.is_bigendian = 0;
+            msg.step = image->width*3;
+            msg.data.resize(image->width*image->height*3);
             for(unsigned int y = 0; y < image->height; y++) {
                 for(unsigned int x = 0; x < image->width; x++) {
                     Vector3d orig_color = img.get_pixel(y, x);
-                    msg4.data[msg4.step*y + 3*x + 0] =
+                    msg.data[msg.step*y + 3*x + 0] =
                         100*dbg_image[image->width*y + x];
-                    msg4.data[msg4.step*y + 3*x + 1] = 255*orig_color[1];
-                    msg4.data[msg4.step*y + 3*x + 2] = 255*orig_color[2];
+                    msg.data[msg.step*y + 3*x + 1] = 255*orig_color[1];
+                    msg.data[msg.step*y + 3*x + 2] = 255*orig_color[2];
                 }
             }
-            image_pub.publish(msg4);
+            image_pub.publish(msg);
         }
     }
 };
