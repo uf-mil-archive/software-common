@@ -233,6 +233,8 @@ struct Particle {
 };
 
 struct Node {
+    static const int N = 1000;
+    
     ros::NodeHandle nh;
     ros::NodeHandle private_nh;
     actionlib::SimpleActionServer<object_finder::FindAction> actionserver;
@@ -284,8 +286,6 @@ struct Node {
     
     void init_particles(ros::Time t, const TaggedImage &img) {
         particles.clear();
-        
-        int N = 1000;
         
         for(int i = 0; i < N; i++)
             particles.push_back(
@@ -361,31 +361,17 @@ struct Node {
             // residual resampling
             std::vector<std::pair<double, Particle> > new_particles;
             BOOST_FOREACH(pair_type &pair, particles) {
-                int count = particles.size() * pair.first;
-                for(int i = 0; i < count; i++)
-                    new_particles.push_back(
-                        std::make_pair(1./particles.size(), i==0?
-                            pair.second :
-                            pair.second.predict(dt)));
-                pair.first -= (double)count / particles.size();
+                int count = N * pair.first + uniform();
+                for(int i = 0; i < count; i++) {
+                    new_particles.push_back(std::make_pair(-1, i==0?
+                        pair.second :
+                        pair.second.predict(dt)));
+                }
             }
-
-            vector<double> cumulative_weights(particles.size());
-            cumulative_weights[0] = particles[0].first;
-            for(unsigned int i = 1; i < particles.size(); i++)
-                cumulative_weights[i] = cumulative_weights[i-1] +
-                    particles[i].first;
-            while(new_particles.size() < particles.size()) {
-                int k = lower_bound(cumulative_weights.begin(),
-                    cumulative_weights.end(),
-                    uniform()*cumulative_weights[particles.size()-1]) -
-                    cumulative_weights.begin();
-                new_particles.push_back(
-                    std::make_pair(1./particles.size(),
-                        particles[k].second.predict(dt)));
-            }
-
-            particles = new_particles;
+            particles.swap(new_particles);
+            
+            BOOST_FOREACH(pair_type &pair, particles)
+                pair.first = 1./particles.size();
         } else {
             BOOST_FOREACH(pair_type &pair, particles)
                 pair.second = pair.second.predict(dt);
