@@ -395,35 +395,6 @@ struct Node {
             if(pair.first > max_p.first) max_p = pair;
         assert(max_p.first >= 0);
         
-        // find mean
-        Vector3d mean_position(0, 0, 0);
-        Vector4d q_sum(0, 0, 0, 0);
-        BOOST_FOREACH(const pair_type &pair, particles) {
-            mean_position += pair.first * pair.second.pos;
-            
-            vector<Vector4d> qs;
-            qs.push_back( pair.second.q.coeffs());
-            qs.push_back(-pair.second.q.coeffs());
-            if(goal.is_180z_symmetric) {
-                qs.push_back( (pair.second.q*Quaterniond(0,0,1,0)).coeffs());
-                qs.push_back(-(pair.second.q*Quaterniond(0,0,1,0)).coeffs());
-            }
-            
-            Vector4d best_q;
-            double best_score = -1e300;
-            BOOST_FOREACH(const Vector4d &q, qs) {
-                double score = q.dot(q_sum);
-                if(score > best_score) {
-                    best_q = q;
-                    best_score = score;
-                }
-            }
-            q_sum += pair.first * best_q;
-        }
-        Quaterniond mean_orientation = Quaterniond(q_sum.normalized());
-        Particle mean_particle(goal, current_obj,
-            mean_position, mean_orientation);
-        
         
         { // send marker message for particle visualization
             visualization_msgs::Marker msg;
@@ -444,15 +415,15 @@ struct Node {
             PoseStamped msg;
             msg.header.frame_id = goal.header.frame_id;
             msg.header.stamp = image->header.stamp;
-            msg.pose.position = vec2xyz<Point>(mean_position);
+            msg.pose.position = vec2xyz<Point>(max_p.second.pos);
             msg.pose.orientation = quat2xyzw<geometry_msgs::Quaternion>(
-                mean_orientation);
+                max_p.second.q);
             pose_pub.publish(msg);
         }
         
         { // send action feedback
             object_finder::FindFeedback feedback;
-            feedback.pose.position = vec2xyz<Point>(mean_position);
+            feedback.pose.position = vec2xyz<Point>(max_p.second.pos);
             feedback.pose.orientation = quat2xyzw<geometry_msgs::Quaternion>(
                 max_p.second.q);
             feedback.P = max_p.second.P(img);
@@ -474,7 +445,6 @@ struct Node {
         
         if(image_pub.getNumSubscribers()) { // send debug image
             vector<int> dbg_image(image->width*image->height, 0);
-            //mean_particle.P(img, &dbg_image);
             max_p.second.P(img, &dbg_image);
             
             Image msg;
