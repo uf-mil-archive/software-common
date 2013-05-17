@@ -479,20 +479,13 @@ struct Node {
             msg4.is_bigendian = 0;
             msg4.step = image->width*3;
             msg4.data.resize(image->width*image->height*3);
-            int step;
-            if(image->encoding == "rgba8" || image->encoding == "bgra8")
-                step = 4;
-            else if(image->encoding == "rgb8" || image->encoding == "bgr8")
-                step = 3;
-            else assert(false);
             for(unsigned int y = 0; y < image->height; y++) {
                 for(unsigned int x = 0; x < image->width; x++) {
+                    Vector3d orig_color = img.get_pixel(y, x);
                     msg4.data[msg4.step*y + 3*x + 0] =
                         100*dbg_image[image->width*y + x];
-                    const uint8_t *pixel = image->data.data() +
-                        image->step * y + step * x;
-                    msg4.data[msg4.step*y + 3*x + 1] = pixel[1];
-                    msg4.data[msg4.step*y + 3*x + 2] = pixel[2];
+                    msg4.data[msg4.step*y + 3*x + 1] = 255*orig_color[1];
+                    msg4.data[msg4.step*y + 3*x + 2] = 255*orig_color[2];
                 }
             }
             image_pub.publish(msg4);

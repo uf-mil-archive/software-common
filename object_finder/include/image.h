@@ -97,6 +97,10 @@ struct TaggedImage {
         }
     }
     
+    inline Eigen::Vector3d get_pixel(int Y, int X) {
+        return sumimage[Y * (cam_info.width+1) + X + 1] - sumimage[Y * (cam_info.width+1) + X];
+    }
+    
     inline Result get_line_sum(int Y, int X1, int X2) const {
         return Result(
             sumimage [Y * (cam_info.width+1) + X2] - sumimage [Y * (cam_info.width+1) + X1],
