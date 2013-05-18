@@ -106,16 +106,27 @@ struct PoseGuess {
         goal(goal), obj(obj),
         pos(pos), q(q) {
     }
-    PoseGuess predict(double dt) const {
+    PoseGuess realpredict(double amount) const {
         PoseGuess p(*this);
-        // diffusion to model INS's position drift and to test near solutions 
-        // to try to find a better fit
-        p.pos += .05 * gaussvec();
-        //p.q *= quat_from_rotvec(sqrt(.01 * dt) * gaussvec());
-        p.q = quat_from_rotvec(Vector3d(0, 0, .05 * gauss())) * p.q;
-        if(goal.allow_pitching) {
-            p.q = p.q * quat_from_rotvec(
-                Vector3d(0, sqrt(.01 * dt) * gauss(), 0));
+        // diffusion to test near solutions to try to find a better fit
+        p.pos += amount * gaussvec();
+        if(false) { // allow_rolling
+            p.q *= quat_from_rotvec(amount * gaussvec());
+        } else {
+            p.q = quat_from_rotvec(Vector3d(0, 0, amount * gauss())) * p.q;
+            if(goal.allow_pitching) {
+                p.q = p.q * quat_from_rotvec(
+                    Vector3d(0, amount * gauss(), 0));
+            }
+        }
+        return p;
+    }
+    PoseGuess predict(double amount) const {
+        PoseGuess p(*this);
+        if(uniform() < .5) {
+            return realpredict(.01);
+        } else {
+            return realpredict(.1);
         }
         return p;
     }
@@ -233,6 +244,7 @@ struct PoseGuess {
 
 struct Particle {
     vector<PoseGuess> poseguesses;
+    vector<double> last_Ps;
     Particle() { }
     Particle(const object_finder::FindGoal &goal,
              const vector<boost::shared_ptr<Obj> > objs,
@@ -243,17 +255,53 @@ struct Particle {
                 objs[&targetdesc - goal.targetdescs.data()], image));
         }
     }
-    Particle predict(double dt) const {
+    Particle predict(double dt, const TaggedImage &image) const {
         Particle p(*this);
-        BOOST_FOREACH(PoseGuess &poseguess, p.poseguesses) {
+        int index = poseguesses.size() * uniform();
+        if(uniform() < .5) { // diffuse
+            PoseGuess &poseguess = p.poseguesses[index];
             poseguess = poseguess.predict(dt);
+        } else { // resample
+            PoseGuess &poseguess = p.poseguesses[index];
+            poseguess = PoseGuess(poseguess.goal, poseguess.obj, image);
+        }
+        BOOST_FOREACH(PoseGuess &poseguess, p.poseguesses) {
+            bool bad = false;
+            BOOST_FOREACH(PoseGuess &poseguess2, p.poseguesses) {
+                if(&poseguess2 == &poseguess) break;
+                if((poseguess2.pos - poseguess.pos).norm() < .1) {
+                    bad = true;
+                    break;
+                }
+            }
+            if(bad) {
+                poseguess = PoseGuess(poseguess.goal, poseguess.obj, image);
+            }
         }
         return p;
     }
-    double P(const TaggedImage &img, vector<int>* dbg_image=NULL) const {
+    void fix() {
+        BOOST_FOREACH(PoseGuess &poseguess, poseguesses) {
+            bool bad = false;
+            BOOST_FOREACH(const PoseGuess &poseguess2, poseguesses) {
+                if(&poseguess2 == &poseguess) break;
+                if((poseguess2.pos - poseguess.pos).norm() < .1) {
+                    bad = true;
+                    break;
+                }
+            }
+            if(bad) {
+                poseguess = PoseGuess(poseguess.goal, poseguess.obj, image);
+            }
+        }
+    }
+    double P(const TaggedImage &img, vector<int>* dbg_image=NULL) {
         double P = 1;
+        last_Ps.clear();
         BOOST_FOREACH(const PoseGuess &poseguess, poseguesses) {
-            P *= poseguess.P(img, dbg_image);
+            double this_P = poseguess.P(img, dbg_image);
+            P *= this_P;
+            last_Ps.push_back(this_P);
         }
         return P;
     }
@@ -396,12 +444,14 @@ struct Node {
             for(int i = 0; i < count; i++) {
                 new_particles.push_back(std::make_pair(-1, i==0?
                     pair.second :
-                    pair.second.predict(dt)));
+                    pair.second.predict(dt, img)));
             }
         }
         particles.swap(new_particles);
         BOOST_FOREACH(pair_type &pair, particles)
             pair.first = 1./particles.size();
+        BOOST_FOREACH(pair_type &pair, particles)
+            pair.second.fix();
         
         // update weights
         BOOST_FOREACH(pair_type &pair, particles)
@@ -442,9 +492,12 @@ struct Node {
             msg.scale = make_xyz<Vector3>(.1, .1, 1);
             msg.color.a = 1;
             BOOST_FOREACH(pair_type &pair, particles) {
-                msg.points.push_back(vec2xyz<Point>(pair.second.poseguesses[0].pos));
-                msg.colors.push_back(make_rgba<ColorRGBA>(
-                    pair.first/max_p.first, 0, 1-pair.first/max_p.first, 1));
+                BOOST_FOREACH(const PoseGuess &poseguess,
+                        pair.second.poseguesses) {
+                    msg.points.push_back(vec2xyz<Point>(poseguess.pos));
+                    msg.colors.push_back(make_rgba<ColorRGBA>(
+                        pair.first/max_p.first, 0, 1-pair.first/max_p.first, 1));
+                }
             }
             particles_pub.publish(msg);
         }
