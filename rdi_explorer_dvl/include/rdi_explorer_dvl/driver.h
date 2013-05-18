@@ -111,6 +111,7 @@ namespace rdi_explorer_dvl {
                     if(ensemble.size() - offset < 2) continue;
                     uint16_t section_id = getu16le(ensemble.data() + offset);
                     
+                    std::vector<double> correlations(4, nan(""));
                     if(section_id == 0x5803) { // Bottom Track High Resolution Velocity
                         if(ensemble.size() - offset < 2 + 4*4) continue;
                         res = boost::make_optional(uf_common::VelocityMeasurements());
@@ -127,14 +128,19 @@ namespace rdi_explorer_dvl {
                             dirs.push_back(uf_common::make_xyz<geometry_msgs::Vector3>(0, -x, -z));
                         }
                         for(int i = 0; i < 4; i++) {
-                            if(gets32le(ensemble.data() + offset + 2) == -3276801) { // -3276801 indicates no data
-                                ROS_ERROR("DVL didn't return bottom velocity for beam %i", i+1);
-                                continue;
-                            }
                             uf_common::VelocityMeasurement m;
                             m.direction = dirs[i];
-                            m.velocity = gets32le(ensemble.data() + offset + 2 + 4*i) * .01e-3;
+                            int32_t vel = gets32le(ensemble.data() + offset + 2 + 4*i);
+                            m.velocity = -vel * .01e-3;
+                            if(vel == -3276801) { // -3276801 indicates no data
+                                ROS_ERROR("DVL didn't return bottom velocity for beam %i", i+1);
+                                m.velocity = nan("");
+                            }
                             res->velocity_measurements.push_back(m);
+                        }
+                    } else if(section_id == 0x0600) { // Bottom Track
+                        for(int i = 0; i < 4; i++) {
+                            correlations[i] = *(ensemble.data() + offset + 32 + i);
                         }
                     } else if(section_id == 0x5804) { // Bottom Track Range
                         if(ensemble.size() - offset < 2 + 4*3) continue;
@@ -145,6 +151,11 @@ namespace rdi_explorer_dvl {
                         height_res = boost::make_optional(uf_common::Float64Stamped());
                         height_res->header.stamp = stamp;
                         height_res->data = gets32le(ensemble.data() + offset + 10) * 0.1e-3;
+                    }
+                    if(res) {
+                        for(int i = 0; i < 4; i++) {
+                            res->velocity_measurements[i].correlation = correlations[i];
+                        }
                     }
                 }
             }
@@ -159,7 +170,7 @@ namespace rdi_explorer_dvl {
                 //buf << "#BK2\r"; // send water mass pings when bottom track pings fail
                 //buf << "#BL7,36,46\r"; // configure near layer and far layer to 12 and 15 feet
                 buf << "ES0\r"; // 0 salinity
-                buf << "EX00010\r"; // no transformation, allow 3 beam solutions
+                buf << "EX00000\r"; // no transformation
                 buf << "EZ10000010\r"; // configure sensor sources. Provide manual data for everything except speed of sound and temperature
                 buf << "BX" << std::setw(5) << std::setfill('0') << (int)(maxdepth * 10 + 0.5) << '\r'; // configure max depth
                 buf << "TT2012/03/04, 05:06:07\r"; // set RTC
