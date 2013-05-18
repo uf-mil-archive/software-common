@@ -19,6 +19,8 @@ rospy.init_node('velocitymeasurements_to_vector3')
 
 vel_pub = rospy.Publisher('vel', Vector3Stamped)
 def cb(msg):
+    msg.velocity_measurements = [x for x in msg.velocity_measurements
+        if not math.isnan(x.velocity)]
     A = numpy.zeros((len(msg.velocity_measurements), 3))
     for i, velocity_measurement in enumerate(msg.velocity_measurements):
         A[i] = xyz_array(velocity_measurement.direction)
