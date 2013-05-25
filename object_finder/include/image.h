@@ -47,6 +47,18 @@ struct Result {
     }
 };
 
+struct ResultWithArea : public Result {
+    double area;
+    ResultWithArea() { }
+    ResultWithArea(Result result, double area) : Result(result), area(area) { }
+    Eigen::Vector3d avg_color_assuming_unseen_is(Eigen::Vector3d unseen_color) const {
+        return (total_color+(area-count)*unseen_color)/area;
+    }
+    static ResultWithArea Zero() {
+        return ResultWithArea(Result::Zero(), 0);
+    }
+};
+
 struct TaggedImage {
     sensor_msgs::CameraInfo cam_info;
     Eigen::Affine3d transform;
@@ -97,7 +109,7 @@ struct TaggedImage {
         }
     }
     
-    inline Eigen::Vector3d get_pixel(int Y, int X) {
+    inline Eigen::Vector3d get_pixel(int Y, int X) const {
         return sumimage[Y * (cam_info.width+1) + X + 1] - sumimage[Y * (cam_info.width+1) + X];
     }
     

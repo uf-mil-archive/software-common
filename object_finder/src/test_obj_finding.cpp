@@ -33,17 +33,22 @@ int main() {
     double tmp[12] = {167.819926235456, 0.0, 349.5, 0.0, 0.0, 167.819926235456, 199.5, 0.0, 0.0, 0.0, 1.0, 0.0};
     for(int i = 0; i < 12; i++) camera_info.P[i] = tmp[i];
     
-    Obj obj = Obj("shooter.obj");
-    TaggedImage img(image, camera_info, Affine3d());
-    vector<ResultWithArea> results;
+    TaggedImage img(image, camera_info, Affine3d::Identity());
     vector<int> dbg_image(width*height, 0);
     
     //write(dbg_image, width, height, "tmp.pgm");
     
-    obj.query(img, Vector3d(0, 0, 2), Quaterniond(.5, .5, -.5, .5), results, &dbg_image);
+    RenderBuffer rb(img);
+    
+    Obj obj = Obj("shooter.obj");
+    BOOST_FOREACH(const Component &component, obj.components) {
+        component.draw(rb, rb.new_region(), Vector3d(0, 0, 2), Quaterniond(.5, .5, -.5, .5), &dbg_image);
+    }
+    
+    vector<ResultWithArea> results = rb.get_results();
     
     BOOST_FOREACH(const Result &result, results) {
-        cout << result.count << endl;
+        cout << "region area: " << result.count << endl;
     }
     
     write(dbg_image, width, height, "out.pgm");

@@ -75,6 +75,9 @@ struct PoseGuess {
     boost::shared_ptr<const Obj> obj;
     Vector3d pos;
     Quaterniond q;
+    RenderBuffer::RegionType bg_region;
+    RenderBuffer::RegionType fg_region;
+    
     PoseGuess() { }
     PoseGuess(const TargetDesc &goal,
              boost::shared_ptr<const Obj> obj,
@@ -130,42 +133,57 @@ struct PoseGuess {
         }
         return p;
     }
-    double P(const TaggedImage &img, vector<int>* dbg_image=NULL) const {
-        Result inner_result;
-        Result outer_result;
-        vector<ResultWithArea> results;
+    void draw1(RenderBuffer &renderbuffer, vector<int>* dbg_image=NULL) {
+        if(!obj) return;
+        bg_region = renderbuffer.new_region();
+        BOOST_FOREACH(const Component &component, obj->components) {
+            if(component.name.find("background_") == 0) {
+                component.draw(renderbuffer, bg_region, pos, q, dbg_image);
+            }
+        }
+    }
+    void draw2(RenderBuffer &renderbuffer, vector<int>* dbg_image=NULL) {
+        if(!obj) return;
+        fg_region = renderbuffer.new_region();
+        BOOST_FOREACH(const Component &component, obj->components) {
+            if(component.name.find("solid_") == 0) {
+                component.draw(renderbuffer, fg_region, pos, q, dbg_image);
+            }
+        }
+    }
+    double P(const TaggedImage &img, const vector<ResultWithArea> &results, vector<int>* dbg_image=NULL) const {
         if(goal.type == TargetDesc::TYPE_SPHERE) {
+            Result inner_result;
             sphere_query(img, pos, goal.sphere_radius,
                 inner_result, dbg_image);
             
             Result both_result;
             sphere_query(img, pos, 2*goal.sphere_radius,
                 both_result, dbg_image);
-            outer_result = both_result - inner_result;
-        } else if(goal.type == TargetDesc::TYPE_OBJECT) {
-            inner_result = Result::Zero();
-            outer_result = Result::Zero();
             
-            obj->query(img, pos, q, results, dbg_image);
+            Result outer_result = both_result - inner_result;
             
-            for(unsigned int i = 0; i < results.size(); i++) {
-                if(obj->components[i].name.find("solid_") == 0) {
-                    inner_result += results[i];
-                } else if(obj->components[i].name.find("background_") == 0) {
-                    outer_result += results[i];
-                }
-                if(dbg_image) {
-                    cout << obj->components[i].name
-                        << " count: " << results[i].count << " "
-                        << results[i].total_color
-                        << "area: " << results[i].area << endl;
-                }
+            Result far_result = img.total_result - inner_result; //- outer_result;
+            
+            if(inner_result.count < 100 || outer_result.count < 100) {
+                return 0.001;
             }
-        } else {
+            
+            Vector3d inner_color = inner_result.avg_color().normalized();
+            Vector3d outer_color = outer_result.avg_color().normalized();
+            Vector3d far_color = far_result.avg_color().normalized();
+            
+            return exp(10*(
+                (inner_color - outer_color).norm() -
+                (  far_color - outer_color).norm() - .01
+            ));
+        } else if(goal.type != TargetDesc::TYPE_OBJECT) {
             cout << "Invalid type:" << goal.type << endl;
             assert(false);
         }
         
+        Result inner_result = results[fg_region];
+        Result outer_result = results[bg_region];
         Result far_result = img.total_result - inner_result; //- outer_result;
         
         if(inner_result.count < 100 || outer_result.count < 100) {
@@ -184,40 +202,35 @@ struct PoseGuess {
         //double P2 = (inner_color - outer_color).norm();
         //double P = P2* pow(far_color.dot(outer_color), 5);
         double P = 1;
-        for(unsigned int i = 0; i < results.size(); i++) {
-            if(obj->components[i].name.find("solid_") != 0 &&
-               obj->components[i].name.find("background_") != 0) {
-                continue;
-            }
-            if(results[i].count < 100) {
+        {
+            if(results[fg_region].count < 100) {
                 if(dbg_image) {
-                    cout << "TOO SMALL" << obj->components[i].name << endl;
+                    cout << "TOO SMALL FG" << endl;
                 }
                 P *= 0.5;
-                continue;
-            }
-            if(obj->components[i].name.find("solid_") == 0) {
-                Vector3d this_color = results[i].avg_color_assuming_unseen_is(
+            } else {
+                Vector3d this_color = results[fg_region].avg_color_assuming_unseen_is(
                     outer_color).normalized();
                 P *= exp(10*(
                     (this_color - outer_color).norm() -
                     ( far_color - outer_color).norm() - .05
                 ));
-            } else if(obj->components[i].name.find("background_") == 0) {
-                Vector3d this_color = results[i].avg_color_assuming_unseen_is(
+            }
+        }
+        {
+            if(results[fg_region].count < 100) {
+                if(dbg_image) {
+                    cout << "TOO SMALL FG" << endl;
+                }
+                P *= 0.5;
+            } else {
+                Vector3d this_color = results[bg_region].avg_color_assuming_unseen_is(
                     inner_color).normalized();
                 P *= exp(10*(
                     (inner_color - this_color).norm() -
                     (  far_color - this_color).norm() - .05
                 ));
             }
-        }
-        
-        if(goal.type == TargetDesc::TYPE_SPHERE) {
-            P = exp(10*(
-                (inner_color - outer_color).norm() -
-                (  far_color - outer_color).norm() - .01
-            ));
         }
         
         if(dbg_image) {
@@ -280,26 +293,17 @@ struct Particle {
         }
         return p;
     }
-    void fix() {
-        BOOST_FOREACH(PoseGuess &poseguess, poseguesses) {
-            bool bad = false;
-            BOOST_FOREACH(const PoseGuess &poseguess2, poseguesses) {
-                if(&poseguess2 == &poseguess) break;
-                if((poseguess2.pos - poseguess.pos).norm() < .1) {
-                    bad = true;
-                    break;
-                }
-            }
-            if(bad) {
-                poseguess = PoseGuess(poseguess.goal, poseguess.obj, image);
-            }
-        }
-    }
     double P(const TaggedImage &img, vector<int>* dbg_image=NULL) {
+        RenderBuffer rb(img);
+        BOOST_FOREACH(PoseGuess &poseguess, poseguesses)
+            poseguess.draw1(rb, dbg_image);
+        BOOST_FOREACH(PoseGuess &poseguess, poseguesses)
+            poseguess.draw2(rb, dbg_image);
+        vector<ResultWithArea> results = rb.get_results();
         double P = 1;
         last_Ps.clear();
         BOOST_FOREACH(const PoseGuess &poseguess, poseguesses) {
-            double this_P = poseguess.P(img, dbg_image);
+            double this_P = poseguess.P(img, results, dbg_image);
             P *= this_P;
             last_Ps.push_back(this_P);
         }
@@ -450,8 +454,6 @@ struct Node {
         particles.swap(new_particles);
         BOOST_FOREACH(pair_type &pair, particles)
             pair.first = 1./particles.size();
-        BOOST_FOREACH(pair_type &pair, particles)
-            pair.second.fix();
         
         // update weights
         BOOST_FOREACH(pair_type &pair, particles)
