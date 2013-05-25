@@ -1,0 +1,7 @@
+<launch>
+  <node pkg="indirect_kalman_6dof" type="indirect_kalman_6dof" name="indirect_kalman_6dof">
+    <remap from="odom" to="test/imu_odom"/>
+    <remap from="pose" to="test/pose"/>
+    <remap from="debug" to="test/debug"/>
+  </node>
+</launch>
