@@ -134,8 +134,12 @@ struct PoseGuess {
         return p;
     }
     void draw1(RenderBuffer &renderbuffer, vector<int>* dbg_image=NULL) {
-        if(!obj) return;
         bg_region = renderbuffer.new_region();
+        if(!obj) {
+            sphere_draw(renderbuffer, bg_region, pos, 2*goal.sphere_radius,
+                dbg_image);
+            return;
+        }
         BOOST_FOREACH(const Component &component, obj->components) {
             if(component.name.find("background_") == 0) {
                 component.draw(renderbuffer, bg_region, pos, q, dbg_image);
@@ -143,8 +147,12 @@ struct PoseGuess {
         }
     }
     void draw2(RenderBuffer &renderbuffer, vector<int>* dbg_image=NULL) {
-        if(!obj) return;
         fg_region = renderbuffer.new_region();
+        if(!obj) {
+            sphere_draw(renderbuffer, fg_region, pos, goal.sphere_radius,
+                dbg_image);
+            return;
+        }
         BOOST_FOREACH(const Component &component, obj->components) {
             if(component.name.find("solid_") == 0) {
                 component.draw(renderbuffer, fg_region, pos, q, dbg_image);
@@ -152,41 +160,11 @@ struct PoseGuess {
         }
     }
     double P(const TaggedImage &img, const vector<ResultWithArea> &results, vector<int>* dbg_image=NULL) const {
-        if(goal.type == TargetDesc::TYPE_SPHERE) {
-            Result inner_result;
-            sphere_query(img, pos, goal.sphere_radius,
-                inner_result, dbg_image);
-            
-            Result both_result;
-            sphere_query(img, pos, 2*goal.sphere_radius,
-                both_result, dbg_image);
-            
-            Result outer_result = both_result - inner_result;
-            
-            Result far_result = img.total_result - inner_result; //- outer_result;
-            
-            if(inner_result.count < 100 || outer_result.count < 100) {
-                return 0.001;
-            }
-            
-            Vector3d inner_color = inner_result.avg_color().normalized();
-            Vector3d outer_color = outer_result.avg_color().normalized();
-            Vector3d far_color = far_result.avg_color().normalized();
-            
-            return exp(10*(
-                (inner_color - outer_color).norm() -
-                (  far_color - outer_color).norm() - .01
-            ));
-        } else if(goal.type != TargetDesc::TYPE_OBJECT) {
-            cout << "Invalid type:" << goal.type << endl;
-            assert(false);
-        }
-        
         Result inner_result = results[fg_region];
         Result outer_result = results[bg_region];
         Result far_result = img.total_result - inner_result; //- outer_result;
         
-        if(inner_result.count < 100 || outer_result.count < 100) {
+        if(inner_result.count < 100 || outer_result.count < 100 || far_result.count < 100) {
             return 0.001;
             if(dbg_image) {
                 cout << endl;
@@ -218,9 +196,9 @@ struct PoseGuess {
             }
         }
         {
-            if(results[fg_region].count < 100) {
+            if(results[bg_region].count < 100) {
                 if(dbg_image) {
-                    cout << "TOO SMALL FG" << endl;
+                    cout << "TOO SMALL BG" << endl;
                 }
                 P *= 0.5;
             } else {

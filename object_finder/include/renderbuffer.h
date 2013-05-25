@@ -1,6 +1,10 @@
 #ifndef RENDERBUFFER_H
 #define RENDERBUFFER_H
 
+#include <boost/foreach.hpp>
+
+#include "image.h"
+
 struct Segment {
     int x_start, x_end; // [x_start, x_end)
     double z_0, z_slope; // z = z_0 + z_slope * x
