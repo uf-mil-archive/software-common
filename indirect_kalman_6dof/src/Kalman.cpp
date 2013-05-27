@@ -1,6 +1,7 @@
 #include "Kalman.h"
 #include <Eigen/LU>
 
+#include <ros/ros.h>
 #include <iomanip>
 
 Kalman::Kalman() {
@@ -117,10 +118,17 @@ void Kalman::update(const Eigen::Matrix<double, 11, 1> &z,
         H.block<3, 15>(3, 0).fill(0);
     }
 
+    bool doprint = false;
     for (int beam = 0; beam < 4; beam++) {
         if (!d_valid[beam]) {
             H.block<1, 15>(6 + beam, 0).fill(0);
+        } else {
+            doprint = true;
         }
+    }
+
+    if (doprint) {
+        ROS_INFO_STREAM("DVL Z " << z.segment<4>(6).transpose());
     }
 
     if (!z_valid) {

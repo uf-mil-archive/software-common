@@ -35,8 +35,8 @@ struct Node {
         // TODO come up with good values
         NavigationComputer::Config config;
         //config.T_imu = 1 / 204.0;
-        config.T_imu = 1 / 30.0;
-        config.T_kalman = 1 / 30.0;
+        config.T_imu = 1 / 204.0;
+        config.T_kalman = 1 / 50.0;
         config.T_kalman_correction = 2.0;
 
         config.predict.R_g = Eigen::DiagonalMatrix<double, 3, 3>(
@@ -48,41 +48,52 @@ struct Node {
         config.predict.Q_b_a = Eigen::DiagonalMatrix<double, 3, 3>(
             1.9700e-7, 1.9700e-7, 1.9700e-7);
 
-        config.update.R_g = config.predict.R_g;
-        config.update.R_a = 100*config.predict.R_a;
+        config.update.R_g = 100*config.predict.R_g;
+        config.update.R_a = config.predict.R_a;
         config.update.R_m = Eigen::DiagonalMatrix<double, 3, 3>(
-            1e-6, 1e-6, 1e-6);
+            4e-14, 4e-14, 4e-14);
         config.update.R_d.fill(0);
         for (int i=0; i<4; i++)
-            config.update.R_d(i, i) = 4.9e-5;
+            config.update.R_d(i, i) = 0.0004;
         config.update.R_z = 5e-3;
 
-/*        config.update.beam_mat <<
-            0.5, 0, 0.86603,
-            -0.5, 0, 0.86603,
-            0, -0.5, 0.86603,
-            0, 0.5, 0.86603;*/
         config.update.beam_mat <<
+            -0.5, 0, -0.86603,
+            0.5, 0, -0.86603,
+            0, 0.5, -0.86603,
+            0, -0.5, -0.86603;
+
+/*        config.update.beam_mat <<
             0.35355, -0.35355, 0.866025,
             -0.35355, 0.35355, 0.866025,
             -0.35355, -0.35355, 0.866025,
-            0.35355, 0.35355, 0.866025;
+            0.35355, 0.35355, 0.866025;*/
 
         // TODO these r_imu2xxx probably need to be rotated 180 degrees about X
+        // config.update.r_imu2dvl <<
+        //     0, 0, -0.102-0.076;
         config.update.r_imu2dvl <<
-            0, 0, -0.102-0.076;
+            0, 0, 0.102+0.076;
+
         config.update.q_imu2dvl = Eigen::Quaterniond(
-            0.000284, 0.394308, -0.918965, -0.005013);
+            0.000284, -0.394308, 0.918965, 0.005013);
+
+        // Double check consistency, beam_mat is imu -> beams
+        config.update.beam_mat = config.update.beam_mat *
+            config.update.q_imu2dvl.matrix();
+
+        // config.update.r_imu2depth <<
+        //     0.445 - 0.431, 0.102, -0.051 - 0.076;
         config.update.r_imu2depth <<
-            0.445 - 0.431, 0.102, -0.051 - 0.076;
+            0.445 - 0.431, -0.102, 0.051 + 0.076;
         config.update.m_nav <<
-            -2244.2, 24151.0, -40572.8;
+            -2244.2e-9, 24151.0e-9, -40572.8e-9;
 
         config.init.accel_samples = 50;
         config.init.mag_samples = 50;
         config.init.dvl_samples = 5;
         config.init.depth_samples = 10;
-        config.init.g_nav = Eigen::Vector3d(0, 0, -9.8);
+        config.init.g_nav = Eigen::Vector3d(0, 0, -9.7997);
         config.init.m_nav = config.update.m_nav;
         config.init.r_imu2depth = config.update.r_imu2depth;
         config.init.beam_mat = config.update.beam_mat;

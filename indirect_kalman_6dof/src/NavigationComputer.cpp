@@ -76,6 +76,9 @@ void NavigationComputer::updateDVL(const Eigen::Matrix<double, 4, 1> &y_d,
 
     this->y_d = y_d;
     this->d_valid = d_valid;
+
+    ROS_INFO_STREAM("DVL! " << d_valid[0] << " " << d_valid[1] << " "
+                    << d_valid[2] << " " << d_valid[3]);
 }
 
 void NavigationComputer::updateDepth(double y_z) {
@@ -136,13 +139,13 @@ void NavigationComputer::run(double run_time) {
     bool m_valid = false;
     bool z_valid = false;
     if (y_a) {
-        if (abs(y_a->norm() - ins->getState().g_nav.norm()) < 1e-3) {
+        if (abs(y_a->norm() - ins->getState().g_nav.norm()) < 1e-2) {
             z.segment<3>(0) = *y_a - -R_imu2nav.transpose()*ins->getState().g_nav;
             a_valid = true;
         }
     }
     if (y_m) {
-        z.segment<3>(3) = y_m->normalized() - R_imu2nav.transpose()*config.update.m_nav.normalized();
+        z.segment<3>(3) = *y_m - R_imu2nav.transpose()*config.update.m_nav;
         m_valid = true;
     }
     z.segment<4>(6) = y_d - config.update.beam_mat*(
