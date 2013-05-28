@@ -78,6 +78,8 @@ struct PoseGuess {
     RenderBuffer::RegionType bg_region;
     RenderBuffer::RegionType fg_region;
     
+    Vector3d last_color;
+    
     PoseGuess() { }
     PoseGuess(const TargetDesc &goal,
              boost::shared_ptr<const Obj> obj,
@@ -159,7 +161,7 @@ struct PoseGuess {
             }
         }
     }
-    double P(const TaggedImage &img, const vector<ResultWithArea> &results, vector<int>* dbg_image=NULL) const {
+    double P(const TaggedImage &img, const vector<ResultWithArea> &results, vector<int>* dbg_image=NULL) {
         Result inner_result = results[fg_region];
         Result outer_result = results[bg_region];
         Result far_result = img.total_result - inner_result; //- outer_result;
@@ -173,6 +175,8 @@ struct PoseGuess {
             }
             // not visible
         }
+        
+        last_color = inner_result.avg_color();
         
         Vector3d inner_color = inner_result.avg_color().normalized();
         Vector3d outer_color = outer_result.avg_color().normalized();
@@ -280,7 +284,7 @@ struct Particle {
         vector<ResultWithArea> results = rb.get_results();
         double P = 1;
         last_Ps.clear();
-        BOOST_FOREACH(const PoseGuess &poseguess, poseguesses) {
+        BOOST_FOREACH(PoseGuess &poseguess, poseguesses) {
             double this_P = poseguess.P(img, results, dbg_image);
             P *= this_P;
             last_Ps.push_back(this_P);
@@ -500,6 +504,8 @@ struct Node {
                 targetres.pose.position = vec2xyz<Point>(poseguess.pos);
                 targetres.pose.orientation =
                      quat2xyzw<geometry_msgs::Quaternion>(poseguess.q);
+                targetres.color = make_rgba<ColorRGBA>(poseguess.last_color[0],
+                    poseguess.last_color[1], poseguess.last_color[2], 1);
                 if(poseguess.obj) {
                     BOOST_FOREACH(const Marker &marker, poseguess.obj->markers) {
                         targetres.markers.push_back(object_finder::MarkerPoint());
