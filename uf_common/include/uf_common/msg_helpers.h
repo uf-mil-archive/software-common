@@ -46,6 +46,12 @@ inline Eigen::Vector3d vec2vec(tf::Vector3 v) {
 inline tf::Vector3 vec2vec(Eigen::Vector3d v) {
     return tf::Vector3(v[0], v[1], v[2]);
 }
+inline Eigen::Quaterniond quat2quat(const tf::Quaternion &q) {
+    return Eigen::Quaterniond(q[3], q[0], q[1], q[2]);
+}
+inline tf::Quaternion quat2quat(const Eigen::Quaterniond &q) {
+    return tf::Quaternion(q.x(), q.y(), q.z(), q.w());
+}
 
 
 template <class T>

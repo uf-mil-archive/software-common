@@ -139,7 +139,7 @@ void NavigationComputer::run(double run_time) {
     bool m_valid = false;
     bool z_valid = false;
     if (y_a) {
-        if (abs(y_a->norm() - ins->getState().g_nav.norm()) < 1e-2) {
+        if (abs(y_a->norm() - ins->getState().g_nav.norm()) < 2e-3) {
             z.segment<3>(0) = *y_a - -R_imu2nav.transpose()*ins->getState().g_nav;
             a_valid = true;
         }

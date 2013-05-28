@@ -34,66 +34,55 @@ struct Node {
         // TODO read from config
         // TODO come up with good values
         NavigationComputer::Config config;
-        //config.T_imu = 1 / 204.0;
         config.T_imu = 1 / 204.0;
+        //config.T_imu = 1 / 30.0;
         config.T_kalman = 1 / 50.0;
         config.T_kalman_correction = 2.0;
 
         config.predict.R_g = Eigen::DiagonalMatrix<double, 3, 3>(
-            4.6254e-6, 4.6254e-6, 4.6254e-6);
+            5e-5, 5e-5, 5e-5);
         config.predict.R_a = Eigen::DiagonalMatrix<double, 3, 3>(
-            1.1413e-6, 1.1413e-6, 1.1413e-6);
+            3e-3, 3e-3, 3e-3);
         config.predict.Q_b_g = Eigen::DiagonalMatrix<double, 3, 3>(
-            1.2217e-8, 1.2217e-8, 1.2217e-8);
+            1e-8, 1e-8, 1e-8);
         config.predict.Q_b_a = Eigen::DiagonalMatrix<double, 3, 3>(
-            1.9700e-7, 1.9700e-7, 1.9700e-7);
+            1e-8, 1e-8, 1e-8);
 
-        config.update.R_g = 100*config.predict.R_g;
-        config.update.R_a = config.predict.R_a;
+        config.update.R_g = config.predict.R_g;
+        config.update.R_a = 100*config.predict.R_a;
         config.update.R_m = Eigen::DiagonalMatrix<double, 3, 3>(
             4e-14, 4e-14, 4e-14);
         config.update.R_d.fill(0);
         for (int i=0; i<4; i++)
             config.update.R_d(i, i) = 0.0004;
-        config.update.R_z = 5e-3;
-
-        config.update.beam_mat <<
-            -0.5, 0, -0.86603,
-            0.5, 0, -0.86603,
-            0, 0.5, -0.86603,
-            0, -0.5, -0.86603;
-
-/*        config.update.beam_mat <<
-            0.35355, -0.35355, 0.866025,
-            -0.35355, 0.35355, 0.866025,
-            -0.35355, -0.35355, 0.866025,
-            0.35355, 0.35355, 0.866025;*/
-
-        // TODO these r_imu2xxx probably need to be rotated 180 degrees about X
-        // config.update.r_imu2dvl <<
-        //     0, 0, -0.102-0.076;
-        config.update.r_imu2dvl <<
-            0, 0, 0.102+0.076;
-
-        config.update.q_imu2dvl = Eigen::Quaterniond(
-            0.000284, -0.394308, 0.918965, 0.005013);
-
-        // Double check consistency, beam_mat is imu -> beams
-        config.update.beam_mat = config.update.beam_mat *
-            config.update.q_imu2dvl.matrix();
-
-        // config.update.r_imu2depth <<
-        //     0.445 - 0.431, 0.102, -0.051 - 0.076;
-        config.update.r_imu2depth <<
-            0.445 - 0.431, -0.102, 0.051 + 0.076;
+        config.update.R_z = 4e-5;
         config.update.m_nav <<
             -2244.2e-9, 24151.0e-9, -40572.8e-9;
 
-        config.init.accel_samples = 50;
-        config.init.mag_samples = 50;
+        tf::StampedTransform imu2dvl;
+        tf_listener.waitForTransform("/dvl", "/imu", ros::Time::now(), ros::Duration(10.0));
+        tf_listener.lookupTransform("/dvl", "/imu", ros::Time::now(), imu2dvl);
+        tf::StampedTransform imu2depth;
+        tf_listener.waitForTransform("/depth", "/imu", ros::Time::now(), ros::Duration(10.0));
+        tf_listener.lookupTransform("/depth", "/imu", ros::Time::now(), imu2depth);
+
+        Eigen::Matrix<double, 4, 3> beam_mat_dvl;
+        beam_mat_dvl <<
+            -0.5, 0, -sqrt(3)/2,
+            0.5, 0, -sqrt(3)/2,
+            0, 0.5, -sqrt(3)/2,
+            0, -0.5, -sqrt(3)/2;
+        Eigen::Quaterniond q_imu2dvl = uf_common::quat2quat(imu2dvl.getRotation());
+        config.update.beam_mat = beam_mat_dvl * q_imu2dvl.matrix();
+
+        config.update.r_imu2dvl = uf_common::vec2vec(imu2dvl.getOrigin());
+        config.update.r_imu2depth = uf_common::vec2vec(imu2depth.getOrigin());
+
+        config.init.accel_samples = 30;
+        config.init.mag_samples = 30;
         config.init.dvl_samples = 5;
         config.init.depth_samples = 10;
-        config.init.g_nav = Eigen::Vector3d(0, 0, -9.7997);
+        config.init.g_nav = Eigen::Vector3d(0, 0, -9.7964);
         config.init.m_nav = config.update.m_nav;
         config.init.r_imu2depth = config.update.r_imu2depth;
         config.init.beam_mat = config.update.beam_mat;
@@ -159,7 +148,7 @@ struct Node {
             msg.pose.pose.position = uf_common::vec2xyz<geometry_msgs::Point>(
                 state->filt.p_nav);
             msg.pose.pose.orientation = uf_common::quat2xyzw<geometry_msgs::Quaternion>(
-                state->filt.q_imu2nav.conjugate());
+                state->filt.q_imu2nav);
             msg.twist.twist.linear = uf_common::vec2xyz<geometry_msgs::Vector3>(
                 state->filt.q_imu2nav.matrix().transpose() * state->filt.v_nav);
             msg.twist.twist.angular = uf_common::vec2xyz<geometry_msgs::Vector3>(
@@ -172,7 +161,7 @@ struct Node {
             posemsg.pose.position = uf_common::vec2xyz<geometry_msgs::Point>(
                 state->filt.p_nav);
             posemsg.pose.orientation = uf_common::quat2xyzw<geometry_msgs::Quaternion>(
-                state->filt.q_imu2nav.conjugate());
+                state->filt.q_imu2nav);
             pose_pub.publish(posemsg);
 
             indirect_kalman_6dof::Debug debugmsg;
