@@ -1,4 +1,5 @@
 #include "NavigationComputer.h"
+#include "util.h"
 #include <ros/console.h>
 #include <algorithm>
 
@@ -11,6 +12,7 @@ NavigationComputer::NavigationComputer(const Config &config) :
 {
     y_d.fill(0);
     std::fill(d_valid.begin(), d_valid.end(), false);
+    y_a_log.reserve(config.y_a_log_size);
 }
 
 boost::optional<NavigationComputer::State> NavigationComputer::getState() const {
@@ -53,7 +55,10 @@ void NavigationComputer::updateINS(const INS::Measurement &measurement,
         ins_time += config.T_imu;
     }
 
-    y_a = measurement.y_a;
+    if (y_a_log.size() == config.y_a_log_size) {
+        y_a_log.erase(y_a_log.begin());
+    }
+    y_a_log.push_back(measurement.y_a);
 }
 
 void NavigationComputer::updateMag(const Eigen::Vector3d &y_m) {
@@ -138,9 +143,17 @@ void NavigationComputer::run(double run_time) {
     bool a_valid = false;
     bool m_valid = false;
     bool z_valid = false;
-    if (y_a) {
-        if (abs(y_a->norm() - ins->getState().g_nav.norm()) < 2e-3) {
-            z.segment<3>(0) = *y_a - -R_imu2nav.transpose()*ins->getState().g_nav;
+    if (y_a_log.size() == config.y_a_log_size) {
+        Eigen::Vector3d y_a_mean = mean(Eigen::Vector3d::Zero(),
+                                        y_a_log.begin(),
+                                        y_a_log.end());
+        double y_a_norm_error = y_a_mean.norm() - config.init.g_nav.norm();
+
+        if (fabs(y_a_norm_error) < config.y_a_max_norm_error) {
+            Eigen::Vector3d y_a = mean(Eigen::Vector3d::Zero(),
+                                       y_a_log.begin(),
+                                       y_a_log.begin() + y_a_log.size()/2);
+            z.segment<3>(0) = y_a - -R_imu2nav.transpose()*ins->getState().g_nav;
             a_valid = true;
         }
     }
@@ -156,13 +169,12 @@ void NavigationComputer::run(double run_time) {
         z_valid = true;
     }
 
-    if (!y_a && !y_m && std::count(d_valid.begin(), d_valid.end(), true) == 0 && !y_z) {
+    if (!a_valid && !m_valid && std::count(d_valid.begin(), d_valid.end(), true) == 0 && !z_valid) {
         return;
     }
 
     kalman.update(z, a_valid, m_valid, d_valid, z_valid, ins->getState(), config.update);
 
-    y_a = boost::none;
     y_m = boost::none;
     std::fill(d_valid.begin(), d_valid.end(), false);
     y_z = boost::none;

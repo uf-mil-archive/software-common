@@ -34,22 +34,29 @@ struct Node {
         // TODO read from config
         // TODO come up with good values
         NavigationComputer::Config config;
-        config.T_imu = 1 / 204.0;
-        //config.T_imu = 1 / 30.0;
-        config.T_kalman = 1 / 50.0;
-        config.T_kalman_correction = 2.0;
+        // real sub
+        //config.T_imu = 1 / 204.0;
+        //config.T_kalman = 1 / 50.0;
+//        config.y_a_max_norm_error = 2e-3;
+//        config.y_a_log_size = 20;
+
+        // sim
+        config.T_imu = 1 / 30.0;
+        config.T_kalman = 1 / 15.0;
+        config.y_a_max_norm_error = 5e-3;
+        config.y_a_log_size = 5;
 
         config.predict.R_g = Eigen::DiagonalMatrix<double, 3, 3>(
             5e-5, 5e-5, 5e-5);
         config.predict.R_a = Eigen::DiagonalMatrix<double, 3, 3>(
             3e-3, 3e-3, 3e-3);
         config.predict.Q_b_g = Eigen::DiagonalMatrix<double, 3, 3>(
-            1e-8, 1e-8, 1e-8);
+            1e-10, 1e-10, 1e-10);
         config.predict.Q_b_a = Eigen::DiagonalMatrix<double, 3, 3>(
-            1e-8, 1e-8, 1e-8);
+            1e-10, 1e-10, 1e-10);
 
         config.update.R_g = config.predict.R_g;
-        config.update.R_a = 100*config.predict.R_a;
+        config.update.R_a = 10*config.predict.R_a;
         config.update.R_m = Eigen::DiagonalMatrix<double, 3, 3>(
             4e-14, 4e-14, 4e-14);
         config.update.R_d.fill(0);
@@ -82,7 +89,7 @@ struct Node {
         config.init.mag_samples = 30;
         config.init.dvl_samples = 5;
         config.init.depth_samples = 10;
-        config.init.g_nav = Eigen::Vector3d(0, 0, -9.7964);
+        config.init.g_nav = Eigen::Vector3d(0, 0, -9.81);
         config.init.m_nav = config.update.m_nav;
         config.init.r_imu2depth = config.update.r_imu2depth;
         config.init.beam_mat = config.update.beam_mat;

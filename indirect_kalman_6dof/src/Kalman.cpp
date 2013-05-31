@@ -35,8 +35,13 @@ void Kalman::resetINSError() {
 
 void Kalman::reset() {
     resetINSError();
+    P.fill(0);
     P = 1e-4 * Eigen::Matrix<double, 15, 15>::Identity();
-    P.block<2, 2>(6, 6).fill(0);
+    for (int i=0; i<6; i++)
+        P(i, i) = 1e-4;
+    P(8, 8) = 1e-2;
+    for (int i=9; i<15; i++)
+        P(i, i) = 1e-3;
 }
 
 void Kalman::predict(const INS::State &ins, const PredictConfig &config, double dt) {

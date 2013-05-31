@@ -7,6 +7,7 @@
 
 #include <boost/array.hpp>
 #include <boost/optional.hpp>
+#include <vector>
 
 class NavigationComputer {
 public:
@@ -14,6 +15,9 @@ public:
         double T_imu;
         double T_kalman;
         double T_kalman_correction;
+
+        double y_a_max_norm_error;
+        unsigned int y_a_log_size;
 
         Kalman::PredictConfig predict;
         Kalman::UpdateConfig update;
@@ -48,7 +52,7 @@ private:
     double kalman_time;
     double last_correction_time;
 
-    boost::optional<Eigen::Vector3d> y_a;
+    std::vector<Eigen::Vector3d> y_a_log;
     boost::optional<Eigen::Vector3d> y_m;
     Eigen::Vector4d y_d;
     boost::array<bool, 4> d_valid;

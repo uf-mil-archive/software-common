@@ -1,5 +1,5 @@
 #include "INSInitializer.h"
-#include <numeric>
+#include "util.h"
 
 #include <ros/ros.h>
 
@@ -13,24 +13,10 @@ bool INSInitializer::ready() const {
         && y_z_log.size() >= config.depth_samples;
 }
 
-namespace {
-    template <typename Container>
-    typename Container::value_type mean(const Container &cont,
-                                        typename Container::value_type val) {
-        for (typename Container::const_iterator i = cont.begin();
-             i != cont.end();
-             ++i) {
-            val += *i;
-        }
-
-        return val / cont.size();
-    }
-}
-
 INS INSInitializer::initializeINS() const {
     // Average up all accel and mag samples
-    Eigen::Vector3d y_a = mean(y_a_log, Eigen::Vector3d::Zero());
-    Eigen::Vector3d y_m = mean(y_m_log, Eigen::Vector3d::Zero());
+    Eigen::Vector3d y_a = mean(Eigen::Vector3d::Zero(), y_a_log.begin(), y_a_log.end());
+    Eigen::Vector3d y_m = mean(Eigen::Vector3d::Zero(), y_m_log.begin(), y_m_log.end());
 
     // Use TRIAD to compute a rotation matrix
     Eigen::Vector3d a = -config.g_nav.normalized();
@@ -42,7 +28,7 @@ INS INSInitializer::initializeINS() const {
         (Eigen::Matrix3d() << a_hat, m_hat, a_hat.cross(m_hat)).finished().transpose();
 
     // Sum up all the DVL readings
-    Eigen::Vector4d y_d = mean(y_d_log, Eigen::Vector4d::Zero());
+    Eigen::Vector4d y_d = mean(Eigen::Vector4d::Zero(), y_d_log.begin(), y_d_log.end());
 
     // Use least squares with the beam matrix to determine our velocity
     Eigen::Vector3d v_imu_init =
@@ -50,7 +36,8 @@ INS INSInitializer::initializeINS() const {
             config.beam_mat.transpose() * y_d);
 
     // Use the depth sensor to determine our z position
-    double p_nav_z = -mean(y_z_log, 0) - (R_imu2nav*config.r_imu2depth)[2];
+    double p_nav_z = -mean(0, y_z_log.begin(), y_z_log.end())
+        - (R_imu2nav*config.r_imu2depth)[2];
 
     // Initialize an INS
     return INS(Eigen::Quaterniond(R_imu2nav),
