@@ -13,6 +13,17 @@
 #include <sensor_msgs/Imu.h>
 #include <nav_msgs/Odometry.h>
 
+static Eigen::Matrix3d vec2diag(const Eigen::Vector3d &x) {
+    return Eigen::DiagonalMatrix<double, 3, 3>(x[0], x[1], x[2]);
+}
+
+static unsigned int get_uint(ros::NodeHandle &nh, const std::string &name) {
+    int val;
+    ROS_ASSERT(nh.getParam(name, val));
+    ROS_ASSERT(val >= 0);
+    return static_cast<unsigned int>(val);
+}
+
 struct Node {
     ros::NodeHandle nh;
     ros::NodeHandle private_nh;
@@ -31,40 +42,35 @@ struct Node {
     Node() :
         private_nh("~")
     {
-        // TODO read from config
-        // TODO come up with good values
         NavigationComputer::Config config;
-        // real sub
-        //config.T_imu = 1 / 204.0;
-        //config.T_kalman = 1 / 50.0;
-//        config.y_a_max_norm_error = 2e-3;
-//        config.y_a_log_size = 20;
 
-        // sim
-        config.T_imu = 1 / 30.0;
-        config.T_kalman = 1 / 15.0;
-        config.y_a_max_norm_error = 5e-3;
-        config.y_a_log_size = 5;
+        double f_imu;
+        ROS_ASSERT(private_nh.getParam("f_imu", f_imu));
+        config.T_imu = 1 / f_imu;
 
-        config.predict.R_g = Eigen::DiagonalMatrix<double, 3, 3>(
-            5e-5, 5e-5, 5e-5);
-        config.predict.R_a = Eigen::DiagonalMatrix<double, 3, 3>(
-            3e-3, 3e-3, 3e-3);
-        config.predict.Q_b_g = Eigen::DiagonalMatrix<double, 3, 3>(
-            1e-10, 1e-10, 1e-10);
-        config.predict.Q_b_a = Eigen::DiagonalMatrix<double, 3, 3>(
-            1e-10, 1e-10, 1e-10);
+        double f_kalman;
+        ROS_ASSERT(private_nh.getParam("f_kalman", f_kalman));
+        config.T_kalman = 1 / f_kalman;
+
+        ROS_ASSERT(private_nh.getParam("y_a_max_norm_error", config.y_a_max_norm_error));
+        config.y_a_log_size = get_uint(private_nh, "y_a_log_size");
+
+        config.predict.R_g = vec2diag(uf_common::get_Vector3(private_nh, "R_g"));
+        config.predict.R_a = vec2diag(uf_common::get_Vector3(private_nh, "R_a"));
+        config.predict.Q_b_g = vec2diag(uf_common::get_Vector3(private_nh, "Q_b_g"));
+        config.predict.Q_b_a = vec2diag(uf_common::get_Vector3(private_nh, "Q_b_a"));
 
         config.update.R_g = config.predict.R_g;
         config.update.R_a = 10*config.predict.R_a;
-        config.update.R_m = Eigen::DiagonalMatrix<double, 3, 3>(
-            4e-14, 4e-14, 4e-14);
+        config.update.R_m = vec2diag(uf_common::get_Vector3(private_nh, "R_m"));
+        double R_d;
+        ROS_ASSERT(private_nh.getParam("R_d", R_d));
         config.update.R_d.fill(0);
         for (int i=0; i<4; i++)
-            config.update.R_d(i, i) = 0.0004;
-        config.update.R_z = 4e-5;
-        config.update.m_nav <<
-            -2244.2e-9, 24151.0e-9, -40572.8e-9;
+            config.update.R_d(i, i) = R_d;
+        ROS_ASSERT(private_nh.getParam("R_z", config.update.R_z));
+
+        config.update.m_nav = uf_common::get_Vector3(private_nh, "m_nav");
 
         tf::StampedTransform imu2dvl;
         tf_listener.waitForTransform("/dvl", "/imu", ros::Time::now(), ros::Duration(10.0));
@@ -85,11 +91,11 @@ struct Node {
         config.update.r_imu2dvl = uf_common::vec2vec(imu2dvl.getOrigin());
         config.update.r_imu2depth = uf_common::vec2vec(imu2depth.getOrigin());
 
-        config.init.accel_samples = 30;
-        config.init.mag_samples = 30;
-        config.init.dvl_samples = 5;
-        config.init.depth_samples = 10;
-        config.init.g_nav = Eigen::Vector3d(0, 0, -9.81);
+        config.init.accel_samples = get_uint(private_nh, "init_accel_samples"); // 30
+        config.init.mag_samples = get_uint(private_nh, "init_mag_samples"); // 30
+        config.init.dvl_samples = get_uint(private_nh, "init_dvl_samples"); // 5
+        config.init.depth_samples = get_uint(private_nh, "init_depth_samples"); // 10
+        config.init.g_nav = uf_common::get_Vector3(private_nh, "g_nav"); // 0, 0, -9.81
         config.init.m_nav = config.update.m_nav;
         config.init.r_imu2depth = config.update.r_imu2depth;
         config.init.beam_mat = config.update.beam_mat;
