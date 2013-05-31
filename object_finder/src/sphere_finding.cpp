@@ -67,7 +67,7 @@ bool intersect_plane_sphere(Vector3d plane_axis1, Vector3d plane_axis2,
 }
 
 bool _accumulate_sphere_scanline(RenderBuffer &renderbuffer, RenderBuffer::RegionType region, Vector3d sphere_pos_camera, double sphere_radius, uint32_t yy, vector<int>* dbg_image=NULL) {
-    const TaggedImage &image = renderbuffer.img;
+    const TaggedImage &image = *renderbuffer.img;
     double y = yy;
     
     // solution space of project((X, Y, Z)) = (x, y, z) with y fixed
@@ -126,7 +126,7 @@ bool _accumulate_sphere_scanline(RenderBuffer &renderbuffer, RenderBuffer::Regio
 }
 
 void sphere_draw(RenderBuffer &renderbuffer, RenderBuffer::RegionType region, Eigen::Vector3d pos, double radius, std::vector<int>* dbg_image) {
-    const TaggedImage &image = renderbuffer.img;
+    const TaggedImage &image = *renderbuffer.img;
     // get the sum of the color values (along with the count) of the pixels
     // that are included within the provided sphere specified by
     // pos and radius

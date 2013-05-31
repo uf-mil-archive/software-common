@@ -89,16 +89,25 @@ struct ScanLine {
             results[segment.region] += img.get_line_sum(Y, segment.x_start, segment.x_end);
         }
     }
+    void reset() {
+        segments.clear();
+    }
 };
 
 struct RenderBuffer {
     typedef int RegionType;
     
-    const TaggedImage &img;
+    const TaggedImage *img; // pointer since we want to reassign it
     std::vector<ScanLine> scanlines;
     std::vector<double> areas;
-    RenderBuffer(const TaggedImage &img) : img(img) {
+    RenderBuffer(const TaggedImage &img) { reset(img); }
+    void reset(const TaggedImage &img) {
+        this->img = &img;
         scanlines.resize(img.cam_info.height);
+        BOOST_FOREACH(ScanLine &scanline, scanlines) {
+            scanline.reset();
+        }
+        areas.clear();
     }
     RegionType new_region() {
         areas.push_back(0);
@@ -111,8 +120,8 @@ struct RenderBuffer {
     }
     std::vector<ResultWithArea> get_results() {
         std::vector<Result> results(areas.size(), Result::Zero());
-        for(unsigned int Y = 0; Y < img.cam_info.height; Y++) {
-            scanlines[Y].accumulate_results(results, img, Y);
+        for(unsigned int Y = 0; Y < img->cam_info.height; Y++) {
+            scanlines[Y].accumulate_results(results, *img, Y);
         }
         
         std::vector<ResultWithArea> results2;

@@ -242,7 +242,7 @@ struct Particle {
     vector<double> last_Ps;
     Particle() { }
     Particle(const object_finder::FindGoal &goal,
-             const vector<boost::shared_ptr<Obj> > objs,
+             const vector<boost::shared_ptr<Obj> > &objs,
              const TaggedImage &image) {
         
         BOOST_FOREACH(const TargetDesc &targetdesc, goal.targetdescs) {
@@ -275,8 +275,8 @@ struct Particle {
         }
         return p;
     }
-    double P(const TaggedImage &img, vector<int>* dbg_image=NULL) {
-        RenderBuffer rb(img);
+    double P(const TaggedImage &img, RenderBuffer &rb, vector<int>* dbg_image=NULL) {
+        rb.reset(img);
         BOOST_FOREACH(PoseGuess &poseguess, poseguesses)
             poseguess.draw1(rb, dbg_image);
         BOOST_FOREACH(PoseGuess &poseguess, poseguesses)
@@ -420,8 +420,11 @@ struct GoalExecutor {
             pair.first = 1./particles.size();
         
         // update weights
-        BOOST_FOREACH(pair_type &pair, particles)
-            pair.first *= pair.second.P(img);
+        {
+            RenderBuffer rb(img);
+            BOOST_FOREACH(pair_type &pair, particles)
+                pair.first *= pair.second.P(img, rb);
+        }
         infinite_p *= 1.0001; // no observation should result in a P of 1
         
         // replace particles doing worse than the median with new ones
@@ -499,7 +502,8 @@ struct GoalExecutor {
                 }
                 feedback.targetreses.push_back(targetres);
             }
-            feedback.P = max_p.second.P(img);
+            RenderBuffer rb(img);
+            feedback.P = max_p.second.P(img, rb);
             feedback.P_within_10cm = 0;
             BOOST_FOREACH(pair_type &pair, particles)
                 if(pair.second.dist(max_p.second) <= .2)
@@ -509,7 +513,8 @@ struct GoalExecutor {
         
         if(image_pub.getNumSubscribers()) { // send debug image
             vector<int> dbg_image(image->width*image->height, 0);
-            max_p.second.P(img, &dbg_image);
+            RenderBuffer rb(img);
+            max_p.second.P(img, rb, &dbg_image);
             
             Image msg;
             msg.header = image->header;
