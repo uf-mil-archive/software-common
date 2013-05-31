@@ -82,8 +82,8 @@ void INS::State::correct(const Error &error) {
     q_imu2nav.normalize();
     v_nav += error.v_nav;
     p_nav += error.p_nav;
-    w_imu += error.b_g;
-    a_imu += error.b_a;
+    w_imu -= error.b_g;
+    a_imu -= error.b_a;
     b_g += error.b_g;
     b_a += error.b_a;
 }

@@ -122,14 +122,13 @@ struct Node {
     }
 
     void onMag(geometry_msgs::Vector3StampedConstPtr mag) {
-        // TODO filter messages that are too old
         Eigen::Vector3d y_m = uf_common::xyz2vec(mag->vector);
-        navcomp->updateMag(y_m);
+        navcomp->updateMag(y_m, mag->header.stamp.toSec());
     }
 
     void onDepth(uf_common::Float64StampedConstPtr depth) {
         double y_z = depth->data;
-        navcomp->updateDepth(y_z);
+        navcomp->updateDepth(y_z, depth->header.stamp.toSec());
     }
 
     void onDvl(uf_common::VelocityMeasurementsConstPtr vels) {
@@ -144,7 +143,7 @@ struct Node {
             }
         }
 
-        navcomp->updateDVL(y_d, d_valid);
+        navcomp->updateDVL(y_d, d_valid, vels->header.stamp.toSec());
     }
 
     void onUpdate(const ros::TimerEvent &event) {
@@ -187,6 +186,11 @@ struct Node {
                 state->filt.a_imu);
             debugmsg.w_imu = uf_common::vec2xyz<geometry_msgs::Vector3>(
                 state->filt.w_imu);
+            debugmsg.y_a_count = state->stats.y_a_count;
+            debugmsg.y_m_count = state->stats.y_m_count;
+            debugmsg.y_d_count = state->stats.y_d_count;
+            debugmsg.y_z_count = state->stats.y_z_count;
+            debugmsg.y_a_norm_error = state->stats.y_a_norm_error;
             debug_pub.publish(debugmsg);
         }
     }

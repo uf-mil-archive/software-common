@@ -3,3 +3,8 @@ geometry_msgs/Vector3 b_g
 geometry_msgs/Vector3 b_a
 geometry_msgs/Vector3 a_imu
 geometry_msgs/Vector3 w_imu
+uint32 y_a_count
+uint32 y_m_count
+uint32 y_d_count
+uint32 y_z_count
+float64 y_a_norm_error

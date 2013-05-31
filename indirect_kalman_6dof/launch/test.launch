@@ -22,7 +22,7 @@
       init_dvl_samples: 5
       init_depth_samples: 10
 
-      g_nav: [0, 0, -9.80]
+      g_nav: [0, 0, -9.81]
       m_nav: [-2244.2e-9, 24151.0e-9, -40572.8e-9]
     </rosparam>
   </node>
