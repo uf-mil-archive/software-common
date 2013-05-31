@@ -302,12 +302,13 @@ struct Particle {
     }
 };
 
-struct Node {
+struct GoalExecutor {
     static const int N = 1000;
     
     ros::NodeHandle nh;
     ros::NodeHandle private_nh;
-    actionlib::SimpleActionServer<object_finder::FindAction> actionserver;
+    object_finder::FindGoal goal;
+    
     tf::TransformListener listener;
     message_filters::Subscriber<sensor_msgs::Image> image_sub;
     message_filters::Subscriber<CameraInfo> info_sub;
@@ -316,9 +317,7 @@ struct Node {
     ros::Publisher particles_pub;
     ros::Publisher pose_pub;
     ros::Publisher image_pub;
-    
-    bool have_goal;
-    object_finder::FindGoal goal;
+    boost::function1<void, const object_finder::FindFeedback&> feedback_callback;
     
     vector<boost::shared_ptr<Obj> > current_objs;
     
@@ -332,14 +331,23 @@ struct Node {
         return a.first < b.first;
     }
     
-    Node() :
+    GoalExecutor(const object_finder::FindGoal &goal,
+                 boost::function1<void, const object_finder::FindFeedback&> 
+                    feedback_callback) :
         private_nh("~"),
-        actionserver(nh, "find", false),
+        goal(goal),
         image_sub(nh, "camera/image_rect_color", 1),
         info_sub(nh, "camera/camera_info", 1),
         info_tf_filter(info_sub, listener, "", 10),
         sync(image_sub, info_tf_filter, 10),
-        have_goal(false) {
+        feedback_callback(feedback_callback) {
+        
+        BOOST_FOREACH(const TargetDesc &targetdesc, goal.targetdescs) {
+            current_objs.push_back(targetdesc.type == TargetDesc::TYPE_OBJECT
+                ? boost::make_shared<Obj>(targetdesc.object_filename)
+                : boost::shared_ptr<Obj>());
+        }
+        info_tf_filter.setTargetFrame(goal.header.frame_id);
         
         particles_pub = private_nh.advertise<visualization_msgs::Marker>(
             "particles", 1);
@@ -347,11 +355,8 @@ struct Node {
         image_pub = private_nh.advertise<sensor_msgs::Image>(
             "debug_image", 1);
         
-        sync.registerCallback(boost::bind(&Node::callback, this, _1, _2));
-        
-        actionserver.registerGoalCallback(
-            boost::bind(&Node::goalCallback, this));
-        actionserver.start();
+        particles.clear();
+        sync.registerCallback(boost::bind(&GoalExecutor::callback, this, _1, _2));
     }
     
     void init_particles(ros::Time t, const TaggedImage &img) {
@@ -366,33 +371,10 @@ struct Node {
         current_stamp = t;
     }
     
-    void goalCallback() {
-        have_goal = true;
-        boost::shared_ptr<const object_finder::FindGoal> new_goal =
-            actionserver.acceptNewGoal();
-        goal = *new_goal;
-        particles.clear();
-        current_objs.clear();
-        BOOST_FOREACH(const TargetDesc &targetdesc, goal.targetdescs) {
-            current_objs.push_back(targetdesc.type == TargetDesc::TYPE_OBJECT
-                ? boost::make_shared<Obj>(targetdesc.object_filename)
-                : boost::shared_ptr<Obj>());
-        }
-        info_tf_filter.setTargetFrame(goal.header.frame_id);
-    }
-    
     void callback(const ImageConstPtr& image,
                   const CameraInfoConstPtr& cam_info) {
         assert(image->header.stamp == cam_info->header.stamp);
         assert(image->header.frame_id == cam_info->header.frame_id);
-        
-        if(actionserver.isPreemptRequested()) {
-            have_goal = false;
-            current_objs.clear();
-        }
-        
-        if(!have_goal)
-            return;
         
         double dt = (image->header.stamp - current_stamp).toSec();
         current_stamp = image->header.stamp;
@@ -522,7 +504,7 @@ struct Node {
             BOOST_FOREACH(pair_type &pair, particles)
                 if(pair.second.dist(max_p.second) <= .2)
                     feedback.P_within_10cm += pair.first;
-            actionserver.publishFeedback(feedback);
+            feedback_callback(feedback);
         }
         
         if(image_pub.getNumSubscribers()) { // send debug image
@@ -548,6 +530,40 @@ struct Node {
             }
             image_pub.publish(msg);
         }
+    }
+};
+
+
+struct Node {
+    ros::NodeHandle nh;
+    
+    typedef actionlib::SimpleActionServer<object_finder::FindAction> actionserverType;
+    actionserverType actionserver;
+    
+    boost::optional<GoalExecutor> goal_executor;
+    
+    Node() :
+        actionserver(nh, "find", false),
+        goal_executor(boost::none) {
+        
+        actionserver.registerGoalCallback(
+            boost::bind(&Node::goalCallback, this));
+        actionserver.registerPreemptCallback(
+            boost::bind(&Node::preemptCallback, this));
+        actionserver.start();
+    }
+    
+    void goalCallback() {
+        boost::shared_ptr<const object_finder::FindGoal> new_goal =
+            actionserver.acceptNewGoal();
+        goal_executor = boost::in_place(*new_goal, boost::bind(boost::mem_fn(
+            (void (actionserverType::*)(const actionserverType::Feedback &))
+            &actionserverType::publishFeedback), // this was fun
+        &actionserver, _1));
+    }
+    
+    void preemptCallback() {
+        goal_executor = boost::none;
     }
 };
 
