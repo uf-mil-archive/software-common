@@ -238,6 +238,7 @@ struct PoseGuess {
 };
 
 struct Particle {
+    double weight;
     vector<PoseGuess> poseguesses;
     vector<double> last_Ps;
     double last_P;
@@ -323,8 +324,7 @@ struct GoalExecutor {
     
     vector<boost::shared_ptr<Obj> > current_objs;
     
-    typedef std::pair<double, Particle> pair_type;
-    std::vector<pair_type> particles;
+    std::vector<Particle> particles;
     ros::Time current_stamp;
     
     GoalExecutor(const object_finder::FindGoal &goal,
@@ -359,14 +359,15 @@ struct GoalExecutor {
         particles.clear();
         
         for(int i = 0; i < N; i++)
-            particles.push_back(
-                make_pair(1./N, Particle(goal, current_objs, img)));
+            particles.push_back(Particle(goal, current_objs, img));
+        BOOST_FOREACH(Particle &particle, particles)
+            particle.weight = 1./particles.size();
         
         current_stamp = t;
     }
     
-    static bool compare_weight(const pair_type a, const pair_type b) {
-        return a.second.last_P < b.second.last_P;
+    static bool compare_weight(const Particle &a, const Particle &b) {
+        return a.last_P < b.last_P;
     }
     void callback(const ImageConstPtr& image,
                   const CameraInfoConstPtr& cam_info) {
@@ -403,49 +404,49 @@ struct GoalExecutor {
         }
         
         // residual resampling
-        std::vector<std::pair<double, Particle> > new_particles;
-        BOOST_FOREACH(pair_type &pair, particles) {
-            int count = N * pair.first + uniform();
+        std::vector<Particle> new_particles;
+        BOOST_FOREACH(Particle &particle, particles) {
+            int count = N * particle.weight + uniform();
             for(int i = 0; i < count; i++) {
-                new_particles.push_back(std::make_pair(-1, i==0?
-                    pair.second :
-                    pair.second.predict(dt, img)));
+                new_particles.push_back(i==0 ?
+                    particle :
+                    particle.predict(dt, img));
             }
         }
         particles.swap(new_particles);
-        BOOST_FOREACH(pair_type &pair, particles)
-            pair.first = 1./particles.size();
+        BOOST_FOREACH(Particle &particle, particles)
+            particle.weight = 1./particles.size();
         
         // update weights
         {
             RenderBuffer rb(img);
-            BOOST_FOREACH(pair_type &pair, particles)
-                pair.first *= pair.second.P(img, rb);
+            BOOST_FOREACH(Particle &particle, particles)
+                particle.weight *= particle.P(img, rb);
         }
         
         
         // normalize weights
         double total_weight = 0;
-        BOOST_FOREACH(pair_type &pair, particles) total_weight += pair.first;
+        BOOST_FOREACH(Particle &particle, particles) total_weight += particle.weight;
         
-        BOOST_FOREACH(pair_type &pair, particles) pair.first /= total_weight;
+        BOOST_FOREACH(Particle &particle, particles) particle.weight /= total_weight;
         
         
         // replace particles doing worse than the median with new ones
         // drawn from the prior distribution
         sort(particles.begin(), particles.end(), compare_weight);
         for(unsigned int i = 0; i < particles.size()/2; i++) {
-            pair_type &pair = particles[i];
-            pair.first = 1./particles.size();
-            pair.second = Particle(goal, current_objs, img);
+            Particle &particle = particles[i];
+            particle = Particle(goal, current_objs, img);
+            particle.weight = 1./particles.size();
         }
         
         
         // find mode
-        pair_type max_p; max_p.first = -1;
-        BOOST_FOREACH(pair_type &pair, particles)
-            if(pair.first > max_p.first) max_p = pair;
-        assert(max_p.first >= 0);
+        Particle max_p; max_p.weight = -1;
+        BOOST_FOREACH(Particle &particle, particles)
+            if(particle.weight > max_p.weight) max_p = particle;
+        assert(max_p.weight >= 0);
         
         
         { // send marker message for particle visualization
@@ -455,12 +456,12 @@ struct GoalExecutor {
             msg.type = visualization_msgs::Marker::POINTS;
             msg.scale = make_xyz<Vector3>(.1, .1, 1);
             msg.color.a = 1;
-            BOOST_FOREACH(pair_type &pair, particles) {
+            BOOST_FOREACH(Particle &particle, particles) {
                 BOOST_FOREACH(const PoseGuess &poseguess,
-                        pair.second.poseguesses) {
+                        particle.poseguesses) {
                     msg.points.push_back(vec2xyz<Point>(poseguess.pos));
                     msg.colors.push_back(make_rgba<ColorRGBA>(
-                        pair.first/max_p.first, 0, 1-pair.first/max_p.first, 1));
+                        particle.weight/max_p.weight, 0, 1-particle.weight/max_p.weight, 1));
                 }
             }
             particles_pub.publish(msg);
@@ -470,16 +471,16 @@ struct GoalExecutor {
             PoseStamped msg;
             msg.header.frame_id = goal.header.frame_id;
             msg.header.stamp = image->header.stamp;
-            msg.pose.position = vec2xyz<Point>(max_p.second.poseguesses[0].pos);
+            msg.pose.position = vec2xyz<Point>(max_p.poseguesses[0].pos);
             msg.pose.orientation = quat2xyzw<geometry_msgs::Quaternion>(
-                max_p.second.poseguesses[0].q);
+                max_p.poseguesses[0].q);
             pose_pub.publish(msg);
         }
         
         { // send action feedback
             object_finder::FindFeedback feedback;
             BOOST_FOREACH(const PoseGuess &poseguess,
-                    max_p.second.poseguesses) {
+                    max_p.poseguesses) {
                 TargetRes targetres;
                 targetres.pose.position = vec2xyz<Point>(poseguess.pos);
                 targetres.pose.orientation =
@@ -498,18 +499,18 @@ struct GoalExecutor {
                 feedback.targetreses.push_back(targetres);
             }
             RenderBuffer rb(img);
-            feedback.P = max_p.second.P(img, rb);
+            feedback.P = max_p.P(img, rb);
             feedback.P_within_10cm = 0;
-            BOOST_FOREACH(pair_type &pair, particles)
-                if(pair.second.dist(max_p.second) <= .2)
-                    feedback.P_within_10cm += pair.first;
+            BOOST_FOREACH(Particle &particle, particles)
+                if(particle.dist(max_p) <= .2)
+                    feedback.P_within_10cm += particle.weight;
             feedback_callback(feedback);
         }
         
         if(image_pub.getNumSubscribers()) { // send debug image
             vector<int> dbg_image(image->width*image->height, 0);
             RenderBuffer rb(img);
-            max_p.second.P(img, rb, &dbg_image);
+            max_p.P(img, rb, &dbg_image);
             
             Image msg;
             msg.header = image->header;
