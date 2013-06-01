@@ -240,6 +240,7 @@ struct PoseGuess {
 struct Particle {
     vector<PoseGuess> poseguesses;
     vector<double> last_Ps;
+    double last_P;
     Particle() { }
     Particle(const object_finder::FindGoal &goal,
              const vector<boost::shared_ptr<Obj> > &objs,
@@ -289,6 +290,7 @@ struct Particle {
             P *= this_P;
             last_Ps.push_back(this_P);
         }
+        last_P = P;
         return P;
     }
     double dist(const Particle &other) {
@@ -324,12 +326,6 @@ struct GoalExecutor {
     typedef std::pair<double, Particle> pair_type;
     std::vector<pair_type> particles;
     ros::Time current_stamp;
-    double infinite_p;
-    
-
-    static bool compare_weight(const pair_type a, const pair_type b) {
-        return a.first < b.first;
-    }
     
     GoalExecutor(const object_finder::FindGoal &goal,
                  boost::function1<void, const object_finder::FindFeedback&> 
@@ -366,11 +362,12 @@ struct GoalExecutor {
             particles.push_back(
                 make_pair(1./N, Particle(goal, current_objs, img)));
         
-        infinite_p = 1./N;
-        
         current_stamp = t;
     }
     
+    static bool compare_weight(const pair_type a, const pair_type b) {
+        return a.second.last_P < b.second.last_P;
+    }
     void callback(const ImageConstPtr& image,
                   const CameraInfoConstPtr& cam_info) {
         assert(image->header.stamp == cam_info->header.stamp);
@@ -425,25 +422,23 @@ struct GoalExecutor {
             BOOST_FOREACH(pair_type &pair, particles)
                 pair.first *= pair.second.P(img, rb);
         }
-        infinite_p *= 1.0001; // no observation should result in a P of 1
         
-        // replace particles doing worse than the median with new ones
-        // drawn from the prior distribution
-        sort(particles.begin(), particles.end(), compare_weight);
-        for(unsigned int i = 0; i < particles.size()/2; i++) {
-            pair_type &pair = particles[i];
-            if(pair.first < infinite_p) {
-                pair.first = infinite_p;
-                pair.second = Particle(goal, current_objs, img);
-            }
-        }
         
         // normalize weights
         double total_weight = 0;
         BOOST_FOREACH(pair_type &pair, particles) total_weight += pair.first;
         
         BOOST_FOREACH(pair_type &pair, particles) pair.first /= total_weight;
-        infinite_p /= total_weight;
+        
+        
+        // replace particles doing worse than the median with new ones
+        // drawn from the prior distribution
+        sort(particles.begin(), particles.end(), compare_weight);
+        for(unsigned int i = 0; i < particles.size()/2; i++) {
+            pair_type &pair = particles[i];
+            pair.first = 1./particles.size();
+            pair.second = Particle(goal, current_objs, img);
+        }
         
         
         // find mode
