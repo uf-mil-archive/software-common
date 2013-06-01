@@ -79,6 +79,7 @@ struct PoseGuess {
     RenderBuffer::RegionType fg_region;
     
     Vector3d last_color;
+    double last_P;
     
     PoseGuess() { }
     PoseGuess(const TargetDesc &goal,
@@ -126,7 +127,7 @@ struct PoseGuess {
         }
         return p;
     }
-    PoseGuess predict(double amount) const {
+    PoseGuess predict() const {
         PoseGuess p(*this);
         if(uniform() < .5) {
             return realpredict(.01);
@@ -167,6 +168,7 @@ struct PoseGuess {
         Result far_result = img.total_result - inner_result; //- outer_result;
         
         if(inner_result.count < 100 || outer_result.count < 100 || far_result.count < 100) {
+            last_P = 0.001;
             return 0.001;
             if(dbg_image) {
                 cout << endl;
@@ -233,6 +235,7 @@ struct PoseGuess {
             cout << "bad P: " << P << endl;
             assert(false);
         }
+        last_P = P;
         return P;
     }
 };
@@ -240,7 +243,6 @@ struct PoseGuess {
 struct Particle {
     double weight;
     vector<PoseGuess> poseguesses;
-    vector<double> last_Ps;
     double last_P;
     Particle() { }
     Particle(const object_finder::FindGoal &goal,
@@ -252,44 +254,36 @@ struct Particle {
                 objs[&targetdesc - goal.targetdescs.data()], image));
         }
     }
-    Particle predict(double dt, const TaggedImage &image) const {
+    Particle predict(const TaggedImage &image) const {
         Particle p(*this);
         int index = poseguesses.size() * uniform();
         if(uniform() < .5) { // diffuse
             PoseGuess &poseguess = p.poseguesses[index];
-            poseguess = poseguess.predict(dt);
+            poseguess = poseguess.predict();
         } else { // resample
             PoseGuess &poseguess = p.poseguesses[index];
             poseguess = PoseGuess(poseguess.goal, poseguess.obj, image);
         }
-        BOOST_FOREACH(PoseGuess &poseguess, p.poseguesses) {
-            bool bad = false;
-            BOOST_FOREACH(PoseGuess &poseguess2, p.poseguesses) {
-                if(&poseguess2 == &poseguess) break;
-                if((poseguess2.pos - poseguess.pos).norm() < .1) {
-                    bad = true;
-                    break;
-                }
-            }
-            if(bad) {
-                poseguess = PoseGuess(poseguess.goal, poseguess.obj, image);
-            }
-        }
         return p;
+    }
+    static bool compare_last_P(const PoseGuess &a, const PoseGuess &b) {
+        return a.last_P < b.last_P;
     }
     double P(const TaggedImage &img, RenderBuffer &rb, vector<int>* dbg_image=NULL) {
         rb.reset(img);
-        BOOST_FOREACH(PoseGuess &poseguess, poseguesses)
+        BOOST_REVERSE_FOREACH(PoseGuess &poseguess, poseguesses) {
             poseguess.draw1(rb, dbg_image);
-        BOOST_FOREACH(PoseGuess &poseguess, poseguesses)
             poseguess.draw2(rb, dbg_image);
+        }
         vector<ResultWithArea> results = rb.get_results();
-        double P = 1;
-        last_Ps.clear();
         BOOST_FOREACH(PoseGuess &poseguess, poseguesses) {
-            double this_P = poseguess.P(img, results, dbg_image);
-            P *= this_P;
-            last_Ps.push_back(this_P);
+            poseguess.P(img, results, dbg_image); // sets poseguess.last_P
+        }
+        sort(poseguesses.begin(), poseguesses.end(), compare_last_P);
+        reverse(poseguesses.begin(), poseguesses.end());
+        double P = 1;
+        BOOST_FOREACH(PoseGuess &poseguess, poseguesses) {
+            P *= poseguess.last_P;
         }
         last_P = P;
         return P;
@@ -302,6 +296,14 @@ struct Particle {
                 (poseguesses[i].pos - other.poseguesses[i].pos).norm());
         }
         return max_dist;
+    }
+    void accumulate_successors(std::vector<Particle> &res, const TaggedImage &img, double N, const std::vector<Particle> &particles) {
+        int count = N * weight + uniform();
+        for(int i = 0; i < count; i++) {
+            res.push_back(i==0 ?
+                *this :
+                predict(img));
+        }
     }
 };
 
@@ -366,9 +368,6 @@ struct GoalExecutor {
         current_stamp = t;
     }
     
-    static bool compare_weight(const Particle &a, const Particle &b) {
-        return a.last_P < b.last_P;
-    }
     void callback(const ImageConstPtr& image,
                   const CameraInfoConstPtr& cam_info) {
         assert(image->header.stamp == cam_info->header.stamp);
@@ -406,16 +405,14 @@ struct GoalExecutor {
         // residual resampling
         std::vector<Particle> new_particles;
         BOOST_FOREACH(Particle &particle, particles) {
-            int count = N * particle.weight + uniform();
-            for(int i = 0; i < count; i++) {
-                new_particles.push_back(i==0 ?
-                    particle :
-                    particle.predict(dt, img));
-            }
+            particle.accumulate_successors(new_particles, img, N*2/3., particles);
         }
-        particles.swap(new_particles);
-        BOOST_FOREACH(Particle &particle, particles)
+        for(unsigned int i = 0; i < N/3; i++) {
+            new_particles.push_back(Particle(goal, current_objs, img));
+        }
+        BOOST_FOREACH(Particle &particle, new_particles)
             particle.weight = 1./particles.size();
+        particles.swap(new_particles);
         
         // update weights
         {
@@ -430,16 +427,6 @@ struct GoalExecutor {
         BOOST_FOREACH(Particle &particle, particles) total_weight += particle.weight;
         
         BOOST_FOREACH(Particle &particle, particles) particle.weight /= total_weight;
-        
-        
-        // replace particles doing worse than the median with new ones
-        // drawn from the prior distribution
-        sort(particles.begin(), particles.end(), compare_weight);
-        for(unsigned int i = 0; i < particles.size()/2; i++) {
-            Particle &particle = particles[i];
-            particle = Particle(goal, current_objs, img);
-            particle.weight = 1./particles.size();
-        }
         
         
         // find mode
