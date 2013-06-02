@@ -9,6 +9,7 @@ struct Segment {
     int x_start, x_end; // [x_start, x_end)
     double z_0, z_slope; // z = z_0 + z_slope * x
     int region;
+    Segment() { }
     Segment(int x_start, int x_end, double z_0, double z_slope, int region) :
         x_start(x_start), x_end(x_end), z_0(z_0), z_slope(z_slope), region(region) { }
     Segment clip(int x_start, int x_end) const {
@@ -29,25 +30,42 @@ struct Segment {
     }
 };
 
+
+    
+static void append(Segment *list, unsigned int &size, const Segment &new_segment) {
+    if(size && list[size-1].x_end == new_segment.x_start && list[size-1].region == new_segment.region) {
+        list[size-1].x_end = new_segment.x_end;
+    } else {
+        list[size] = new_segment; size++;
+    }
+}
+
 struct ScanLine {
     std::vector<Segment> segments;
+    
     void add_segment(const Segment &add) {
+        Segment new_segments[2*segments.size() + 1];
+        unsigned int new_segments_size = 0;
+        
         // currently this ignores depth and new areas always overwrite old ones
-        std::vector<Segment> new_segments;
         BOOST_FOREACH(const Segment &segment, segments) {
             Segment new_segment = segment.clip(std::min(segment.x_start, add.x_start), std::min(segment.x_end, add.x_start));
             if(new_segment.is_real()) {
-                new_segments.push_back(new_segment);
+                new_segments[new_segments_size] = new_segment; new_segments_size++;
             }
         }
-        new_segments.push_back(add);
+        append(new_segments, new_segments_size, add);
         BOOST_FOREACH(const Segment &segment, segments) {
             Segment new_segment = segment.clip(std::max(segment.x_start, add.x_end), std::max(segment.x_end, add.x_end));
             if(new_segment.is_real()) {
-                new_segments.push_back(new_segment);
+                append(new_segments, new_segments_size, new_segment);
             }
         }
-        segments = new_segments;
+        
+        segments.resize(new_segments_size);
+        for(unsigned int i = 0; i < new_segments_size; i++) {
+            segments[i] = new_segments[i];
+        }
         /*
         std::vector<Segment> new_segments;
         BOOST_FOREACH(const Segment &segment, segments) {
