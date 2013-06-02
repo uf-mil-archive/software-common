@@ -308,8 +308,6 @@ struct Particle {
 };
 
 struct GoalExecutor {
-    static const int N = 1000;
-    
     ros::NodeHandle nh;
     ros::NodeHandle private_nh;
     object_finder::FindGoal goal;
@@ -326,6 +324,7 @@ struct GoalExecutor {
     
     vector<boost::shared_ptr<Obj> > current_objs;
     
+    double N;
     std::vector<Particle> particles;
     ros::Time current_stamp;
     
@@ -360,6 +359,7 @@ struct GoalExecutor {
     void init_particles(ros::Time t, const TaggedImage &img) {
         particles.clear();
         
+        N = 300;
         for(int i = 0; i < N; i++)
             particles.push_back(Particle(goal, current_objs, img));
         BOOST_FOREACH(Particle &particle, particles)
@@ -401,6 +401,8 @@ struct GoalExecutor {
             ROS_ERROR("dropped out of order camera frame");
             return;
         }
+        
+        ros::WallTime start_time = ros::WallTime::now();
         
         // residual resampling
         std::vector<Particle> new_particles;
@@ -493,6 +495,14 @@ struct GoalExecutor {
                     feedback.P_within_10cm += particle.weight;
             feedback_callback(feedback);
         }
+        
+        ros::WallTime end_time = ros::WallTime::now();
+        if(end_time - start_time > ros::WallDuration(.1)) {
+            N *= .9;
+        } else {
+            N /= .9;
+        }
+        cout << "N = " << N << endl;
         
         if(image_pub.getNumSubscribers()) { // send debug image
             vector<int> dbg_image(image->width*image->height, 0);
