@@ -309,6 +309,7 @@ struct Particle {
 
 struct GoalExecutor {
     ros::NodeHandle nh;
+    ros::NodeHandle camera_nh;
     ros::NodeHandle private_nh;
     object_finder::FindGoal goal;
     
@@ -331,11 +332,12 @@ struct GoalExecutor {
     GoalExecutor(const object_finder::FindGoal &goal,
                  boost::function1<void, const object_finder::FindFeedback&> 
                     feedback_callback) :
+        camera_nh("camera"),
         private_nh("~"),
         goal(goal),
-        image_sub(nh, "camera/image_rect_color", 1),
-        info_sub(nh, "camera/camera_info", 1),
-        info_tf_filter(info_sub, listener, "", 10),
+        image_sub(camera_nh, "image_rect_color", 1),
+        info_sub(camera_nh, "camera_info", 1),
+        info_tf_filter(info_sub, listener, goal.header.frame_id, 10),
         sync(image_sub, info_tf_filter, 10),
         feedback_callback(feedback_callback) {
         
@@ -344,7 +346,6 @@ struct GoalExecutor {
                 ? boost::make_shared<Obj>(targetdesc.object_filename)
                 : boost::shared_ptr<Obj>());
         }
-        info_tf_filter.setTargetFrame(goal.header.frame_id);
         
         particles_pub = private_nh.advertise<visualization_msgs::Marker>(
             "particles", 1);
@@ -373,7 +374,7 @@ struct GoalExecutor {
         assert(image->header.stamp == cam_info->header.stamp);
         assert(image->header.frame_id == cam_info->header.frame_id);
         
-        double dt = (image->header.stamp - current_stamp).toSec();
+        //double dt = (image->header.stamp - current_stamp).toSec();
         current_stamp = image->header.stamp;
         
         // get map from camera transform
