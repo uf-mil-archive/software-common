@@ -17,7 +17,7 @@ static Vector3d flat_vector(Vector2d x) {
     return Vector3d(x[0], x[1], 0);
 }
 
-void Component::draw(RenderBuffer &renderbuffer, int region, Vector3d pos, Quaterniond orientation, vector<int>* dbg_image) const {
+void Component::draw(RenderBuffer &renderbuffer, int region, Vector3d pos, Quaterniond orientation) const {
     BOOST_FOREACH(const Triangle &tri, triangles) {
         // XXX one corner being behind the camera does not mean the triangle is invisible!
         // instead, it is an "external triangle" that needs to be handled specially
@@ -69,11 +69,6 @@ void Component::draw(RenderBuffer &renderbuffer, int region, Vector3d pos, Quate
                 double z_0 = 0; // XXX
                 double z_slope = 0; // XXX
                 renderbuffer.scanlines[Y].add_segment(Segment(X1, X2, z_0, z_slope, region));
-                if(dbg_image) {
-                    for(int X = X1; X < X2; X++) {
-                        (*dbg_image)[Y * renderbuffer.img->cam_info.width + X] += region+1;
-                    }
-                }
             }
         }
     }

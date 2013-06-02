@@ -148,6 +148,16 @@ struct RenderBuffer {
         }
         return results2;
     }
+    void draw_debug_regions(std::vector<int> &dbg_image) {
+        for(unsigned int Y = 0; Y < img->cam_info.height; Y++) {
+            ScanLine &scanline = scanlines[Y];
+            BOOST_FOREACH(const Segment &segment, scanline.segments) {
+                for(int X = segment.x_start; X < segment.x_end; X++) {
+                    dbg_image[Y * img->cam_info.width + X] = segment.region + 1;
+                }
+            }
+        }
+    }
 };
 
 #endif

@@ -66,7 +66,7 @@ bool intersect_plane_sphere(Vector3d plane_axis1, Vector3d plane_axis2,
     return true;
 }
 
-bool _accumulate_sphere_scanline(RenderBuffer &renderbuffer, RenderBuffer::RegionType region, Vector3d sphere_pos_camera, double sphere_radius, uint32_t yy, vector<int>* dbg_image=NULL) {
+bool _accumulate_sphere_scanline(RenderBuffer &renderbuffer, RenderBuffer::RegionType region, Vector3d sphere_pos_camera, double sphere_radius, uint32_t yy) {
     const TaggedImage &image = *renderbuffer.img;
     double y = yy;
     
@@ -112,11 +112,6 @@ bool _accumulate_sphere_scanline(RenderBuffer &renderbuffer, RenderBuffer::Regio
     double z_slope = 0; // XXX
     renderbuffer.scanlines[yy].add_segment(Segment(xstart, xend, z_0, z_slope, region));
     renderbuffer.areas[region] += maxx - minx;
-    if(dbg_image) {
-        for(int X = xstart; X < xend; X++) {
-            (*dbg_image)[yy * image.cam_info.width + X] += 1;
-        }
-    }
     
     /*cout << yy << " "
         << "(" << point1_screen(0) << " " << point1_screen(1) << ") "
@@ -125,7 +120,7 @@ bool _accumulate_sphere_scanline(RenderBuffer &renderbuffer, RenderBuffer::Regio
     return true;
 }
 
-void sphere_draw(RenderBuffer &renderbuffer, RenderBuffer::RegionType region, Eigen::Vector3d pos, double radius, std::vector<int>* dbg_image) {
+void sphere_draw(RenderBuffer &renderbuffer, RenderBuffer::RegionType region, Eigen::Vector3d pos, double radius) {
     const TaggedImage &image = *renderbuffer.img;
     // get the sum of the color values (along with the count) of the pixels
     // that are included within the provided sphere specified by
@@ -137,11 +132,11 @@ void sphere_draw(RenderBuffer &renderbuffer, RenderBuffer::RegionType region, Ei
     int32_t y_center_hint = max(min(center_screen(1), (double)image.cam_info.height-1), 0.) + .5;
     
     for(int32_t yy = y_center_hint; yy >= 0; yy--) {
-        if(!_accumulate_sphere_scanline(renderbuffer, region, pos_camera, radius, yy, dbg_image))
+        if(!_accumulate_sphere_scanline(renderbuffer, region, pos_camera, radius, yy))
             break;
     }
     for(int32_t yy = y_center_hint + 1; yy < (int32_t)image.cam_info.height; yy++) {
-        if(!_accumulate_sphere_scanline(renderbuffer, region, pos_camera, radius, yy, dbg_image))
+        if(!_accumulate_sphere_scanline(renderbuffer, region, pos_camera, radius, yy))
             break;
     }
 }

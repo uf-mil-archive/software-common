@@ -5,6 +5,6 @@
 
 #include "renderbuffer.h"
 
-void sphere_draw(RenderBuffer &renderbuffer, RenderBuffer::RegionType region, Eigen::Vector3d pos, double radius, std::vector<int>* dbg_image=NULL);
+void sphere_draw(RenderBuffer &renderbuffer, RenderBuffer::RegionType region, Eigen::Vector3d pos, double radius);
 
 #endif

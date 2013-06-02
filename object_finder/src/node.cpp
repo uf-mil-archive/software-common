@@ -136,33 +136,31 @@ struct PoseGuess {
         }
         return p;
     }
-    void draw1(RenderBuffer &renderbuffer, vector<int>* dbg_image=NULL) {
+    void draw1(RenderBuffer &renderbuffer) {
         bg_region = renderbuffer.new_region();
         if(!obj) {
-            sphere_draw(renderbuffer, bg_region, pos, 2*goal.sphere_radius,
-                dbg_image);
+            sphere_draw(renderbuffer, bg_region, pos, 2*goal.sphere_radius);
             return;
         }
         BOOST_FOREACH(const Component &component, obj->components) {
             if(component.name.find("background_") == 0) {
-                component.draw(renderbuffer, bg_region, pos, q, dbg_image);
+                component.draw(renderbuffer, bg_region, pos, q);
             }
         }
     }
-    void draw2(RenderBuffer &renderbuffer, vector<int>* dbg_image=NULL) {
+    void draw2(RenderBuffer &renderbuffer) {
         fg_region = renderbuffer.new_region();
         if(!obj) {
-            sphere_draw(renderbuffer, fg_region, pos, goal.sphere_radius,
-                dbg_image);
+            sphere_draw(renderbuffer, fg_region, pos, goal.sphere_radius);
             return;
         }
         BOOST_FOREACH(const Component &component, obj->components) {
             if(component.name.find("solid_") == 0) {
-                component.draw(renderbuffer, fg_region, pos, q, dbg_image);
+                component.draw(renderbuffer, fg_region, pos, q);
             }
         }
     }
-    double P(const TaggedImage &img, const vector<ResultWithArea> &results, vector<int>* dbg_image=NULL) {
+    double P(const TaggedImage &img, const vector<ResultWithArea> &results, bool print_debug_info=false) {
         Result inner_result = results[fg_region];
         Result outer_result = results[bg_region];
         Result far_result = img.total_result - inner_result; //- outer_result;
@@ -170,7 +168,7 @@ struct PoseGuess {
         if(inner_result.count < 100 || outer_result.count < 100 || far_result.count < 100) {
             last_P = 0.001;
             return 0.001;
-            if(dbg_image) {
+            if(print_debug_info) {
                 cout << endl;
                 cout << endl;
                 cout << "NOT VISIBLE" << endl;
@@ -188,7 +186,7 @@ struct PoseGuess {
         double P = 1;
         {
             if(results[fg_region].count < 100) {
-                if(dbg_image) {
+                if(print_debug_info) {
                     cout << "TOO SMALL FG" << endl;
                 }
                 P *= 0.5;
@@ -203,7 +201,7 @@ struct PoseGuess {
         }
         {
             if(results[bg_region].count < 100) {
-                if(dbg_image) {
+                if(print_debug_info) {
                     cout << "TOO SMALL BG" << endl;
                 }
                 P *= 0.5;
@@ -217,7 +215,7 @@ struct PoseGuess {
             }
         }
         
-        if(dbg_image) {
+        if(print_debug_info) {
             cout << endl;
             cout << endl;
             cout << "inner count" << inner_result.count << endl;
@@ -269,15 +267,15 @@ struct Particle {
     static bool compare_last_P(const PoseGuess &a, const PoseGuess &b) {
         return a.last_P < b.last_P;
     }
-    double P(const TaggedImage &img, RenderBuffer &rb, vector<int>* dbg_image=NULL) {
+    double P(const TaggedImage &img, RenderBuffer &rb, bool print_debug_info=false) {
         rb.reset(img);
         BOOST_REVERSE_FOREACH(PoseGuess &poseguess, poseguesses) {
-            poseguess.draw1(rb, dbg_image);
-            poseguess.draw2(rb, dbg_image);
+            poseguess.draw1(rb);
+            poseguess.draw2(rb);
         }
         vector<ResultWithArea> results = rb.get_results();
         BOOST_FOREACH(PoseGuess &poseguess, poseguesses) {
-            poseguess.P(img, results, dbg_image); // sets poseguess.last_P
+            poseguess.P(img, results, print_debug_info); // sets poseguess.last_P
         }
         sort(poseguesses.begin(), poseguesses.end(), compare_last_P);
         reverse(poseguesses.begin(), poseguesses.end());
@@ -506,9 +504,11 @@ struct GoalExecutor {
         cout << "N = " << N << endl;
         
         if(image_pub.getNumSubscribers()) { // send debug image
-            vector<int> dbg_image(image->width*image->height, 0);
             RenderBuffer rb(img);
-            max_p.P(img, rb, &dbg_image);
+            max_p.P(img, rb, true);
+            
+            vector<int> dbg_image(image->width*image->height, 0);
+            rb.draw_debug_regions(dbg_image);
             
             Image msg;
             msg.header = image->header;
@@ -522,7 +522,7 @@ struct GoalExecutor {
                 for(unsigned int x = 0; x < image->width; x++) {
                     Vector3d orig_color = img.get_pixel(y, x);
                     msg.data[msg.step*y + 3*x + 0] =
-                        100*dbg_image[image->width*y + x];
+                        255.*dbg_image[image->width*y + x]/(rb.areas.size() + 1);
                     msg.data[msg.step*y + 3*x + 1] = 255*orig_color[1];
                     msg.data[msg.step*y + 3*x + 2] = 255*orig_color[2];
                 }

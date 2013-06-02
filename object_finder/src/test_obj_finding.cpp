@@ -3,6 +3,7 @@
 #include <boost/foreach.hpp>
 
 #include "obj_finding.h"
+#include "sphere_finding.h"
 
 using namespace std;
 using namespace Eigen;
@@ -34,7 +35,6 @@ int main() {
     for(int i = 0; i < 12; i++) camera_info.P[i] = tmp[i];
     
     TaggedImage img(image, camera_info, Affine3d::Identity());
-    vector<int> dbg_image(width*height, 0);
     
     //write(dbg_image, width, height, "tmp.pgm");
     
@@ -42,8 +42,13 @@ int main() {
     
     Obj obj = Obj("shooter.obj");
     BOOST_FOREACH(const Component &component, obj.components) {
-        component.draw(rb, rb.new_region(), Vector3d(0, 0, 2), Quaterniond(.5, .5, -.5, .5), &dbg_image);
+        component.draw(rb, rb.new_region(), Vector3d(0, 0, 2), Quaterniond(.5, .5, -.5, .5));
     }
+    sphere_draw(rb, rb.new_region(), Vector3d(1.5, 0, 2), .3);
+    sphere_draw(rb, rb.new_region(), Vector3d(1.5, 0, 2), .2);
+    
+    vector<int> dbg_image(width*height, 0);
+    rb.draw_debug_regions(dbg_image);
     
     vector<ResultWithArea> results = rb.get_results();
     
