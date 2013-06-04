@@ -12,9 +12,7 @@ NavigationComputer::NavigationComputer(const Config &config) :
 {
     y_d.fill(0);
     std::fill(d_valid.begin(), d_valid.end(), false);
-    y_a_log.reserve(config.y_a_log_size);
 
-    stats.y_a_count = 0;
     stats.y_m_count = 0;
     stats.y_d_count = 0;
     stats.y_z_count = 0;
@@ -45,17 +43,19 @@ void NavigationComputer::updateINS(const INS::Measurement &measurement,
     double T_delta = measurement_time - ins_time;
     int updates = static_cast<int>(round(T_delta / config.T_imu));
 
-    if (updates < 0) {
-        ROS_WARN_STREAM("Out of order IMU measurement, dropping "
-                        "(T_delta " << T_delta << ")");
+    if (updates <= 0) {
+        // T_imu could be incorrect, or just a message from the past
+        ROS_WARN_STREAM("Out of order or too frequent IMU measurements, dropping "
+                        "(T_delta " << T_delta << " T_imu " << config.T_imu << ")");
         return;
     }
 
     if (updates >= 20) {
         // too many dropped messages, just advance time
-        ROS_WARN_STREAM("Dropped " << updates << " INS messages, skipping ahead");
-        ins_time += updates*config.T_imu;
-        return;
+        ROS_WARN_STREAM("Dropped or too infrequent IMU measurements, advancing time "
+                        "(T_delta " << T_delta << " T_imu " << config.T_imu << ")");
+        ins_time += (updates-1)*config.T_imu;
+        updates = 1;
     }
 
     if (updates >= 3) {
@@ -67,12 +67,6 @@ void NavigationComputer::updateINS(const INS::Measurement &measurement,
         ins->update(measurement, config.T_imu);
         ins_time += config.T_imu;
     }
-
-    // Save the accelerometer reading for the accelerometer hack
-    if (y_a_log.size() == config.y_a_log_size) {
-        y_a_log.erase(y_a_log.begin());
-    }
-    y_a_log.push_back(measurement.y_a);
 }
 
 void NavigationComputer::updateMag(const Eigen::Vector3d &y_m,
@@ -192,45 +186,20 @@ void NavigationComputer::predict(int predicts) {
 void NavigationComputer::update() {
     Eigen::Matrix3d R_imu2nav = ins->getState().q_imu2nav.matrix();
 
-    Eigen::Matrix<double, 11, 1> z;
+    Kalman::MeasurementVec z;
     z.fill(0);
-    bool a_valid = false;
     bool m_valid = false;
     bool d_valid_ = false;
     bool z_valid = false;
 
-    // accelerometer hack, only activates if the y_a_log is full
-    if (y_a_log.size() == config.y_a_log_size) {
-        // compute mean of entire y_a_log
-        Eigen::Vector3d y_a_mean = mean(Eigen::Vector3d::Zero(),
-                                        y_a_log.begin(),
-                                        y_a_log.end());
-        // compute the error in magnitudes
-        double y_a_norm_error = (y_a_mean - ins->getState().b_a).norm() - config.init.g_nav.norm();
-        stats.y_a_norm_error = y_a_norm_error;
-
-        // if the error is low enough, we assume there are no external accelerations
-        // and apply the hack
-        if (fabs(y_a_norm_error) < config.y_a_max_norm_error) {
-            // only average data from the middle of the buffer, where
-            // we are most certain there are no external accelerations
-            Eigen::Vector3d y_a = mean(Eigen::Vector3d::Zero(),
-                                       y_a_log.begin() + y_a_log.size()/4,
-                                       y_a_log.begin() + 3*y_a_log.size()/4);
-            z.segment<3>(0) = y_a - ins->getState().b_a -R_imu2nav.transpose()*ins->getState().g_nav;
-            a_valid = true;
-            stats.y_a_count++;
-        }
-    }
-
     if (y_m) {
-        z.segment<3>(3) = *y_m - R_imu2nav.transpose()*config.update.m_nav;
+        z.segment<3>(0) = *y_m - R_imu2nav.transpose()*config.update.m_nav;
         m_valid = true;
         stats.y_m_count++;
     }
 
     if (std::count(d_valid.begin(), d_valid.end(), true) > 0) {
-        z.segment<4>(6) = y_d - config.update.beam_mat*(
+        z.segment<4>(3) = y_d - config.update.beam_mat*(
             R_imu2nav.transpose()*ins->getState().v_nav +
             ins->getState().w_imu.cross(config.update.r_imu2dvl));
         d_valid_ = true;
@@ -238,16 +207,16 @@ void NavigationComputer::update() {
     }
 
     if (y_z) {
-        z[10] = *y_z - -(ins->getState().p_nav + R_imu2nav*config.update.r_imu2depth)[2];
+        z[7] = *y_z - -(ins->getState().p_nav + R_imu2nav*config.update.r_imu2depth)[2];
         z_valid = true;
         stats.y_z_count++;
     }
 
-    if (!a_valid && !m_valid && !d_valid_ && !z_valid) {
+    if (!m_valid && !d_valid_ && !z_valid) {
         return;
     }
 
-    kalman.update(z, a_valid, m_valid, d_valid, z_valid, ins->getState(), config.update);
+    kalman.update(z, m_valid, d_valid, z_valid, ins->getState(), config.update);
 
     y_m = boost::none;
     std::fill(d_valid.begin(), d_valid.end(), false);

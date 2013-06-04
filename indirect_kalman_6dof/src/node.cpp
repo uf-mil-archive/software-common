@@ -52,16 +52,11 @@ struct Node {
         ROS_ASSERT(private_nh.getParam("f_kalman", f_kalman));
         config.T_kalman = 1 / f_kalman;
 
-        ROS_ASSERT(private_nh.getParam("y_a_max_norm_error", config.y_a_max_norm_error));
-        config.y_a_log_size = get_uint(private_nh, "y_a_log_size");
-
         config.predict.R_g = vec2diag(uf_common::get_Vector3(private_nh, "R_g"));
         config.predict.R_a = vec2diag(uf_common::get_Vector3(private_nh, "R_a"));
         config.predict.Q_b_g = vec2diag(uf_common::get_Vector3(private_nh, "Q_b_g"));
-        config.predict.Q_b_a = vec2diag(uf_common::get_Vector3(private_nh, "Q_b_a"));
 
         config.update.R_g = config.predict.R_g;
-        config.update.R_a = 10*config.predict.R_a;
         config.update.R_m = vec2diag(uf_common::get_Vector3(private_nh, "R_m"));
         double R_d;
         ROS_ASSERT(private_nh.getParam("R_d", R_d));
@@ -180,17 +175,13 @@ struct Node {
             debugmsg.header.stamp = event.current_real;
             debugmsg.b_g = uf_common::vec2xyz<geometry_msgs::Vector3>(
                 state->filt.b_g);
-            debugmsg.b_a = uf_common::vec2xyz<geometry_msgs::Vector3>(
-                state->filt.b_a);
             debugmsg.a_imu = uf_common::vec2xyz<geometry_msgs::Vector3>(
                 state->filt.a_imu);
             debugmsg.w_imu = uf_common::vec2xyz<geometry_msgs::Vector3>(
                 state->filt.w_imu);
-            debugmsg.y_a_count = state->stats.y_a_count;
             debugmsg.y_m_count = state->stats.y_m_count;
             debugmsg.y_d_count = state->stats.y_d_count;
             debugmsg.y_z_count = state->stats.y_z_count;
-            debugmsg.y_a_norm_error = state->stats.y_a_norm_error;
             debug_pub.publish(debugmsg);
         }
     }

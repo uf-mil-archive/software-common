@@ -16,9 +16,6 @@ public:
         double T_kalman;
         double T_kalman_correction;
 
-        double y_a_max_norm_error;
-        unsigned int y_a_log_size;
-
         Kalman::PredictConfig predict;
         Kalman::UpdateConfig update;
         INSInitializer::Config init;
@@ -27,16 +24,14 @@ public:
     NavigationComputer(const Config &config);
 
     struct Stats {
-        unsigned int y_a_count;
         unsigned int y_m_count;
         unsigned int y_d_count;
         unsigned int y_z_count;
-        double y_a_norm_error;
     };
 
     struct State {
         INS::State filt;
-        Eigen::Matrix<double, 15, 15> cov;
+        Kalman::StateMat cov;
         Stats stats;
     };
 
@@ -69,7 +64,6 @@ private:
     double kalman_time;
     double last_correction_time;
 
-    std::vector<Eigen::Vector3d> y_a_log;
     boost::optional<Eigen::Vector3d> y_m;
     Eigen::Vector4d y_d;
     boost::array<bool, 4> d_valid;

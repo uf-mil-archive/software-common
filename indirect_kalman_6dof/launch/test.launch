@@ -15,7 +15,6 @@
       R_d: 0.0004
       R_z: 0.000004
       Q_b_g: [1.0e-10, 1.0e-10, 1.0e-10]
-      Q_b_a: [1.0e-10, 1.0e-10, 1.0e-10]
 
       init_accel_samples: 30
       init_mag_samples: 30

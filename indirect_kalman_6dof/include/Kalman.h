@@ -16,11 +16,13 @@ public:
         Eigen::Matrix3d R_g;
         Eigen::Matrix3d R_a;
         Eigen::Matrix3d Q_b_g;
-        Eigen::Matrix3d Q_b_a;
     };
 
-    const Eigen::Matrix<double, 15, 1> &getX() const { return x; }
-    const Eigen::Matrix<double, 15, 15> &getP() const { return P; }
+    typedef Eigen::Matrix<double, 12, 1> StateVec;
+    typedef Eigen::Matrix<double, 12, 12> StateMat;
+
+    const StateVec &getX() const { return x; }
+    const StateMat &getP() const { return P; }
     INS::Error getINSError() const;
     void resetINSError();
     void reset();
@@ -35,25 +37,23 @@ public:
         Eigen::Vector3d m_nav;
 
         Eigen::Matrix3d R_g;
-        Eigen::Matrix3d R_a;
         Eigen::Matrix3d R_m;
         Eigen::Matrix4d R_d;
         double R_z;
     };
 
-    void update(const Eigen::Matrix<double, 11, 1> &z,
-                bool a_valid,
+    typedef Eigen::Matrix<double, 8, 1> MeasurementVec;
+
+    void update(const MeasurementVec &z,
                 bool m_valid,
                 const boost::array<bool, 4> &d_valid,
                 bool z_valid,
                 const INS::State &ins,
                 const UpdateConfig &config);
 
-//private:
-    Eigen::Matrix<double, 15, 1> x;
-    Eigen::Matrix<double, 15, 15> P;
-
-    std::ofstream dbg;
+private:
+    StateVec x;
+    StateMat P;
 };
 
 #endif

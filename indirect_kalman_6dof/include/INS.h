@@ -19,7 +19,6 @@ public:
         Eigen::Vector3d v_nav;
         Eigen::Vector3d p_nav;
         Eigen::Vector3d b_g;
-        Eigen::Vector3d b_a;
     };
 
     // INS state variables
@@ -32,7 +31,6 @@ public:
         Eigen::Vector3d a_imu;
 
         Eigen::Vector3d b_g;
-        Eigen::Vector3d b_a;
         Eigen::Vector3d g_nav;
 
         void correct(const Error &error);

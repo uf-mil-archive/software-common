@@ -10,7 +10,6 @@ INS::INS(const Eigen::Quaterniond &init_q_imu2nav,
     state.w_imu.fill(0);
     state.a_imu.fill(0);
     state.b_g.fill(0);
-    state.b_a.fill(0);
     state.g_nav = g_nav;
 }
 
@@ -59,7 +58,7 @@ void INS::update(const Measurement &cur, double dt) {
     // Integrate a_imu to v_nav
     Eigen::Vector3d v_nav_prev = state.v_nav;
     Eigen::Vector3d a_imu_prev = state.a_imu;
-    state.a_imu = cur.y_a - state.b_a;
+    state.a_imu = cur.y_a;
     Eigen::Vector3d a_imu_mid = (state.a_imu + a_imu_prev)/2;
     Eigen::Quaterniond q_imu2nav_mid = (1/2.0) * (state.q_imu2nav + q_imu2nav_prev);
     q_imu2nav_mid.normalize();
@@ -83,7 +82,5 @@ void INS::State::correct(const Error &error) {
     v_nav += error.v_nav;
     p_nav += error.p_nav;
     w_imu -= error.b_g;
-    a_imu -= error.b_a;
     b_g += error.b_g;
-    b_a += error.b_a;
 }
