@@ -70,7 +70,7 @@ Quaterniond quat_from_rotvec(Vector3d r) {
     return Quaterniond(AngleAxisd(r.norm(), r.normalized()));
 }
 
-struct PoseGuess {
+struct Particle {
     TargetDesc goal;
     boost::shared_ptr<const Obj> obj;
     Vector3d pos;
@@ -80,9 +80,10 @@ struct PoseGuess {
     
     Vector3d last_color;
     double last_P;
+    double smoothed_last_P;
     
-    PoseGuess() { }
-    PoseGuess(const TargetDesc &goal,
+    Particle() { }
+    Particle(const TargetDesc &goal,
              boost::shared_ptr<const Obj> obj,
              const TaggedImage &image) :
         goal(goal),
@@ -105,15 +106,18 @@ struct PoseGuess {
             xyzw2quat(goal.prior_distribution.pose.orientation);
         if(goal.check_180z_flip && uniform() >= .5)
             q = q * Quaterniond(0, 0, 1, 0);
+        smoothed_last_P = 1;
     }
-    PoseGuess(const TargetDesc &goal,
+    Particle(const TargetDesc &goal,
              boost::shared_ptr<const Obj> obj,
              Vector3d pos, Quaterniond q) :
         goal(goal), obj(obj),
         pos(pos), q(q) {
+        assert(false);
     }
-    PoseGuess realpredict(double amount) const {
-        PoseGuess p(*this);
+    Particle realpredict(double amount) const {
+        Particle p(*this);
+        p.smoothed_last_P = 1.;
         // diffusion to test near solutions to try to find a better fit
         p.pos += amount * gaussvec();
         if(false) { // allow_rolling
@@ -127,14 +131,12 @@ struct PoseGuess {
         }
         return p;
     }
-    PoseGuess predict() const {
-        PoseGuess p(*this);
+    Particle predict() const {
         if(uniform() < .5) {
             return realpredict(.01);
         } else {
             return realpredict(.1);
         }
-        return p;
     }
     void draw1(RenderBuffer &renderbuffer) {
         bg_region = renderbuffer.new_region();
@@ -160,23 +162,25 @@ struct PoseGuess {
             }
         }
     }
-    double P(const TaggedImage &img, const vector<ResultWithArea> &results, bool print_debug_info=false) {
+    double P(const TaggedImage &img, RenderBuffer &rb, bool print_debug_info=false) {
+        draw2(rb);
+        draw1(rb);
+        vector<ResultWithArea> results = rb.get_results();
         Result inner_result = results[fg_region];
         Result outer_result = results[bg_region];
         Result far_result = img.total_result - inner_result; //- outer_result;
         
         if(inner_result.count < 100 || outer_result.count < 100 || far_result.count < 100) {
-            last_P = 0.001;
-            return 0.001;
             if(print_debug_info) {
                 cout << endl;
                 cout << endl;
                 cout << "NOT VISIBLE" << endl;
             }
             // not visible
+            return 0.001;
         }
         
-        last_color = inner_result.avg_color();
+        last_color = inner_result.avg_color(); // XXX
         
         Vector3d inner_color = inner_result.avg_color().normalized();
         Vector3d outer_color = outer_result.avg_color().normalized();
@@ -233,77 +237,70 @@ struct PoseGuess {
             cout << "bad P: " << P << endl;
             assert(false);
         }
-        last_P = P;
-        return P;
-    }
-};
-
-struct Particle {
-    vector<PoseGuess> poseguesses;
-    double last_P;
-    Particle() { }
-    Particle(const object_finder::FindGoal &goal,
-             const vector<boost::shared_ptr<Obj> > &objs,
-             const TaggedImage &image) {
-        
-        BOOST_FOREACH(const TargetDesc &targetdesc, goal.targetdescs) {
-            poseguesses.push_back(PoseGuess(targetdesc,
-                objs[&targetdesc - goal.targetdescs.data()], image));
-        }
-    }
-    Particle predict(const TaggedImage &image) const {
-        Particle p(*this);
-        int index = poseguesses.size() * uniform();
-        if(uniform() < .5) { // diffuse
-            PoseGuess &poseguess = p.poseguesses[index];
-            poseguess = poseguess.predict();
-        } else { // resample
-            PoseGuess &poseguess = p.poseguesses[index];
-            poseguess = PoseGuess(poseguess.goal, poseguess.obj, image);
-        }
-        return p;
-    }
-    static bool compare_last_P(const PoseGuess &a, const PoseGuess &b) {
-        return a.last_P < b.last_P;
-    }
-    double P(const TaggedImage &img, RenderBuffer &rb, bool print_debug_info=false) {
-        rb.reset(img);
-        BOOST_REVERSE_FOREACH(PoseGuess &poseguess, poseguesses) {
-            poseguess.draw1(rb);
-            poseguess.draw2(rb);
-        }
-        vector<ResultWithArea> results = rb.get_results();
-        BOOST_FOREACH(PoseGuess &poseguess, poseguesses) {
-            poseguess.P(img, results, print_debug_info); // sets poseguess.last_P
-        }
-        sort(poseguesses.begin(), poseguesses.end(), compare_last_P);
-        reverse(poseguesses.begin(), poseguesses.end());
-        double P = 1;
-        BOOST_FOREACH(PoseGuess &poseguess, poseguesses) {
-            P *= poseguess.last_P;
-        }
-        last_P = P;
         return P;
     }
     void update(const TaggedImage &img, RenderBuffer &rb, bool print_debug_info=false) {
-        P(img, rb, print_debug_info);
+        double P = this->P(img, rb, print_debug_info);
+        
+        last_P = P;
+        
+        smoothed_last_P = pow(smoothed_last_P, 0.9) * pow(last_P, 0.1);
     }
-    double dist(const Particle &other) {
-        assert(other.poseguesses.size() == poseguesses.size());
-        double max_dist = 0;
-        for(unsigned int i = 0; i < poseguesses.size(); i++) {
-            max_dist = max(max_dist,
-                (poseguesses[i].pos - other.poseguesses[i].pos).norm());
-        }
-        return max_dist;
-    }
-    void accumulate_successors(std::vector<Particle> &res, const TaggedImage &img, double N, const std::vector<Particle> &particles, double total_last_P) {
+    void accumulate_successors(std::vector<Particle> &res, const TaggedImage &img, double N, const std::vector<Particle> &particles, double total_last_P) const {
         int count = N * last_P/total_last_P + uniform();
         for(int i = 0; i < count; i++) {
             res.push_back(i==0 ?
                 *this :
-                predict(img));
+                predict());
         }
+    }
+};
+
+struct ParticleFilter {
+    TargetDesc targetdesc;
+    boost::shared_ptr<const Obj> obj;
+    std::vector<Particle> particles;
+    
+    ParticleFilter(const TargetDesc &targetdesc, boost::shared_ptr<const Obj> obj, const TaggedImage &img, double N) :
+        targetdesc(targetdesc),
+        obj(obj) {
+        for(int i = 0; i < N; i++)
+            particles.push_back(Particle(targetdesc, obj, img));
+    }
+    
+    RenderBuffer update(const TaggedImage &img, const RenderBuffer &rb, double N) {
+        
+        double original_total_last_P = 0;
+        BOOST_FOREACH(const Particle &particle, particles) original_total_last_P += particle.last_P;
+        
+        // residual resampling
+        std::vector<Particle> new_particles;
+        BOOST_FOREACH(const Particle &particle, particles) {
+            particle.accumulate_successors(new_particles, img, N*2/3., particles, original_total_last_P);
+        }
+        for(unsigned int i = 0; i < N/3; i++) {
+            new_particles.push_back(Particle(targetdesc, obj, img));
+        }
+        particles.swap(new_particles);
+        
+        // update particles
+        BOOST_FOREACH(Particle &particle, particles) {
+            RenderBuffer tmp_rb = rb;
+            particle.update(img, tmp_rb);
+        }
+        
+        RenderBuffer res = rb;
+        get_best().P(img, res);
+        return res;
+    }
+    
+    Particle get_best() const {
+        // find mode
+        Particle max_p; max_p.smoothed_last_P = -1;
+        BOOST_FOREACH(const Particle &particle, particles)
+            if(particle.smoothed_last_P > max_p.smoothed_last_P) max_p = particle;
+        assert(max_p.smoothed_last_P >= 0);
+        return max_p;
     }
 };
 
@@ -326,7 +323,7 @@ struct GoalExecutor {
     vector<boost::shared_ptr<Obj> > current_objs;
     
     double N;
-    std::vector<Particle> particles;
+    std::vector<ParticleFilter> particle_filters;
     ros::Time current_stamp;
     
     GoalExecutor(const object_finder::FindGoal &goal,
@@ -353,16 +350,17 @@ struct GoalExecutor {
         image_pub = private_nh.advertise<sensor_msgs::Image>(
             "debug_image", 1);
         
-        particles.clear();
         sync.registerCallback(boost::bind(&GoalExecutor::callback, this, _1, _2));
     }
     
-    void init_particles(ros::Time t, const TaggedImage &img) {
-        particles.clear();
-        
+    void init(ros::Time t, const TaggedImage &img) {
         N = 300;
-        for(int i = 0; i < N; i++)
-            particles.push_back(Particle(goal, current_objs, img));
+        
+        particle_filters.clear();
+        BOOST_FOREACH(const TargetDesc &targetdesc, goal.targetdescs) {
+            particle_filters.push_back(ParticleFilter(targetdesc,
+                current_objs[&targetdesc - goal.targetdescs.data()], img, N));
+        }
         
         current_stamp = t;
     }
@@ -388,14 +386,14 @@ struct GoalExecutor {
         
         TaggedImage img(*image, *cam_info, eigen_from_tf(transform));
         
-        if(particles.size() == 0) {
-            ROS_INFO("got first frame; initializing particles");
-            init_particles(image->header.stamp, img);
+        if(particle_filters.size() == 0) {
+            ROS_INFO("got first frame; initializing");
+            init(image->header.stamp, img);
         } else if(image->header.stamp < current_stamp - ros::Duration(1) ||
                   image->header.stamp > current_stamp + ros::Duration(5)) {
             ROS_INFO("time jumped too far backwards or forwards; "
-                "reinitializing particles");
-            init_particles(image->header.stamp, img);
+                "reinitializing");
+            init(image->header.stamp, img);
         } else if(image->header.stamp < current_stamp) {
             ROS_ERROR("dropped out of order camera frame");
             return;
@@ -403,37 +401,20 @@ struct GoalExecutor {
         
         ros::WallTime start_time = ros::WallTime::now();
         
+        //double total_smoothed_last_P = 0;
+        //BOOST_FOREACH(Particle &particle, particles) total_smoothed_last_P += particle.smoothed_last_P;
         
-        double original_total_last_P = 0;
-        BOOST_FOREACH(Particle &particle, particles) original_total_last_P += particle.last_P;
-        // residual resampling
-        std::vector<Particle> new_particles;
-        BOOST_FOREACH(Particle &particle, particles) {
-            particle.accumulate_successors(new_particles, img, N*2/3., particles, original_total_last_P);
-        }
-        for(unsigned int i = 0; i < N/3; i++) {
-            new_particles.push_back(Particle(goal, current_objs, img));
-        }
-        particles.swap(new_particles);
-        
-        // update particles
         {
             RenderBuffer rb(img);
-            BOOST_FOREACH(Particle &particle, particles)
-                particle.update(img, rb);
+            BOOST_FOREACH(ParticleFilter &particle_filter, particle_filters) {
+                rb = particle_filter.update(img, rb, N);
+            }
         }
         
-        
-        double total_last_P = 0;
-        BOOST_FOREACH(Particle &particle, particles) total_last_P += particle.last_P;
-        
-        
-        // find mode
-        Particle max_p; max_p.last_P = -1;
-        BOOST_FOREACH(Particle &particle, particles)
-            if(particle.last_P > max_p.last_P) max_p = particle;
-        assert(max_p.last_P >= 0);
-        
+        std::vector<Particle> max_ps;
+        BOOST_FOREACH(const ParticleFilter &particle_filter, particle_filters) {
+            max_ps.push_back(particle_filter.get_best());
+        }
         
         { // send marker message for particle visualization
             visualization_msgs::Marker msg;
@@ -442,12 +423,11 @@ struct GoalExecutor {
             msg.type = visualization_msgs::Marker::POINTS;
             msg.scale = make_xyz<Vector3>(.1, .1, 1);
             msg.color.a = 1;
-            BOOST_FOREACH(Particle &particle, particles) {
-                BOOST_FOREACH(const PoseGuess &poseguess,
-                        particle.poseguesses) {
-                    msg.points.push_back(vec2xyz<Point>(poseguess.pos));
+            BOOST_FOREACH(const ParticleFilter &particle_filter, particle_filters) {
+                BOOST_FOREACH(const Particle &particle, particle_filter.particles) { int i = &particle - particle_filter.particles.data();
+                    msg.points.push_back(vec2xyz<Point>(particle.pos));
                     msg.colors.push_back(make_rgba<ColorRGBA>(
-                        particle.last_P/max_p.last_P, 0, 1-particle.last_P/max_p.last_P, 1));
+                        particle.smoothed_last_P/max_ps[i].smoothed_last_P, 0, 1-particle.smoothed_last_P/max_ps[i].smoothed_last_P, 1));
                 }
             }
             particles_pub.publish(msg);
@@ -457,24 +437,23 @@ struct GoalExecutor {
             PoseStamped msg;
             msg.header.frame_id = goal.header.frame_id;
             msg.header.stamp = image->header.stamp;
-            msg.pose.position = vec2xyz<Point>(max_p.poseguesses[0].pos);
+            msg.pose.position = vec2xyz<Point>(max_ps[0].pos);
             msg.pose.orientation = quat2xyzw<geometry_msgs::Quaternion>(
-                max_p.poseguesses[0].q);
+                max_ps[0].q);
             pose_pub.publish(msg);
         }
         
         { // send action feedback
             object_finder::FindFeedback feedback;
-            BOOST_FOREACH(const PoseGuess &poseguess,
-                    max_p.poseguesses) {
+            BOOST_FOREACH(const Particle &particle, max_ps) {
                 TargetRes targetres;
-                targetres.pose.position = vec2xyz<Point>(poseguess.pos);
+                targetres.pose.position = vec2xyz<Point>(particle.pos);
                 targetres.pose.orientation =
-                     quat2xyzw<geometry_msgs::Quaternion>(poseguess.q);
-                targetres.color = make_rgba<ColorRGBA>(poseguess.last_color[0],
-                    poseguess.last_color[1], poseguess.last_color[2], 1);
-                if(poseguess.obj) {
-                    BOOST_FOREACH(const Marker &marker, poseguess.obj->markers) {
+                     quat2xyzw<geometry_msgs::Quaternion>(particle.q);
+                targetres.color = make_rgba<ColorRGBA>(particle.last_color[0],
+                    particle.last_color[1], particle.last_color[2], 1);
+                if(particle.obj) {
+                    BOOST_FOREACH(const Marker &marker, particle.obj->markers) {
                         targetres.markers.push_back(object_finder::MarkerPoint());
                         targetres.markers[targetres.markers.size()-1].name =
                             marker.name;
@@ -482,14 +461,17 @@ struct GoalExecutor {
                             vec2xyz<Point>(marker.position);
                     }
                 }
+                targetres.P = particle.last_P;
+                targetres.smoothed_last_P = particle.smoothed_last_P;
                 feedback.targetreses.push_back(targetres);
             }
-            RenderBuffer rb(img);
-            feedback.P = max_p.P(img, rb);
-            feedback.P_within_10cm = 0;
-            BOOST_FOREACH(Particle &particle, particles)
-                if(particle.dist(max_p) <= .2)
-                    feedback.P_within_10cm += particle.last_P/total_last_P;
+            //RenderBuffer rb(img);
+            // XXX
+            //feedback.P = max_p.P(img, rb);
+            //feedback.P_within_10cm = 0;
+            //BOOST_FOREACH(Particle &particle, particles)
+            //    if(particle.dist(max_p) <= .2)
+            //        feedback.P_within_10cm += particle.smoothed_last_P/total_smoothed_last_P;
             feedback_callback(feedback);
         }
         
@@ -503,7 +485,9 @@ struct GoalExecutor {
         
         if(image_pub.getNumSubscribers()) { // send debug image
             RenderBuffer rb(img);
-            max_p.P(img, rb, true);
+            BOOST_FOREACH(Particle &max_p, max_ps) { // XXX make const
+                max_p.P(img, rb, true);
+            }
             
             vector<int> dbg_image(image->width*image->height, 0);
             rb.draw_debug_regions(dbg_image);
