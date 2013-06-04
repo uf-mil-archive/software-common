@@ -239,7 +239,6 @@ struct PoseGuess {
 };
 
 struct Particle {
-    double weight;
     vector<PoseGuess> poseguesses;
     double last_P;
     Particle() { }
@@ -286,6 +285,9 @@ struct Particle {
         last_P = P;
         return P;
     }
+    void update(const TaggedImage &img, RenderBuffer &rb, bool print_debug_info=false) {
+        P(img, rb, print_debug_info);
+    }
     double dist(const Particle &other) {
         assert(other.poseguesses.size() == poseguesses.size());
         double max_dist = 0;
@@ -295,8 +297,8 @@ struct Particle {
         }
         return max_dist;
     }
-    void accumulate_successors(std::vector<Particle> &res, const TaggedImage &img, double N, const std::vector<Particle> &particles) {
-        int count = N * weight + uniform();
+    void accumulate_successors(std::vector<Particle> &res, const TaggedImage &img, double N, const std::vector<Particle> &particles, double total_last_P) {
+        int count = N * last_P/total_last_P + uniform();
         for(int i = 0; i < count; i++) {
             res.push_back(i==0 ?
                 *this :
@@ -361,8 +363,6 @@ struct GoalExecutor {
         N = 300;
         for(int i = 0; i < N; i++)
             particles.push_back(Particle(goal, current_objs, img));
-        BOOST_FOREACH(Particle &particle, particles)
-            particle.weight = 1./particles.size();
         
         current_stamp = t;
     }
@@ -403,38 +403,36 @@ struct GoalExecutor {
         
         ros::WallTime start_time = ros::WallTime::now();
         
+        
+        double original_total_last_P = 0;
+        BOOST_FOREACH(Particle &particle, particles) original_total_last_P += particle.last_P;
         // residual resampling
         std::vector<Particle> new_particles;
         BOOST_FOREACH(Particle &particle, particles) {
-            particle.accumulate_successors(new_particles, img, N*2/3., particles);
+            particle.accumulate_successors(new_particles, img, N*2/3., particles, original_total_last_P);
         }
         for(unsigned int i = 0; i < N/3; i++) {
             new_particles.push_back(Particle(goal, current_objs, img));
         }
-        BOOST_FOREACH(Particle &particle, new_particles)
-            particle.weight = 1./particles.size();
         particles.swap(new_particles);
         
-        // update weights
+        // update particles
         {
             RenderBuffer rb(img);
             BOOST_FOREACH(Particle &particle, particles)
-                particle.weight *= particle.P(img, rb);
+                particle.update(img, rb);
         }
         
         
-        // normalize weights
-        double total_weight = 0;
-        BOOST_FOREACH(Particle &particle, particles) total_weight += particle.weight;
-        
-        BOOST_FOREACH(Particle &particle, particles) particle.weight /= total_weight;
+        double total_last_P = 0;
+        BOOST_FOREACH(Particle &particle, particles) total_last_P += particle.last_P;
         
         
         // find mode
-        Particle max_p; max_p.weight = -1;
+        Particle max_p; max_p.last_P = -1;
         BOOST_FOREACH(Particle &particle, particles)
-            if(particle.weight > max_p.weight) max_p = particle;
-        assert(max_p.weight >= 0);
+            if(particle.last_P > max_p.last_P) max_p = particle;
+        assert(max_p.last_P >= 0);
         
         
         { // send marker message for particle visualization
@@ -449,7 +447,7 @@ struct GoalExecutor {
                         particle.poseguesses) {
                     msg.points.push_back(vec2xyz<Point>(poseguess.pos));
                     msg.colors.push_back(make_rgba<ColorRGBA>(
-                        particle.weight/max_p.weight, 0, 1-particle.weight/max_p.weight, 1));
+                        particle.last_P/max_p.last_P, 0, 1-particle.last_P/max_p.last_P, 1));
                 }
             }
             particles_pub.publish(msg);
@@ -491,7 +489,7 @@ struct GoalExecutor {
             feedback.P_within_10cm = 0;
             BOOST_FOREACH(Particle &particle, particles)
                 if(particle.dist(max_p) <= .2)
-                    feedback.P_within_10cm += particle.weight;
+                    feedback.P_within_10cm += particle.last_P/total_last_P;
             feedback_callback(feedback);
         }
         
