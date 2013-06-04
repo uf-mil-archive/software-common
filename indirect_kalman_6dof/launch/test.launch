@@ -1,0 +1,28 @@
+<launch>
+  <node pkg="indirect_kalman_6dof" type="indirect_kalman_6dof" name="indirect_kalman_6dof">
+    <remap from="odom" to="test/imu_odom"/>
+    <remap from="pose" to="test/pose"/>
+    <remap from="debug" to="test/debug"/>
+    <rosparam>
+      f_imu: 30
+      f_kalman: 30
+      y_a_max_norm_error: .002
+      y_a_log_size: 5
+
+      R_g: [5.0e-5, 5.0e-5, 5.0e-5]
+      R_a: [3.0e-3, 3.0e-3, 3.0e-3]
+      R_m: [4.0e-14, 4.0e-14, 4.0e-14]
+      R_d: 0.0004
+      R_z: 0.000004
+      Q_b_g: [1.0e-10, 1.0e-10, 1.0e-10]
+
+      init_accel_samples: 30
+      init_mag_samples: 30
+      init_dvl_samples: 5
+      init_depth_samples: 10
+
+      g_nav: [0, 0, -9.81]
+      m_nav: [-2244.2e-9, 24151.0e-9, -40572.8e-9]
+    </rosparam>
+  </node>
+</launch>

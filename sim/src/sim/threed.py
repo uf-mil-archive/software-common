@@ -8,6 +8,7 @@ import random
 import numpy
 from OpenGL.GL import *
 from OpenGL.GLU import *
+from OpenGL.arrays import vbo
 import pygame
 
 import roslib
@@ -28,33 +29,6 @@ class GLMatrix(object):
     
     def __exit__(self, type, value, traceback):
         glPopMatrix()
-
-class DisplayList(object):
-    def __init__(self):
-        self.sl = glGenLists(1)
-    
-    def __del__(self):
-        glDeleteLists(self.sl, 1)
-    
-    def __enter__(self):
-        glNewList(self.sl, GL_COMPILE)
-    
-    def __exit__(self, type, value, traceback):
-        glEndList()
-    
-    def __call__(self):
-        glCallList(self.sl)
-
-def display_list(callable):
-    cache = {}
-    def x(*args):
-        if args not in cache:
-            dl = DisplayList()
-            with dl:
-                callable(*args)
-            cache[args] = dl
-        cache[args]()
-    return x
 
 def angleaxis_matrix(angle, (x, y, z)):
     s = math.sin(angle)
@@ -107,19 +81,39 @@ class Mesh(object):
         self.texcoords = texcoords
         self.normals = normals
         self.indices = indices
+        
+        self.vbo = None
     
-    @display_list
-    def draw(self):
-        glBegin(GL_TRIANGLES)
+    def generate(self):
+        assert self.vbo is None
+        
+        vecs = []
         for triangle in self.indices:
-            assert len(triangle) == 3, len(triangle)
+            assert len(triangle) == 3
             for vert_index, tex_index, normal_index in triangle:
-                if tex_index is not None:
-                    glTexCoord2f(*self.texcoords[tex_index])
-                if normal_index is not None:
-                    glNormal3f(*self.normals[normal_index])
-                glVertex3f(*self.vertices[vert_index])
-        glEnd()
+                vecs.append([
+                    self.vertices[vert_index],
+                    self.texcoords[tex_index] if tex_index is not None else (0, 0, 0),
+                    self.normals[normal_index] if normal_index is not None else (0, 0, 0),
+                ])
+        self.vbo = vbo.VBO(numpy.array(vecs, 'f'))
+        self.vbo_count = len(vecs)
+    
+    def draw(self):
+        if self.vbo is None:
+            self.generate()
+        self.vbo.bind()
+        glEnableClientState(GL_VERTEX_ARRAY)
+        glEnableClientState(GL_NORMAL_ARRAY)
+        glEnableClientState(GL_TEXTURE_COORD_ARRAY)
+        glVertexPointer(3, GL_FLOAT, 36, self.vbo)
+        glNormalPointer(GL_FLOAT, 36, self.vbo + 12)
+        glTexCoordPointer(3, GL_FLOAT, 36, self.vbo + 24)
+        glDrawArrays(GL_TRIANGLES, 0, self.vbo_count)
+        glDisableClientState(GL_VERTEX_ARRAY)
+        glDisableClientState(GL_NORMAL_ARRAY)
+        glDisableClientState(GL_TEXTURE_COORD_ARRAY)
+        self.vbo.unbind()
     
     @property
     def ode_trimeshdata(self):

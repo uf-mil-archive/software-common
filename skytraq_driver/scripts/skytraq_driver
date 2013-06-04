@@ -181,6 +181,9 @@ class MyGPS(GPS):
                 print 'no ephemeris, dropping', prn
                 continue
             eph = self.ephemerises[prn]
+            if not eph.is_healthy():
+                print 'unhealthy, dropping', prn
+                continue
             
             measured_vel = doppler_freq*gps.c/gps.L1_f0
             sat_vel = -gps.deriv(lambda t: numpy.linalg.norm(self.position-eph.predict(t)), t)
@@ -194,6 +197,8 @@ class MyGPS(GPS):
                 ),
                 direction_enu=Vector3(*gps.enu_from_ecef(sat_dir, self.position)),
                 velocity_plus_drift=measured_vel - sat_vel,
+                prn=prn,
+                cn0=cn0,
             ))
         print len(pairs), 'GOOD SATELLITES'
         

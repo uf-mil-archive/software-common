@@ -13,6 +13,7 @@
 #include <Eigen/Geometry>
 
 #include "image.h"
+#include "renderbuffer.h"
 
 
 struct Triangle {
@@ -45,6 +46,7 @@ struct Component {
         }
         return total_centroid/total_area;
     }
+    void draw(RenderBuffer &renderbuffer, int region, Eigen::Vector3d pos, Eigen::Quaterniond orientation, std::vector<int>* dbg_image) const;
 };
 
 struct Marker {
@@ -52,22 +54,11 @@ struct Marker {
     Eigen::Vector3d position;
 };
 
-struct ResultWithArea : public Result {
-    double area;
-    ResultWithArea() { }
-    ResultWithArea(Result result, double area) : Result(result), area(area) { }
-    Eigen::Vector3d avg_color_assuming_unseen_is(Eigen::Vector3d unseen_color) {
-        return (total_color+(area-count)*unseen_color)/area;
-    }
-};
-
 struct Obj {
     std::vector<Component> components;
     std::vector<Marker> markers;
     
     Obj(const std::string filename);
-    
-    void query(const TaggedImage &image, Eigen::Vector3d pos, Eigen::Quaterniond orientation, std::vector<ResultWithArea> &results, std::vector<int>* dbg_image=NULL) const;
 };
 
 #endif

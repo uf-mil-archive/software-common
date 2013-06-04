@@ -1,5 +1,6 @@
 #include <boost/shared_ptr.hpp>
 #include <boost/thread.hpp>
+#include <boost/optional.hpp>
 
 #include <nodelet/nodelet.h>
 #include <pluginlib/class_list_macros.h>
@@ -21,11 +22,17 @@ namespace rdi_explorer_dvl {
             }
             
             virtual void onInit() {
-                std::string port = "/dev/ttyS1"; getPrivateNodeHandle().getParam("port", port);
-                int baudrate = 115200; getPrivateNodeHandle().getParam("baudrate", baudrate);
-                frame_id = "/dvl"; getPrivateNodeHandle().getParam("frame_id", frame_id);
+                std::string port;
+                ROS_ASSERT_MSG(getPrivateNodeHandle().getParam("port", port),
+                    "\"port\" param missing");
                 
-                pub = getNodeHandle().advertise<geometry_msgs::Vector3Stamped>("dvl", 10);
+                int baudrate = 115200;
+                getPrivateNodeHandle().getParam("baudrate", baudrate);
+                
+                ROS_ASSERT_MSG(getPrivateNodeHandle().getParam("frame_id", frame_id),
+                    "\"frame_id\" param missing");
+                
+                pub = getNodeHandle().advertise<uf_common::VelocityMeasurements>("dvl", 10);
                 range_pub = getNodeHandle().advertise<uf_common::Float64Stamped>("dvl/range", 10);
                 
                 device = boost::make_shared<Device>(port, baudrate);
@@ -41,14 +48,17 @@ namespace rdi_explorer_dvl {
             
             void polling_thread() {
                 while(running) {
-                    geometry_msgs::Vector3Stamped msg;
-                    uf_common::Float64Stamped range_msg;
-                    if(!device->read(msg, range_msg))
-                        continue;
-                    msg.header.frame_id = frame_id;
-                    range_msg.header.frame_id = frame_id;
-                    pub.publish(msg);
-                    range_pub.publish(range_msg);
+                    boost::optional<uf_common::VelocityMeasurements> msg;
+                    boost::optional<uf_common::Float64Stamped> range_msg;
+                    device->read(msg, range_msg);
+                    if(msg) {
+                        msg->header.frame_id = frame_id;
+                        pub.publish(*msg);
+                    }
+                    if(range_msg) {
+                        range_msg->header.frame_id = frame_id;
+                        range_pub.publish(*range_msg);
+                    }
                 }
             }
             

@@ -118,13 +118,13 @@ struct Node {
             return; // only initialize when unkilled
         
         subjugator::C3Trajectory::Point current = Point_from_PoseTwist(odom->pose.pose, odom->twist.twist);
+        current.q[3] = current.q[4] = 0; // zero roll and pitch
         current.qdot = subjugator::Vector6d::Zero(); // zero velocities
         
         c3trajectory.reset(new subjugator::C3Trajectory(current, limits));
         c3trajectory_t = odom->header.stamp;
         
         current_waypoint = current;
-        current_waypoint.r.q[3] = current_waypoint.r.q[4] = 0; // zero roll and pitch
         current_waypoint_t = odom->header.stamp;
     }
     

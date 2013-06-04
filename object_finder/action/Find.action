@@ -1,26 +1,12 @@
 # goal
 Header header # only used for frame_id
 
-uint32 TYPE_OBJECT=0
-uint32 TYPE_SPHERE=1
-uint32 type
-
-string object_filename
-
-float64 sphere_radius
-
-geometry_msgs/PoseWithCovariance prior_distribution # currently only orientation is used
-float64 min_dist
-float64 max_dist
-
-bool allow_pitching
-bool is_180z_symmetric
+TargetDesc[] targetdescs
 ---
 # result
-# not used currently
+# not used
 ---
 # feedback
-geometry_msgs/Pose pose
+TargetRes[] targetreses
 float64 P
 float64 P_within_10cm
-MarkerPoint[] markers

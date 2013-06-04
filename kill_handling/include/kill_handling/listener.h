@@ -14,11 +14,7 @@ namespace kill_handling {
 
 struct KillListener {
     void _killmsg_callback(const KillConstPtr &msg) {
-        if(_kill_cache.count(msg->id) && msg->header.stamp < _kill_cache[msg->id].header.stamp) {
-            return; // this is older than current info
-        }
-        
-        _kill_cache[msg->id] = *msg;
+        _kill_cache[msg->id] = make_pair(ros::Time::now(), *msg);
         
         _check_killed();
     }
@@ -38,7 +34,8 @@ struct KillListener {
     ros::NodeHandle nh;
     boost::function<void()> _killed_callback;
     boost::function<void()> _unkilled_callback;
-    std::map<std::string, Kill> _kill_cache;
+    typedef std::pair<ros::Time, Kill> ValueType;
+    std::map<std::string, ValueType> _kill_cache;
     ros::Subscriber _sub;
     bool _previously_killed;
     ros::Timer _check_killed_timer;
@@ -53,11 +50,11 @@ struct KillListener {
     }
     
     std::vector<std::string> get_kills() {
-        ros::Time t = ros::Time::now();
+        ros::Time now = ros::Time::now();
         std::vector<std::string> res;
-        BOOST_FOREACH(const Kill &kill, _kill_cache | boost::adaptors::map_values) {
-            if(kill.header.stamp + kill.lifetime >= t and kill.active) {
-                res.push_back(kill.description);
+        BOOST_FOREACH(const ValueType &timekill, _kill_cache | boost::adaptors::map_values) {
+            if(timekill.first + timekill.second.lifetime >= now and timekill.second.active) {
+                res.push_back(timekill.second.description);
             }
         }
         return res;

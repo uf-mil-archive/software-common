@@ -3,8 +3,8 @@
 
 #include <Eigen/Dense>
 
-#include "image.h"
+#include "renderbuffer.h"
 
-void sphere_query(const TaggedImage &image, Eigen::Vector3d pos, double radius, Result &result, std::vector<int>* dbg_image=NULL);
+void sphere_draw(RenderBuffer &renderbuffer, RenderBuffer::RegionType region, Eigen::Vector3d pos, double radius, std::vector<int>* dbg_image=NULL);
 
 #endif

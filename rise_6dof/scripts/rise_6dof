@@ -19,7 +19,7 @@ from kill_handling.listener import KillListener
 
 from rise_6dof import controller
 from rise_6dof.cfg import controllerConfig
-
+from rise_6dof.srv import SendConstantWrench
 
 class Node(object):
     def reconfigure(self, config, level):
@@ -30,43 +30,47 @@ class Node(object):
                 assert len(x) == 6
                 processed_config[name] = x
             processed_config['use_rise'] = config['use_rise']
-            
+
             self.config = config
             self.processed_config = processed_config
-            
+
             return config
         except:
             traceback.print_exc()
             # go back to old config if new is invalid
             return self.config
-    
+
     def __init__(self):
         self.kill_listener = KillListener()
-        
+
         self.reconfigure(controllerConfig.defaults, 0)
         server = DynamicReconfigureServer(controllerConfig, self.reconfigure)
-        
+
         self.controller = controller.Controller(self.processed_config)
-        
+
         self.desired = None
         rospy.Subscriber('/desired', PoseTwistStamped, lambda desired: setattr(self, 'desired', desired))
-        
+
         self.current = None
         rospy.Subscriber('/current', Odometry, lambda current: setattr(self, 'current', current))
-        
+
+        self.constant_wrench = None
+        self.constant_wrench_time = None
+        rospy.Service('send_constant_wrench', SendConstantWrench, self.send_constant_wrench)
+
         pub = rospy.Publisher('/output', WrenchStamped)
-        
+
         dt = 1/50
-        
+
         while not rospy.is_shutdown():
             rospy.sleep(dt)
-            
+
             if self.kill_listener.get_killed():
                 self.current = None
                 self.desired = None
                 self.controller.reset()
                 continue
-            
+
             if self.current is None:
                 print 'no current'
                 rospy.sleep(1/10)
@@ -81,14 +85,34 @@ class Node(object):
                         pose=self.current.pose.pose,
                     ),
                 )
-            
-            assert self.current.header.frame_id == self.desired.header.frame_id and self.current.header.frame_id in ['/map', '/odom']
-            
-            self.controller.config = self.processed_config
-            wrench = self.controller.update(dt, self.desired.posetwist, PoseTwist(pose=self.current.pose.pose, twist=self.current.twist.twist))
-            
-            pub.publish(WrenchStamped(header=Header(frame_id='/base_link'), wrench=wrench))
 
+            assert self.current.header.frame_id == self.desired.header.frame_id and self.current.header.frame_id in ['/map', '/odom']
+
+            if not self.is_constant_wrench_valid():
+                self.controller.config = self.processed_config
+                wrench = self.controller.update(dt, self.desired.posetwist, PoseTwist(pose=self.current.pose.pose, twist=self.current.twist.twist))
+            else:
+                wrench = self.constant_wrench.wrench
+
+            pub.publish(WrenchStamped(
+                header=Header(
+                    stamp=rospy.Time.now(),
+                    frame_id='/base_link',
+                ),
+                wrench=wrench,
+            ))
+
+    def is_constant_wrench_valid(self):
+        if self.constant_wrench is None:
+            return False
+        return rospy.Duration(0) <= rospy.Time.now() - self.constant_wrench_time < self.constant_wrench.lifetime
+
+    def send_constant_wrench(self, constant_wrench):
+        self.constant_wrench_time = rospy.Time.now()
+        self.constant_wrench = constant_wrench
+        while self.is_constant_wrench_valid():
+            rospy.sleep(.1)
+        return ()
 
 if __name__ == '__main__':
     rospy.init_node('rise_6dof')

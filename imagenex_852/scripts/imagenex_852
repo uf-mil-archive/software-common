@@ -26,10 +26,10 @@ class Node(object):
         return config
     
     def __init__(self):
-        port_filename = rospy.get_param('~port_filename', '/dev/ttyUSB0')
-        frame_id = rospy.get_param('~frame_id', '/sonar')
+        port = rospy.get_param('~port')
+        frame_id = rospy.get_param('~frame_id')
         
-        d = driver.Device(port_filename)
+        d = driver.Device(port)
         
         self.config = sonarConfig.defaults
         server = DynamicReconfigureServer(sonarConfig, self.reconfigure)
