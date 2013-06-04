@@ -1,0 +1,22 @@
+<package>
+  <description brief="uf_rqt_plugins">
+
+     uf_rqt_plugins
+
+  </description>
+  <author>Matthew Thompson</author>
+  <license>BSD</license>
+  <review status="unreviewed" notes=""/>
+  <url>http://ros.org/wiki/uf_rqt_plugins</url>
+  <depend package="rospy"/>
+  <depend package="rqt_gui"/>
+  <depend package="rqt_gui_py"/>
+  <depend package="thruster_handling"/>
+  <depend package="uf_common"/>
+
+  <export>
+    <rqt_gui plugin="${prefix}/plugin.xml"/>
+  </export>
+</package>
+
+
