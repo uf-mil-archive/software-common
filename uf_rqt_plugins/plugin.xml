@@ -4,8 +4,11 @@
       Controls multiple thrusters through uf-ros-pkg/thruster_handling.
     </description>
     <qtgui>
-      <label>Thruster Plugin</label>
-      <icon type="theme">system-help</icon>
+      <group>
+        <icon type="file">uf.ico</icon>
+        <label>UF</label>
+      </group>
+      <label>Thrusters</label>
       <statustip>Control thrusters.</statustip>
     </qtgui>
   </class>
@@ -14,8 +17,11 @@
       Provides status information for uf-ros-pkg/kill_handling.
     </description>
     <qtgui>
-      <label>Kill Plugin</label>
-      <icon type="theme">system-help</icon>
+      <group>
+        <icon type="file">uf.ico</icon>
+        <label>UF</label>
+      </group>
+      <label>Kill</label>
       <statustip>Provides kill status information.</statustip>
     </qtgui>
   </class>
