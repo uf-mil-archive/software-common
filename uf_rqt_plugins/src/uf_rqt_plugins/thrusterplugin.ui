@@ -58,6 +58,16 @@
       </spacer>
      </item>
      <item>
+      <widget class="QCheckBox" name="manualControlCheckBox">
+       <property name="toolTip">
+        <string extracomment="Allows control of thrusters by the sliders"/>
+       </property>
+       <property name="text">
+        <string>Manual Control</string>
+       </property>
+      </widget>
+     </item>
+     <item>
       <widget class="QPushButton" name="stopAllButton">
        <property name="text">
         <string>Stop All</string>
