@@ -52,6 +52,12 @@ struct Node {
         ROS_ASSERT(private_nh.getParam("f_kalman", f_kalman));
         config.T_kalman = 1 / f_kalman;
 
+        config.verify_timestamps = true;
+        private_nh.getParam("verify_timestamps", config.verify_timestamps);
+        if (!config.verify_timestamps) {
+            ROS_WARN("Not verifying timestamps on sensor data.");
+        }
+
         config.predict.R_g = vec2diag(uf_common::get_Vector3(private_nh, "R_g"));
         config.predict.R_a = vec2diag(uf_common::get_Vector3(private_nh, "R_a"));
         config.predict.Q_b_g = vec2diag(uf_common::get_Vector3(private_nh, "Q_b_g"));
@@ -86,11 +92,11 @@ struct Node {
         config.update.r_imu2dvl = uf_common::vec2vec(imu2dvl.getOrigin());
         config.update.r_imu2depth = uf_common::vec2vec(imu2depth.getOrigin());
 
-        config.init.accel_samples = get_uint(private_nh, "init_accel_samples"); // 30
-        config.init.mag_samples = get_uint(private_nh, "init_mag_samples"); // 30
-        config.init.dvl_samples = get_uint(private_nh, "init_dvl_samples"); // 5
-        config.init.depth_samples = get_uint(private_nh, "init_depth_samples"); // 10
-        config.init.g_nav = uf_common::get_Vector3(private_nh, "g_nav"); // 0, 0, -9.81
+        config.init.accel_samples = get_uint(private_nh, "init_accel_samples");
+        config.init.mag_samples = get_uint(private_nh, "init_mag_samples");
+        config.init.dvl_samples = get_uint(private_nh, "init_dvl_samples");
+        config.init.depth_samples = get_uint(private_nh, "init_depth_samples");
+        config.init.g_nav = uf_common::get_Vector3(private_nh, "g_nav");
         config.init.m_nav = config.update.m_nav;
         config.init.r_imu2depth = config.update.r_imu2depth;
         config.init.beam_mat = config.update.beam_mat;
@@ -142,14 +148,15 @@ struct Node {
     }
 
     void onUpdate(const ros::TimerEvent &event) {
-        // TODO use timestamp from kalman instead of timer
         // TODO don't hardcode frames
         navcomp->run(event.current_real.toSec());
 
         boost::optional<NavigationComputer::State> state = navcomp->getState();
         if (state) {
+            Eigen::Matrix3d R_nav2imu = state->filt.q_imu2nav.matrix().transpose();
+
             nav_msgs::Odometry msg;
-            msg.header.stamp = event.current_real;
+            msg.header.stamp = ros::Time(state->ins_time);
             msg.header.frame_id = "/map";
             msg.child_frame_id = "/imu";
             msg.pose.pose.position = uf_common::vec2xyz<geometry_msgs::Point>(
@@ -157,13 +164,13 @@ struct Node {
             msg.pose.pose.orientation = uf_common::quat2xyzw<geometry_msgs::Quaternion>(
                 state->filt.q_imu2nav);
             msg.twist.twist.linear = uf_common::vec2xyz<geometry_msgs::Vector3>(
-                state->filt.q_imu2nav.matrix().transpose() * state->filt.v_nav);
+                R_nav2imu * state->filt.v_nav);
             msg.twist.twist.angular = uf_common::vec2xyz<geometry_msgs::Vector3>(
                 state->filt.w_imu);
             odometry_pub.publish(msg);
 
             geometry_msgs::PoseStamped posemsg;
-            posemsg.header.stamp = event.current_real;
+            posemsg.header.stamp = ros::Time(state->ins_time);
             posemsg.header.frame_id = "/map";
             posemsg.pose.position = uf_common::vec2xyz<geometry_msgs::Point>(
                 state->filt.p_nav);
@@ -172,11 +179,13 @@ struct Node {
             pose_pub.publish(posemsg);
 
             indirect_kalman_6dof::Debug debugmsg;
-            debugmsg.header.stamp = event.current_real;
+            debugmsg.header.stamp = ros::Time(state->ins_time);
             debugmsg.b_g = uf_common::vec2xyz<geometry_msgs::Vector3>(
                 state->filt.b_g);
             debugmsg.a_imu = uf_common::vec2xyz<geometry_msgs::Vector3>(
                 state->filt.a_imu);
+            debugmsg.a_imu_no_g = uf_common::vec2xyz<geometry_msgs::Vector3>(
+                state->filt.a_imu + R_nav2imu * state->filt.g_nav);
             debugmsg.w_imu = uf_common::vec2xyz<geometry_msgs::Vector3>(
                 state->filt.w_imu);
             debugmsg.y_m_count = state->stats.y_m_count;
