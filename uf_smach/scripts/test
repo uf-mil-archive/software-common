@@ -1,0 +1,34 @@
+#!/usr/bin/env python
+
+import roslib; roslib.load_manifest('uf_smach')
+from uf_smach.states import WaypointState
+
+import rospy
+import smach
+import smach_ros
+
+def main():
+    rospy.init_node('smach_example_state_machine')
+
+    # Create a SMACH state machine
+    sm = smach.Sequence(['succeeded', 'aborted', 'preempted'], 'succeeded')
+
+    # Open the container
+    with sm:
+        # Add states to the container
+        smach.Sequence.add('DEPTH', WaypointState('depth', 2))
+        for i in xrange(4):
+            smach.Sequence.add('FORWARD %d' % i, WaypointState('forward', 2))
+            smach.Sequence.add('TURN %d' % i, WaypointState('turn_left_deg', 90))
+
+    sis = smach_ros.IntrospectionServer('test', sm, '/SM_ROOT')
+    sis.start()
+
+    # Execute SMACH plan
+    outcome = sm.execute()
+
+    rospy.spin()
+    sis.stop()
+
+if __name__ == '__main__':
+    main()
