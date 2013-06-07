@@ -22,14 +22,14 @@ from rise_6dof import controller
 from rise_6dof.cfg import controllerConfig
 from rise_6dof.srv import SendConstantWrench
 
-def unpack_pose_and_twist(pose, twist):
-    return (xyz_array(pose.position), xyzw_array(pose.orientation)), (xyz_array(twist.linear), xyz_array(twist.angular))
+def unpack_pose(pose): return xyz_array(pose.position), xyzw_array(pose.orientation)
+def unpack_twist(twist): return xyz_array(twist.linear), xyz_array(twist.angular)
 
 class Node(object):
     def reconfigure(self, config, level):
         try:
             processed_config = {}
-            for name in 'k ks alpha beta'.split(' '):
+            for name in 'k ks alpha beta accel_feedforward vel_feedforward'.split(' '):
                 x = numpy.array(map(float, config[name].split(',')))
                 assert len(x) == 6
                 processed_config[name] = x
@@ -63,6 +63,7 @@ class Node(object):
         rospy.Service('send_constant_wrench', SendConstantWrench, self.send_constant_wrench)
 
         pub = rospy.Publisher('/output', WrenchStamped)
+        pd_pub = rospy.Publisher('/pd_output', WrenchStamped)
 
         dt = 1/50
 
@@ -94,11 +95,18 @@ class Node(object):
 
             if not self.is_constant_wrench_valid():
                 self.controller.config = self.processed_config
-                force, torque = self.controller.update(dt,
-                    unpack_pose_and_twist(self.desired.posetwist.pose, self.desired.posetwist.twist),
-                    unpack_pose_and_twist(self.current.pose.pose, self.current.twist.twist),
+                pd_wrench, wrench = self.controller.update(dt,
+                    (unpack_pose(self.desired.posetwist.pose), unpack_twist(self.desired.posetwist.twist), unpack_twist(self.desired.posetwist.acceleration)),
+                    (unpack_pose(self.current.pose.pose), unpack_twist(self.current.twist.twist)),
                 )
-                wrench = Wrench(force=Vector3(*force), torque=Vector3(*torque))
+                pd_pub.publish(WrenchStamped(
+                    header=Header(
+                        stamp=rospy.Time.now(),
+                        frame_id='/base_link',
+                    ),
+                    wrench=Wrench(force=Vector3(*pd_wrench[0]), torque=Vector3(*pd_wrench[1])),
+                ))
+                wrench = Wrench(force=Vector3(*wrench[0]), torque=Vector3(*wrench[1]))
             else:
                 wrench = self.constant_wrench.wrench
 
