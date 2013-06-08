@@ -19,6 +19,8 @@ public:
         Kalman::PredictConfig predict;
         Kalman::UpdateConfig update;
         INSInitializer::Config init;
+
+        bool verify_timestamps;
     };
 
     NavigationComputer(const Config &config);
@@ -33,6 +35,7 @@ public:
         INS::State filt;
         Kalman::StateMat cov;
         Stats stats;
+        double ins_time;
     };
 
     boost::optional<State> getState() const;

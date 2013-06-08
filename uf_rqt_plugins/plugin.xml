@@ -1,12 +1,28 @@
 <library path="src">
   <class name="Thrusters" type="uf_rqt_plugins.thrusterplugin.ThrusterPlugin" base_class_type="rqt_gui_py::Plugin">
     <description>
-      An example Python GUI plugin to create a great user interface.
+      Controls multiple thrusters through uf-ros-pkg/thruster_handling.
     </description>
     <qtgui>
-      <label>Thruster Plugin</label>
-      <icon type="theme">system-help</icon>
-      <statustip>Great user interface to provide real value.</statustip>
+      <group>
+        <icon type="file">uf.ico</icon>
+        <label>UF</label>
+      </group>
+      <label>Thrusters</label>
+      <statustip>Control thrusters.</statustip>
+    </qtgui>
+  </class>
+  <class name="Kill" type="uf_rqt_plugins.killplugin.KillPlugin" base_class_type="rqt_gui_py::Plugin">
+    <description>
+      Provides status information for uf-ros-pkg/kill_handling.
+    </description>
+    <qtgui>
+      <group>
+        <icon type="file">uf.ico</icon>
+        <label>UF</label>
+      </group>
+      <label>Kill</label>
+      <statustip>Provides kill status information.</statustip>
     </qtgui>
   </class>
 </library>

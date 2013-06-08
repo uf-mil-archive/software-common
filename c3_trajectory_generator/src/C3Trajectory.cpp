@@ -21,19 +21,16 @@ C3Trajectory::C3Trajectory(const Point &start, const Limits &limits) :
 	u_b(Vector6d::Zero()),
 	limits(limits) { }
 
-C3Trajectory::Point C3Trajectory::getCurrentPoint() const {
-	Point p;
-	p.q = q;
-	p.qdot = qdot;
-   	return p;
-}
-
 static Vector6d apply(const Matrix4d &T, const Vector6d &q, double w) {
 	Vector6d q_t;
 	q_t << q.head(3), w, 0, 0;
 	q_t.head(4) = T * q_t.head(4);
 	q_t.tail(3) = q.tail(3);
 	return q_t;
+}
+
+C3Trajectory::PointWithAcceleration C3Trajectory::getCurrentPoint() const {
+    return PointWithAcceleration(q, qdot, apply(C3Trajectory::transformation_pair(q).second, qdotdot_b, 0));
 }
 
 void C3Trajectory::update(double dt, const Waypoint &waypoint, double waypoint_t) {
