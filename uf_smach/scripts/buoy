@@ -28,7 +28,7 @@ def main():
 
     # Open the container
     with sm:
-        smach.Sequence.add('DEPTH', WaypointState(lambda cur: cur.depth(3)))
+        smach.Sequence.add('DEPTH', WaypointState(lambda cur: cur.depth(1.5)))
         smach.Sequence.add('APPROACH', VelocityState(numpy.array([.2, 0, 0])))
         smach.Sequence.add('WAIT_BUOY',
                            WaitForSingleObjectState('find_forward', buoy_desc, 60))

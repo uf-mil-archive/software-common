@@ -6,7 +6,7 @@ import smach
 import smach_ros
 import actionlib
 
-from uf_common.orientation_helpers import PoseEditor, xyz_array
+from uf_common.orientation_helpers import PoseEditor, xyz_array, xyzw_array
 from uf_common.msg import MoveToAction, MoveToGoal, PoseTwist
 from object_finder.msg import FindAction, FindGoal, TargetDesc
 from nav_msgs.msg import Odometry
@@ -71,31 +71,22 @@ class WaitForSingleObjectState(smach.State):
         if len(feedback.targetreses) == 0:
             return
         result = feedback.targetreses[0]
-        if result.P > 75:
+        if result.P > 50:
             with self._cond:
                 self._found = True
                 self._cond.notify_all()
 
-class ApproachObjectState(smach.State):
-    def __init__(self, action, targetdesc, approach_frame, approach_dist):
+class BaseManeuverObjectState(smach.State):
+    def __init__(self, action, targetdesc):
         smach.State.__init__(self, outcomes=['succeeded'])
 
-        tf_listener = tf.TransformListener()
-        tf_listener.waitForTransform('/base_link', approach_frame,
-                                     rospy.Time(0), rospy.Duration(1000000))
-        self._approach_pos, _ = tf_listener.lookupTransform('/base_link',
-                                                            approach_frame,
-                                                            rospy.Time(0))
-        self._approach_pos = numpy.array(self._approach_pos)
-        self._approach_dist = approach_dist
-        self._targetdesc = targetdesc
-
         self._cond = threading.Condition()
+        self._targetdesc = targetdesc
         self._odom_current = None
         self._odom_start = None
-        self._target_pose = None
         self._done = False
 
+        # TODO Share these somehow to avoid reinitializing the SimpleActionClient
         self._vision_client = actionlib.SimpleActionClient(action, FindAction)
         self._vision_client.wait_for_server()
         self._move_client = actionlib.SimpleActionClient('moveto', MoveToAction)
@@ -109,32 +100,26 @@ class ApproachObjectState(smach.State):
         self._vision_client.send_goal(vision_goal, feedback_cb=self._feedback_cb)
 
         with self._cond:
-            while True:
+            while not self._done:
                 self._cond.wait()
-                if self._target_pose is None or self._odom_current is None:
-                    continue
-                err = numpy.linalg.norm(xyz_array(self._target_pose.position) -
-                                        xyz_array(self._odom_current.pose.pose.position))
-                if err > 0.05:
-                    continue
-                break
 
         self._vision_client.stop_tracking_goal()
         return 'succeeded'
 
     def _feedback_cb(self, feedback):
-        if len(feedback.targetreses) == 0 or self._odom_current is None:
-            return
-        result = feedback.targetreses[0]
-
-        target = PoseEditor.from_Odometry(self._odom_start)
-        target = target.look_at_without_pitching(xyz_array(result.pose.position)) \
-                       .set_position(xyz_array(result.pose.position))
-        target = target.relative(-self._approach_pos) \
-                       .backward(self._approach_dist)
-        self._move_client.send_goal(target.as_MoveToGoal(speed=.5))
         with self._cond:
-            self._target_pose = target.as_Pose()
+            if len(feedback.targetreses) == 0 or self._odom_current is None:
+                return
+            result = feedback.targetreses[0]
+            if result.P < 10:
+                return
+            target = self._get_target(result)
+            self._move_client.send_goal(target.as_MoveToGoal(speed=.5),
+                                        done_cb=self._done_cb)
+
+    def _done_cb(self, state, result):
+        with self._cond:
+            self._done = True
             self._cond.notify_all()
 
     def _odometry_cb(self, odometry):
@@ -142,5 +127,32 @@ class ApproachObjectState(smach.State):
             self._odom_current = odometry
             if self._odom_start is None:
                 self._odom_start = odometry
-            self._cond.notify_all()
 
+class ApproachObjectState(BaseManeuverObjectState):
+    def __init__(self, action, targetdesc, approach_frame, approach_dist):
+        BaseManeuverObjectState.__init__(self, action, targetdesc)
+        tf_listener = tf.TransformListener()
+        tf_listener.waitForTransform('/base_link', approach_frame,
+                                     rospy.Time(0), rospy.Duration(1000000))
+        self._approach_pos, _ = tf_listener.lookupTransform('/base_link',
+                                                            approach_frame,
+                                                            rospy.Time(0))
+        self._approach_pos = numpy.array(self._approach_pos)
+        self._approach_dist = approach_dist
+
+    def _get_target(self, result):
+        target = PoseEditor.from_Odometry(self._odom_start)
+        target = target.look_at_without_pitching(xyz_array(result.pose.position)) \
+                       .set_position(xyz_array(result.pose.position))
+        target = target.relative(-self._approach_pos) \
+                       .backward(self._approach_dist)
+        return target
+
+class AlignObjectState(BaseManeuverObjectState):
+    def _get_target(self, result):
+        start_depth = self._odom_start.pose.pose.position.z # TODO use start trajectory
+        target = PoseEditor.from_Odometry(self._odom_start)
+        target = target.set_position(xyz_array(result.pose.position)) \
+                        .set_orientation(xyzw_array(result.pose.orientation)) \
+                        .depth(start_depth)
+        return target
