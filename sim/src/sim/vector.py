@@ -46,7 +46,10 @@ class V(tuple):
     def mag2(self):
         return self*self
     def unit(self):
-        return self/self.mag()
+        try:
+            return self/self.mag()
+        except ZeroDivisionError:
+            return v(1, 0, 0)
     def conj(self):
         return V([self[0]] + list(-V(self[1:])))
     def quat_to_matrix(self):
