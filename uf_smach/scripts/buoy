@@ -1,0 +1,52 @@
+#!/usr/bin/env python
+
+import roslib; roslib.load_manifest('uf_smach')
+from uf_smach.states import WaypointState, VelocityState, WaitForSingleObjectState, ApproachObjectState
+from object_finder.msg import TargetDesc
+
+import numpy
+import rospy
+import smach
+import smach_ros
+
+buoy_desc = TargetDesc()
+buoy_desc.type = TargetDesc.TYPE_SPHERE
+buoy_desc.sphere_radius = 4*.0254 # 4 in
+buoy_desc.prior_distribution.pose.orientation.w = 1
+buoy_desc.prior_distribution.covariance[0+6*0] = 1
+buoy_desc.prior_distribution.covariance[1+6*1] = 1
+buoy_desc.prior_distribution.covariance[2+6*2] = 1
+buoy_desc.min_dist = 2.6
+buoy_desc.max_dist = 6
+
+
+def main():
+    rospy.init_node('smach_example_state_machine')
+
+    # Create a SMACH state machine
+    sm = smach.Sequence(['succeeded', 'timeout', 'aborted', 'preempted'], 'succeeded')
+
+    # Open the container
+    with sm:
+        smach.Sequence.add('DEPTH', WaypointState(lambda cur: cur.depth(3)))
+        smach.Sequence.add('APPROACH', VelocityState(numpy.array([.2, 0, 0])))
+        smach.Sequence.add('WAIT_BUOY',
+                           WaitForSingleObjectState('find_forward', buoy_desc, 60))
+        smach.Sequence.add('APPROACH_BUOY',
+                           ApproachObjectState('find_forward', buoy_desc,
+                                               'forward_camera', 1))
+        smach.Sequence.add('BUMP', WaypointState(lambda cur: cur.forward(1.1)))
+        smach.Sequence.add('BACK UP', WaypointState(lambda cur: cur.backward(1.5)))
+        smach.Sequence.add('SURFACE', WaypointState(lambda cur: cur.depth(.1)))
+
+    sis = smach_ros.IntrospectionServer('buoy', sm, '/SM_ROOT')
+    sis.start()
+
+    # Execute SMACH plan
+    outcome = sm.execute()
+
+    rospy.spin()
+    sis.stop()
+
+if __name__ == '__main__':
+    main()

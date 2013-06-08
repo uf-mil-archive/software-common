@@ -16,10 +16,12 @@ def main():
     # Open the container
     with sm:
         # Add states to the container
-        smach.Sequence.add('DEPTH', WaypointState('depth', 2))
+        smach.Sequence.add('DEPTH', WaypointState(lambda cur: cur.depth(2)))
         for i in xrange(4):
-            smach.Sequence.add('FORWARD %d' % i, WaypointState('forward', 2))
-            smach.Sequence.add('TURN %d' % i, WaypointState('turn_left_deg', 90))
+            smach.Sequence.add('FORWARD %d' % i,
+                               WaypointState(lambda cur: cur.forward(2)))
+            smach.Sequence.add('TURN %d' % i,
+                               WaypointState(lambda cur: cur.turn_left_deg(90)))
 
     sis = smach_ros.IntrospectionServer('test', sm, '/SM_ROOT')
     sis.start()
