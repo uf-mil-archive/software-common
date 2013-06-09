@@ -343,6 +343,7 @@ struct GoalExecutor {
     vector<boost::shared_ptr<Obj> > current_objs;
     
     double N;
+    TaggedImage img;
     std::vector<ParticleFilter> particle_filters;
     ros::Time current_stamp;
     
@@ -404,7 +405,7 @@ struct GoalExecutor {
         }
         ROS_INFO("good");
         
-        TaggedImage img(*image, *cam_info, eigen_from_tf(transform));
+        img.reset(*image, *cam_info, eigen_from_tf(transform));
         
         if(particle_filters.size() == 0) {
             ROS_INFO("got first frame; initializing");
