@@ -1,6 +1,8 @@
 #ifndef RENDERBUFFER_H
 #define RENDERBUFFER_H
 
+#include <queue>
+
 #include <boost/foreach.hpp>
 
 #include "image.h"
@@ -41,42 +43,23 @@ struct Segment {
     }
 };
 
-
-    
-static void append(Segment *list, unsigned int &size, const Segment &new_segment) {
-    if(size && list[size-1].x_end == new_segment.x_start && list[size-1].region == new_segment.region) {
-        list[size-1].x_end = new_segment.x_end;
-    } else {
-        list[size] = new_segment; size++;
+struct cmpclass {
+    const std::vector<Segment> &segments;
+    cmpclass(const std::vector<Segment> &segments) : segments(segments) { }
+    bool operator() (int i,int j) {
+        int x1 = i >= 0 ? segments[i].x_start : segments[-i-1].x_end;
+        int x2 = j >= 0 ? segments[j].x_start : segments[-j-1].x_end;
+        if(x1 == x2) {
+            return i > j; // always have start before end
+        }
+        return x1 < x2;
     }
-}
-
+};
 struct ScanLine {
     std::vector<Segment> segments;
     
     void add_segment(const Segment &add) { // underwrites
-        unsigned int new_segments_max_size = 2*segments.size() + 1;
-        Segment new_segments[new_segments_max_size];
-        unsigned int new_segments_size = 0;
-        
-        // currently this ignores depth and new areas always overwrite old ones
-        BOOST_FOREACH(const Segment &segment, segments) {
-            Segment add_clipped = add.clip(new_segments_size ? new_segments[new_segments_size-1].x_end : INT_MIN, segment.x_start);
-            if(add_clipped.is_real()) {
-                append(new_segments, new_segments_size, add_clipped);
-            }
-            
-            append(new_segments, new_segments_size, segment);
-        }
-        Segment add_clipped = add.clip(new_segments_size ? new_segments[new_segments_size-1].x_end : INT_MIN, INT_MAX);
-        if(add_clipped.is_real()) {
-            append(new_segments, new_segments_size, add_clipped);
-        }
-        
-        segments.resize(new_segments_size);
-        for(unsigned int i = 0; i < new_segments_size; i++) {
-            segments[i] = new_segments[i];
-        }
+        segments.push_back(add);
     }
     void finalize_layer() {
         BOOST_FOREACH(Segment &segment, segments) {
@@ -84,9 +67,87 @@ struct ScanLine {
             segment.z_slope = 0;
         }
     }
-    void accumulate_results(std::vector<Result> &results, const TaggedImage &img, unsigned int Y) {
-        BOOST_FOREACH(const Segment &segment, segments) {
-            results[segment.region] += img.get_line_sum(Y, segment.x_start, segment.x_end);
+    void accumulate_results(std::vector<Result> &results, const TaggedImage &img, unsigned int Y, std::vector<int> *dbg_image=NULL) {
+        unsigned int indices_size = segments.size()*2;
+        int indices[indices_size];
+        for(unsigned int i = 0; i < segments.size(); i++) {
+            indices[i] = i;
+        }
+        for(unsigned int i = 0; i < segments.size(); i++) {
+            indices[segments.size()+i] = -i-1;
+        }
+        std::sort(indices, indices + indices_size, cmpclass(segments));
+        
+        bool active[segments.size()];
+        for(unsigned int i = 0; i < segments.size(); i++) {
+            active[i] = false;
+        }
+        static std::priority_queue<int> activelist;
+        assert(activelist.empty());
+        int last_x = -1;
+        for(unsigned int i = 0; i < indices_size; i++) {
+            //std::cout << "INDEX " << i << std::endl;
+            // find current top segment
+            int best = -1;
+            if(last_x >= 0) {
+                while(!activelist.empty()) {
+                    if(active[-activelist.top()]) {
+                        best = -activelist.top();
+                        break;
+                    } else {
+                        activelist.pop();
+                    }
+                }
+            }
+            /*
+            int best2 = -1;
+            for(unsigned int j = 0; j < segments.size(); j++) {
+                if(active[j]) {
+                    best2 = j;
+                    break;
+                }
+            }
+            assert(best == best2);
+            */
+            //std::cout << "  BEST " << best << std::endl;
+            
+            // apply start or end
+            int index = indices[i];
+            int this_x;
+            if(index >= 0) { // start
+                int seg = index;
+                //assert(!active[seg]);
+                active[seg] = true;
+                activelist.push(-seg);
+                this_x = segments[seg].x_start;
+                //std::cout << "START " << seg << std::endl;
+            } else { // end
+                int seg = -index-1;
+                //assert(active[seg]);
+                active[seg] = false;
+                this_x = segments[seg].x_end;
+                //std::cout << "END " << seg << std::endl;
+            }
+            
+            if(last_x >= 0) {
+                //assert(this_x >= last_x);
+                if(best != -1 && this_x > last_x) {
+                    const Segment &segment = segments[best];
+                    //assert(*last_x >= segment.x_start);
+                    //assert(this_x <= segment.x_end);
+                    results[segment.region] += img.get_line_sum(Y, last_x, this_x);
+                    if(dbg_image) {
+                        for(int X = last_x; X < this_x; X++) {
+                            (*dbg_image)[Y * img.cam_info.width + X] = segment.region + 10;
+                        }
+                    }
+                }
+            }
+            
+            last_x = this_x;
+        }
+        while(!activelist.empty()) {
+            activelist.pop();
         }
     }
     void reset() {
@@ -149,13 +210,9 @@ struct RenderBuffer {
         return results2;
     }
     void draw_debug_regions(std::vector<int> &dbg_image) {
+        std::vector<Result> results(areas.size(), Result::Zero());
         for(unsigned int Y = 0; Y < img->cam_info.height; Y++) {
-            ScanLine &scanline = scanlines[Y];
-            BOOST_FOREACH(const Segment &segment, scanline.segments) {
-                for(int X = segment.x_start; X < segment.x_end; X++) {
-                    dbg_image[Y * img->cam_info.width + X] = segment.region + 1;
-                }
-            }
+            scanlines[Y].accumulate_results(results, *img, Y, &dbg_image);
         }
     }
 };
