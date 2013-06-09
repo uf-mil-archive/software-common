@@ -55,7 +55,8 @@ struct ScanLine {
     std::vector<Segment> segments;
     
     void add_segment(const Segment &add) { // underwrites
-        Segment new_segments[2*segments.size() + 1];
+        unsigned int new_segments_max_size = 2*segments.size() + 1;
+        Segment new_segments[new_segments_max_size];
         unsigned int new_segments_size = 0;
         
         // currently this ignores depth and new areas always overwrite old ones
@@ -70,6 +71,11 @@ struct ScanLine {
         Segment add_clipped = add.clip(new_segments_size ? new_segments[new_segments_size-1].x_end : INT_MIN, INT_MAX);
         if(add_clipped.is_real()) {
             append(new_segments, new_segments_size, add_clipped);
+        }
+        
+        segments.resize(new_segments_size);
+        for(unsigned int i = 0; i < new_segments_size; i++) {
+            segments[i] = new_segments[i];
         }
     }
     void finalize_layer() {
