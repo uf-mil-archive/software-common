@@ -282,6 +282,7 @@ struct ParticleFilter {
     boost::shared_ptr<const Obj> obj;
     std::vector<Particle> particles;
     double total_last_P;
+    RenderBuffer myrb;
     
     ParticleFilter(const TargetDesc &targetdesc, boost::shared_ptr<const Obj> obj, const TaggedImage &img, double N) :
         targetdesc(targetdesc),
@@ -306,8 +307,8 @@ struct ParticleFilter {
         
         // update particles
         BOOST_FOREACH(Particle &particle, particles) {
-            RenderBuffer tmp_rb = rb;
-            particle.update(img, tmp_rb);
+            myrb.reset(img, rb);
+            particle.update(img, myrb);
         }
         
         total_last_P = 0;

@@ -92,6 +92,12 @@ struct ScanLine {
     void reset() {
         segments.clear();
     }
+    void reset(const ScanLine &other) {
+        segments.resize(other.segments.size());
+        for(unsigned int i = 0; i < other.segments.size(); i++) {
+            segments[i] = other.segments[i];
+        }
+    }
 };
 
 struct RenderBuffer {
@@ -100,6 +106,7 @@ struct RenderBuffer {
     const TaggedImage *img; // pointer since we want to reassign it
     std::vector<ScanLine> scanlines;
     std::vector<double> areas;
+    RenderBuffer() { img = NULL; }
     RenderBuffer(const TaggedImage &img) { reset(img); }
     void reset(const TaggedImage &img) {
         this->img = &img;
@@ -108,6 +115,17 @@ struct RenderBuffer {
             scanline.reset();
         }
         areas.clear();
+    }
+    void reset(const TaggedImage &img, const RenderBuffer &orig) {
+        this->img = &img;
+        
+        assert(orig.scanlines.size() == img.cam_info.height);
+        scanlines.resize(img.cam_info.height);
+        
+        int i = 0; BOOST_FOREACH(ScanLine &scanline, scanlines) {
+            scanline.reset(orig.scanlines[i]);
+         i++; }
+        areas = orig.areas;
     }
     RegionType new_region() {
         areas.push_back(0);
