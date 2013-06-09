@@ -429,13 +429,13 @@ struct GoalExecutor {
             msg.type = visualization_msgs::Marker::POINTS;
             msg.scale = make_xyz<Vector3>(.1, .1, 1);
             msg.color.a = 1;
-            BOOST_FOREACH(const ParticleFilter &particle_filter, particle_filters) {
-                BOOST_FOREACH(const Particle &particle, particle_filter.particles) { int i = &particle - particle_filter.particles.data();
+            int i = 0; BOOST_FOREACH(const ParticleFilter &particle_filter, particle_filters) {
+                BOOST_FOREACH(const Particle &particle, particle_filter.particles) {
                     msg.points.push_back(vec2xyz<Point>(particle.pos));
                     msg.colors.push_back(make_rgba<ColorRGBA>(
                         particle.smoothed_last_P/max_ps[i].smoothed_last_P, 0, 1-particle.smoothed_last_P/max_ps[i].smoothed_last_P, 1));
                 }
-            }
+             i++; }
             particles_pub.publish(msg);
         }
         
