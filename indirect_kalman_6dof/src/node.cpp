@@ -73,12 +73,13 @@ struct Node {
 
         config.update.m_nav = uf_common::get_Vector3(private_nh, "m_nav");
 
+        ros::Time now = ros::Time::now();
         tf::StampedTransform imu2dvl;
-        tf_listener.waitForTransform("/dvl", "/imu", ros::Time::now(), ros::Duration(10.0));
-        tf_listener.lookupTransform("/dvl", "/imu", ros::Time::now(), imu2dvl);
+        tf_listener.waitForTransform("/dvl", "/imu", now, ros::Duration(10.0));
+        tf_listener.lookupTransform("/dvl", "/imu", now, imu2dvl);
         tf::StampedTransform imu2depth;
-        tf_listener.waitForTransform("/depth", "/imu", ros::Time::now(), ros::Duration(10.0));
-        tf_listener.lookupTransform("/depth", "/imu", ros::Time::now(), imu2depth);
+        tf_listener.waitForTransform("/depth", "/imu", now, ros::Duration(10.0));
+        tf_listener.lookupTransform("/depth", "/imu", now, imu2depth);
 
         Eigen::Matrix<double, 4, 3> beam_mat_dvl;
         beam_mat_dvl <<
@@ -119,7 +120,7 @@ struct Node {
             uf_common::xyz2vec(imu->angular_velocity)
         };
 
-        navcomp->updateINS(measurement, imu->header.stamp.toSec());
+        navcomp->updateINS(measurement, imu->header.stamp.toSec(), ros::Time::now().toSec());
     }
 
     void onMag(geometry_msgs::Vector3StampedConstPtr mag) {

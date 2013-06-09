@@ -41,7 +41,7 @@ public:
     boost::optional<State> getState() const;
     INS::Error getINSError() const;
 
-    void updateINS(const INS::Measurement &measurement, double measurement_time);
+    void updateINS(const INS::Measurement &measurement, double measurement_time, double now_time);
     void updateMag(const Eigen::Vector3d &y_m, double measurement_time);
     void updateDVL(const Eigen::Matrix<double, 4, 1> &y_d,
                    const boost::array<bool, 4> &d_valid,

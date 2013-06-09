@@ -33,7 +33,8 @@ boost::optional<NavigationComputer::State> NavigationComputer::getState() const 
 }
 
 void NavigationComputer::updateINS(const INS::Measurement &measurement,
-                                   double measurement_time) {
+                                   double measurement_time,
+                                   double now_time) {
     if (!ins) {
         ins_init.updateAccel(measurement.y_a);
         return;
@@ -73,6 +74,12 @@ void NavigationComputer::updateINS(const INS::Measurement &measurement,
     for (int i=0; i<updates; i++) {
         ins->update(measurement, config.T_imu);
         ins_time += config.T_imu;
+    }
+
+    // If we're not relying on timestamps, keep ins_time synced with
+    // current time
+    if (!config.verify_timestamps) {
+        ins_time = now_time;
     }
 }
 
