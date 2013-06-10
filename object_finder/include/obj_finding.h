@@ -46,7 +46,7 @@ struct Component {
         }
         return total_centroid/total_area;
     }
-    void draw(RenderBuffer &renderbuffer, int region, Eigen::Vector3d pos, Eigen::Quaterniond orientation, std::vector<int>* dbg_image) const;
+    void draw(RenderBuffer &renderbuffer, int region, Eigen::Vector3d pos, Eigen::Quaterniond orientation) const;
 };
 
 struct Marker {

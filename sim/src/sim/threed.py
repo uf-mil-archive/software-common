@@ -234,7 +234,7 @@ class World(object):
             glBegin(GL_TRIANGLE_FAN)
             glNormal3f(0, 0, 1)
             glColor4f(0, 0, 0.5, 0.5)
-            glVertex4f(pos[0], pos[1], min(0, pos[2] - 0.15), 1)
+            glVertex4f(pos[0], pos[1], min(0, pos[2] - 0.2), 1)
             glVertex4f(-1, -1, 0, 0)
             glVertex4f(+1, -1, 0, 0)
             glVertex4f(+1, +1, 0, 0)
@@ -245,7 +245,7 @@ class World(object):
             glBegin(GL_TRIANGLE_FAN)
             glNormal3f(0, 0, -1)
             glColor4f(0, 0, 0.5, 0.5)
-            glVertex4f(pos[0], pos[1], max(0, pos[2] + 0.15), 1)
+            glVertex4f(pos[0], pos[1], max(0, pos[2] + 0.2), 1)
             glVertex4f(-1, -1, 0, 0)
             glVertex4f(-1, +1, 0, 0)
             glVertex4f(+1, +1, 0, 0)
@@ -293,19 +293,23 @@ class World(object):
 tf_br = tf.TransformBroadcaster()
 
 class Camera(object):
-    def __init__(self, world, name, set_pose_func, base_link_body, fovy=90):
+    def __init__(self, world, name, set_pose_func, base_link_body, fovy=90, aspect=640/480):
         self.world = world
         self.name = name
         self.set_pose_func = set_pose_func
         self.base_link_body = base_link_body
         self.fovy = fovy
+        self.aspect = aspect
         
         self.image_pub = rospy.Publisher('/%s/image_rect_color' % name, Image)
         self.info_pub = rospy.Publisher('/%s/camera_info' % name, CameraInfo)
     
     def step(self):
         t = rospy.Time.now()
-        _, _, width, height = glGetFloatv(GL_VIEWPORT)
+        _, _, oldwidth, oldheight = glGetFloatv(GL_VIEWPORT)
+        height = min(oldheight, int(oldwidth / self.aspect + .5))
+        width = int(self.aspect * height + .5)
+        glViewport(0, 0, width, height)
         
         msg = CameraInfo()
         msg.header.stamp = t
@@ -352,6 +356,7 @@ class Camera(object):
                      "/base_link")
 		
         if not self.image_pub.get_num_connections():
+            glViewport(0, 0, oldwidth, oldheight)
             return
 		
         self.world.draw()
@@ -370,6 +375,8 @@ class Camera(object):
         msg.step = width * 4
         msg.data = x.tostring()
         self.image_pub.publish(msg)
+        
+        glViewport(0, 0, oldwidth, oldheight)
 
 class Interface(object):
     def init(self, world, pos=v(0, -10, 2)):

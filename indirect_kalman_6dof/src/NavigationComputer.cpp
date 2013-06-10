@@ -28,19 +28,27 @@ boost::optional<NavigationComputer::State> NavigationComputer::getState() const 
     state.filt.correct(kalman.getINSError());
     state.cov = kalman.getP();
     state.stats = stats;
+    state.ins_time = ins_time;
     return state;
 }
 
 void NavigationComputer::updateINS(const INS::Measurement &measurement,
-                                   double measurement_time) {
+                                   double measurement_time,
+                                   double now_time) {
     if (!ins) {
         ins_init.updateAccel(measurement.y_a);
         return;
     }
 
-    // Calculate how many updates are necessary to bring INS
-    // to this measurement.
-    double T_delta = measurement_time - ins_time;
+    // Calculate how many updates are necessary to bring INS to this
+    // measurement.
+    double T_delta;
+    if (config.verify_timestamps) {
+        T_delta = measurement_time - ins_time;
+    } else {
+        T_delta = config.T_imu;
+    }
+
     int updates = static_cast<int>(round(T_delta / config.T_imu));
 
     if (updates <= 0) {
@@ -66,6 +74,12 @@ void NavigationComputer::updateINS(const INS::Measurement &measurement,
     for (int i=0; i<updates; i++) {
         ins->update(measurement, config.T_imu);
         ins_time += config.T_imu;
+    }
+
+    // If we're not relying on timestamps, keep ins_time synced with
+    // current time
+    if (!config.verify_timestamps) {
+        ins_time = now_time;
     }
 }
 
@@ -172,8 +186,6 @@ void NavigationComputer::tryInitINS(double run_time) {
     ins_time = run_time;
     kalman_time = run_time;
     last_correction_time = run_time;
-    return;
-
 }
 
 void NavigationComputer::predict(int predicts) {
@@ -225,6 +237,10 @@ void NavigationComputer::update() {
 
 bool NavigationComputer::verifyKalmanTime(const std::string &sensor,
                                           double measurement_time) {
+    if (!config.verify_timestamps) {
+        return true;
+    }
+
     double dt = measurement_time - kalman_time;
 
     if (dt < -config.T_kalman/2) {

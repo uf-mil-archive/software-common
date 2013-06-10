@@ -17,23 +17,23 @@ static Vector3d flat_vector(Vector2d x) {
     return Vector3d(x[0], x[1], 0);
 }
 
-void Component::draw(RenderBuffer &renderbuffer, int region, Vector3d pos, Quaterniond orientation, vector<int>* dbg_image) const {
+void Component::draw(RenderBuffer &renderbuffer, int region, Vector3d pos, Quaterniond orientation) const {
     BOOST_FOREACH(const Triangle &tri, triangles) {
         // XXX one corner being behind the camera does not mean the triangle is invisible!
         // instead, it is an "external triangle" that needs to be handled specially
         
-        Vector3d c0_camera = renderbuffer.img.transform_inverse * (pos + orientation._transformVector(tri.corners[0]));
-        Vector3d c0_homo = renderbuffer.img.proj * c0_camera.homogeneous();
+        Vector3d c0_camera = renderbuffer.img->transform_inverse * (pos + orientation._transformVector(tri.corners[0]));
+        Vector3d c0_homo = renderbuffer.img->proj * c0_camera.homogeneous();
         if(c0_homo(2) <= 0) continue; // behind camera
         Vector2d c0 = c0_homo.hnormalized();
         
-        Vector3d c1_camera = renderbuffer.img.transform_inverse * (pos + orientation._transformVector(tri.corners[1]));
-        Vector3d c1_homo = renderbuffer.img.proj * c1_camera.homogeneous();
+        Vector3d c1_camera = renderbuffer.img->transform_inverse * (pos + orientation._transformVector(tri.corners[1]));
+        Vector3d c1_homo = renderbuffer.img->proj * c1_camera.homogeneous();
         if(c1_homo(2) <= 0) continue; // behind camera
         Vector2d c1 = c1_homo.hnormalized();
         
-        Vector3d c2_camera = renderbuffer.img.transform_inverse * (pos + orientation._transformVector(tri.corners[2]));
-        Vector3d c2_homo = renderbuffer.img.proj * c2_camera.homogeneous();
+        Vector3d c2_camera = renderbuffer.img->transform_inverse * (pos + orientation._transformVector(tri.corners[2]));
+        Vector3d c2_homo = renderbuffer.img->proj * c2_camera.homogeneous();
         if(c2_homo(2) <= 0) continue; // behind camera
         Vector2d c2 = c2_homo.hnormalized();
         
@@ -58,22 +58,17 @@ void Component::draw(RenderBuffer &renderbuffer, int region, Vector3d pos, Quate
             }
             
             // draw region between c0->c2 and ca->cb edges
-            for(int Y = max(0, (int)ceil(ca[1] - 0.5)); Y + 0.5 < cb[1] && Y < (int)renderbuffer.img.cam_info.height; Y++) {
+            for(int Y = max(0, (int)ceil(ca[1] - 0.5)); Y + 0.5 < cb[1] && Y < (int)renderbuffer.img->cam_info.height; Y++) {
                 double y = Y + 0.5;
                 double x1 = (y - c0[1])*(c2[0] - c0[0])/(c2[1] - c0[1]) + c0[0];
                 double x2 = (y - ca[1])*(cb[0] - ca[0])/(cb[1] - ca[1]) + ca[0];
                 if(x2 < x1) swap(x2, x1); // sort x's
-                int X1 = max(0, min((int)renderbuffer.img.cam_info.width-1, (int)ceil(x1 - 0.5)));
-                int X2 = max(0, min((int)renderbuffer.img.cam_info.width-1, (int)ceil(x2 - 0.5)));
+                int X1 = max(0, min((int)renderbuffer.img->cam_info.width-1, (int)ceil(x1 - 0.5)));
+                int X2 = max(0, min((int)renderbuffer.img->cam_info.width-1, (int)ceil(x2 - 0.5)));
                 
                 double z_0 = 0; // XXX
                 double z_slope = 0; // XXX
                 renderbuffer.scanlines[Y].add_segment(Segment(X1, X2, z_0, z_slope, region));
-                if(dbg_image) {
-                    for(int X = X1; X < X2; X++) {
-                        (*dbg_image)[Y * renderbuffer.img.cam_info.width + X] += region+1;
-                    }
-                }
             }
         }
     }

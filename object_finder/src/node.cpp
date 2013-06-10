@@ -70,7 +70,7 @@ Quaterniond quat_from_rotvec(Vector3d r) {
     return Quaterniond(AngleAxisd(r.norm(), r.normalized()));
 }
 
-struct PoseGuess {
+struct Particle {
     TargetDesc goal;
     boost::shared_ptr<const Obj> obj;
     Vector3d pos;
@@ -79,9 +79,11 @@ struct PoseGuess {
     RenderBuffer::RegionType fg_region;
     
     Vector3d last_color;
+    double last_P;
+    double smoothed_last_P;
     
-    PoseGuess() { }
-    PoseGuess(const TargetDesc &goal,
+    Particle() { }
+    Particle(const TargetDesc &goal,
              boost::shared_ptr<const Obj> obj,
              const TaggedImage &image) :
         goal(goal),
@@ -104,15 +106,18 @@ struct PoseGuess {
             xyzw2quat(goal.prior_distribution.pose.orientation);
         if(goal.check_180z_flip && uniform() >= .5)
             q = q * Quaterniond(0, 0, 1, 0);
+        smoothed_last_P = 1;
     }
-    PoseGuess(const TargetDesc &goal,
+    Particle(const TargetDesc &goal,
              boost::shared_ptr<const Obj> obj,
              Vector3d pos, Quaterniond q) :
         goal(goal), obj(obj),
         pos(pos), q(q) {
+        assert(false);
     }
-    PoseGuess realpredict(double amount) const {
-        PoseGuess p(*this);
+    Particle realpredict(double amount) const {
+        Particle p(*this);
+        p.smoothed_last_P = 1.;
         // diffusion to test near solutions to try to find a better fit
         p.pos += amount * gaussvec();
         if(false) { // allow_rolling
@@ -126,57 +131,56 @@ struct PoseGuess {
         }
         return p;
     }
-    PoseGuess predict(double amount) const {
-        PoseGuess p(*this);
+    Particle predict() const {
         if(uniform() < .5) {
             return realpredict(.01);
         } else {
             return realpredict(.1);
         }
-        return p;
     }
-    void draw1(RenderBuffer &renderbuffer, vector<int>* dbg_image=NULL) {
+    void draw1(RenderBuffer &renderbuffer) {
         bg_region = renderbuffer.new_region();
         if(!obj) {
-            sphere_draw(renderbuffer, bg_region, pos, 2*goal.sphere_radius,
-                dbg_image);
+            sphere_draw(renderbuffer, bg_region, pos, 2*goal.sphere_radius);
             return;
         }
         BOOST_FOREACH(const Component &component, obj->components) {
             if(component.name.find("background_") == 0) {
-                component.draw(renderbuffer, bg_region, pos, q, dbg_image);
+                component.draw(renderbuffer, bg_region, pos, q);
             }
         }
     }
-    void draw2(RenderBuffer &renderbuffer, vector<int>* dbg_image=NULL) {
+    void draw2(RenderBuffer &renderbuffer) {
         fg_region = renderbuffer.new_region();
         if(!obj) {
-            sphere_draw(renderbuffer, fg_region, pos, goal.sphere_radius,
-                dbg_image);
+            sphere_draw(renderbuffer, fg_region, pos, goal.sphere_radius);
             return;
         }
         BOOST_FOREACH(const Component &component, obj->components) {
             if(component.name.find("solid_") == 0) {
-                component.draw(renderbuffer, fg_region, pos, q, dbg_image);
+                component.draw(renderbuffer, fg_region, pos, q);
             }
         }
     }
-    double P(const TaggedImage &img, const vector<ResultWithArea> &results, vector<int>* dbg_image=NULL) {
+    double P(const TaggedImage &img, RenderBuffer &rb, bool print_debug_info=false) {
+        draw2(rb);
+        draw1(rb);
+        vector<ResultWithArea> results = rb.get_results();
         Result inner_result = results[fg_region];
         Result outer_result = results[bg_region];
         Result far_result = img.total_result - inner_result; //- outer_result;
         
         if(inner_result.count < 100 || outer_result.count < 100 || far_result.count < 100) {
-            return 0.001;
-            if(dbg_image) {
+            if(print_debug_info) {
                 cout << endl;
                 cout << endl;
                 cout << "NOT VISIBLE" << endl;
             }
             // not visible
+            return 0.001;
         }
         
-        last_color = inner_result.avg_color();
+        last_color = inner_result.avg_color(); // XXX
         
         Vector3d inner_color = inner_result.avg_color().normalized();
         Vector3d outer_color = outer_result.avg_color().normalized();
@@ -186,7 +190,7 @@ struct PoseGuess {
         double P = 1;
         {
             if(results[fg_region].count < 100) {
-                if(dbg_image) {
+                if(print_debug_info) {
                     cout << "TOO SMALL FG" << endl;
                 }
                 P *= 0.5;
@@ -201,7 +205,7 @@ struct PoseGuess {
         }
         {
             if(results[bg_region].count < 100) {
-                if(dbg_image) {
+                if(print_debug_info) {
                     cout << "TOO SMALL BG" << endl;
                 }
                 P *= 0.5;
@@ -215,7 +219,7 @@ struct PoseGuess {
             }
         }
         
-        if(dbg_image) {
+        if(print_debug_info) {
             cout << endl;
             cout << endl;
             cout << "inner count" << inner_result.count << endl;
@@ -235,79 +239,77 @@ struct PoseGuess {
         }
         return P;
     }
-};
-
-struct Particle {
-    vector<PoseGuess> poseguesses;
-    vector<double> last_Ps;
-    Particle() { }
-    Particle(const object_finder::FindGoal &goal,
-             const vector<boost::shared_ptr<Obj> > objs,
-             const TaggedImage &image) {
+    void update(const TaggedImage &img, RenderBuffer &rb, bool print_debug_info=false) {
+        double P = this->P(img, rb, print_debug_info);
         
-        BOOST_FOREACH(const TargetDesc &targetdesc, goal.targetdescs) {
-            poseguesses.push_back(PoseGuess(targetdesc,
-                objs[&targetdesc - goal.targetdescs.data()], image));
-        }
+        last_P = P;
+        
+        smoothed_last_P = pow(smoothed_last_P, 0.9) * pow(last_P, 0.1);
     }
-    Particle predict(double dt, const TaggedImage &image) const {
-        Particle p(*this);
-        int index = poseguesses.size() * uniform();
-        if(uniform() < .5) { // diffuse
-            PoseGuess &poseguess = p.poseguesses[index];
-            poseguess = poseguess.predict(dt);
-        } else { // resample
-            PoseGuess &poseguess = p.poseguesses[index];
-            poseguess = PoseGuess(poseguess.goal, poseguess.obj, image);
+    void accumulate_successors(std::vector<Particle> &res, const TaggedImage &img, double N, const std::vector<Particle> &particles, double total_last_P) const {
+        int count = N * last_P/total_last_P + uniform();
+        for(int i = 0; i < count; i++) {
+            res.push_back(i==0 ?
+                *this :
+                predict());
         }
-        BOOST_FOREACH(PoseGuess &poseguess, p.poseguesses) {
-            bool bad = false;
-            BOOST_FOREACH(PoseGuess &poseguess2, p.poseguesses) {
-                if(&poseguess2 == &poseguess) break;
-                if((poseguess2.pos - poseguess.pos).norm() < .1) {
-                    bad = true;
-                    break;
-                }
-            }
-            if(bad) {
-                poseguess = PoseGuess(poseguess.goal, poseguess.obj, image);
-            }
-        }
-        return p;
-    }
-    double P(const TaggedImage &img, vector<int>* dbg_image=NULL) {
-        RenderBuffer rb(img);
-        BOOST_FOREACH(PoseGuess &poseguess, poseguesses)
-            poseguess.draw1(rb, dbg_image);
-        BOOST_FOREACH(PoseGuess &poseguess, poseguesses)
-            poseguess.draw2(rb, dbg_image);
-        vector<ResultWithArea> results = rb.get_results();
-        double P = 1;
-        last_Ps.clear();
-        BOOST_FOREACH(PoseGuess &poseguess, poseguesses) {
-            double this_P = poseguess.P(img, results, dbg_image);
-            P *= this_P;
-            last_Ps.push_back(this_P);
-        }
-        return P;
-    }
-    double dist(const Particle &other) {
-        assert(other.poseguesses.size() == poseguesses.size());
-        double max_dist = 0;
-        for(unsigned int i = 0; i < poseguesses.size(); i++) {
-            max_dist = max(max_dist,
-                (poseguesses[i].pos - other.poseguesses[i].pos).norm());
-        }
-        return max_dist;
     }
 };
 
-struct Node {
-    static const int N = 1000;
+struct ParticleFilter {
+    TargetDesc targetdesc;
+    boost::shared_ptr<const Obj> obj;
+    std::vector<Particle> particles;
     
+    ParticleFilter(const TargetDesc &targetdesc, boost::shared_ptr<const Obj> obj, const TaggedImage &img, double N) :
+        targetdesc(targetdesc),
+        obj(obj) {
+        for(int i = 0; i < N; i++)
+            particles.push_back(Particle(targetdesc, obj, img));
+    }
+    
+    RenderBuffer update(const TaggedImage &img, const RenderBuffer &rb, double N) {
+        
+        double original_total_last_P = 0;
+        BOOST_FOREACH(const Particle &particle, particles) original_total_last_P += particle.last_P;
+        
+        // residual resampling
+        std::vector<Particle> new_particles;
+        BOOST_FOREACH(const Particle &particle, particles) {
+            particle.accumulate_successors(new_particles, img, N*2/3., particles, original_total_last_P);
+        }
+        for(unsigned int i = 0; i < N/3; i++) {
+            new_particles.push_back(Particle(targetdesc, obj, img));
+        }
+        particles.swap(new_particles);
+        
+        // update particles
+        BOOST_FOREACH(Particle &particle, particles) {
+            RenderBuffer tmp_rb = rb;
+            particle.update(img, tmp_rb);
+        }
+        
+        RenderBuffer res = rb;
+        get_best().P(img, res);
+        return res;
+    }
+    
+    Particle get_best() const {
+        // find mode
+        Particle max_p; max_p.smoothed_last_P = -1;
+        BOOST_FOREACH(const Particle &particle, particles)
+            if(particle.smoothed_last_P > max_p.smoothed_last_P) max_p = particle;
+        assert(max_p.smoothed_last_P >= 0);
+        return max_p;
+    }
+};
+
+struct GoalExecutor {
     ros::NodeHandle nh;
+    ros::NodeHandle camera_nh;
     ros::NodeHandle private_nh;
-    actionlib::SimpleActionServer<object_finder::FindAction> actionserver;
+    object_finder::FindGoal goal;
+    
     tf::TransformListener listener;
     message_filters::Subscriber<sensor_msgs::Image> image_sub;
     message_filters::Subscriber<CameraInfo> info_sub;
@@ -316,30 +318,31 @@ struct Node {
     ros::Publisher particles_pub;
     ros::Publisher pose_pub;
     ros::Publisher image_pub;
-    
-    bool have_goal;
-    object_finder::FindGoal goal;
+    boost::function1<void, const object_finder::FindFeedback&> feedback_callback;
     
     vector<boost::shared_ptr<Obj> > current_objs;
     
-    typedef std::pair<double, Particle> pair_type;
-    std::vector<pair_type> particles;
+    double N;
+    std::vector<ParticleFilter> particle_filters;
     ros::Time current_stamp;
-    double infinite_p;
     
-
-    static bool compare_weight(const pair_type a, const pair_type b) {
-        return a.first < b.first;
-    }
-    
-    Node() :
+    GoalExecutor(const object_finder::FindGoal &goal,
+                 boost::function1<void, const object_finder::FindFeedback&> 
+                    feedback_callback) :
+        camera_nh("camera"),
         private_nh("~"),
-        actionserver(nh, "find", false),
-        image_sub(nh, "camera/image_rect_color", 1),
-        info_sub(nh, "camera/camera_info", 1),
-        info_tf_filter(info_sub, listener, "", 10),
+        goal(goal),
+        image_sub(camera_nh, "image_rect_color", 1),
+        info_sub(camera_nh, "camera_info", 1),
+        info_tf_filter(info_sub, listener, goal.header.frame_id, 10),
         sync(image_sub, info_tf_filter, 10),
-        have_goal(false) {
+        feedback_callback(feedback_callback) {
+        
+        BOOST_FOREACH(const TargetDesc &targetdesc, goal.targetdescs) {
+            current_objs.push_back(targetdesc.type == TargetDesc::TYPE_OBJECT
+                ? boost::make_shared<Obj>(targetdesc.object_filename)
+                : boost::shared_ptr<Obj>());
+        }
         
         particles_pub = private_nh.advertise<visualization_msgs::Marker>(
             "particles", 1);
@@ -347,38 +350,19 @@ struct Node {
         image_pub = private_nh.advertise<sensor_msgs::Image>(
             "debug_image", 1);
         
-        sync.registerCallback(boost::bind(&Node::callback, this, _1, _2));
-        
-        actionserver.registerGoalCallback(
-            boost::bind(&Node::goalCallback, this));
-        actionserver.start();
+        sync.registerCallback(boost::bind(&GoalExecutor::callback, this, _1, _2));
     }
     
-    void init_particles(ros::Time t, const TaggedImage &img) {
-        particles.clear();
+    void init(ros::Time t, const TaggedImage &img) {
+        N = 300;
         
-        for(int i = 0; i < N; i++)
-            particles.push_back(
-                make_pair(1./N, Particle(goal, current_objs, img)));
-        
-        infinite_p = 1./N;
+        particle_filters.clear();
+        BOOST_FOREACH(const TargetDesc &targetdesc, goal.targetdescs) {
+            particle_filters.push_back(ParticleFilter(targetdesc,
+                current_objs[&targetdesc - goal.targetdescs.data()], img, N));
+        }
         
         current_stamp = t;
-    }
-    
-    void goalCallback() {
-        have_goal = true;
-        boost::shared_ptr<const object_finder::FindGoal> new_goal =
-            actionserver.acceptNewGoal();
-        goal = *new_goal;
-        particles.clear();
-        current_objs.clear();
-        BOOST_FOREACH(const TargetDesc &targetdesc, goal.targetdescs) {
-            current_objs.push_back(targetdesc.type == TargetDesc::TYPE_OBJECT
-                ? boost::make_shared<Obj>(targetdesc.object_filename)
-                : boost::shared_ptr<Obj>());
-        }
-        info_tf_filter.setTargetFrame(goal.header.frame_id);
     }
     
     void callback(const ImageConstPtr& image,
@@ -386,15 +370,7 @@ struct Node {
         assert(image->header.stamp == cam_info->header.stamp);
         assert(image->header.frame_id == cam_info->header.frame_id);
         
-        if(actionserver.isPreemptRequested()) {
-            have_goal = false;
-            current_objs.clear();
-        }
-        
-        if(!have_goal)
-            return;
-        
-        double dt = (image->header.stamp - current_stamp).toSec();
+        //double dt = (image->header.stamp - current_stamp).toSec();
         current_stamp = image->header.stamp;
         
         // get map from camera transform
@@ -410,63 +386,35 @@ struct Node {
         
         TaggedImage img(*image, *cam_info, eigen_from_tf(transform));
         
-        if(particles.size() == 0) {
-            ROS_INFO("got first frame; initializing particles");
-            init_particles(image->header.stamp, img);
+        if(particle_filters.size() == 0) {
+            ROS_INFO("got first frame; initializing");
+            init(image->header.stamp, img);
         } else if(image->header.stamp < current_stamp - ros::Duration(1) ||
                   image->header.stamp > current_stamp + ros::Duration(5)) {
             ROS_INFO("time jumped too far backwards or forwards; "
-                "reinitializing particles");
-            init_particles(image->header.stamp, img);
+                "reinitializing");
+            init(image->header.stamp, img);
         } else if(image->header.stamp < current_stamp) {
             ROS_ERROR("dropped out of order camera frame");
             return;
         }
         
-        // residual resampling
-        std::vector<std::pair<double, Particle> > new_particles;
-        BOOST_FOREACH(pair_type &pair, particles) {
-            int count = N * pair.first + uniform();
-            for(int i = 0; i < count; i++) {
-                new_particles.push_back(std::make_pair(-1, i==0?
-                    pair.second :
-                    pair.second.predict(dt, img)));
-            }
-        }
-        particles.swap(new_particles);
-        BOOST_FOREACH(pair_type &pair, particles)
-            pair.first = 1./particles.size();
+        ros::WallTime start_time = ros::WallTime::now();
         
-        // update weights
-        BOOST_FOREACH(pair_type &pair, particles)
-            pair.first *= pair.second.P(img);
-        infinite_p *= 1.0001; // no observation should result in a P of 1
+        //double total_smoothed_last_P = 0;
+        //BOOST_FOREACH(Particle &particle, particles) total_smoothed_last_P += particle.smoothed_last_P;
         
-        // replace particles doing worse than the median with new ones
-        // drawn from the prior distribution
-        sort(particles.begin(), particles.end(), compare_weight);
-        for(unsigned int i = 0; i < particles.size()/2; i++) {
-            pair_type &pair = particles[i];
-            if(pair.first < infinite_p) {
-                pair.first = infinite_p;
-                pair.second = Particle(goal, current_objs, img);
+        {
+            RenderBuffer rb(img);
+            BOOST_FOREACH(ParticleFilter &particle_filter, particle_filters) {
+                rb = particle_filter.update(img, rb, N);
             }
         }
         
-        // normalize weights
-        double total_weight = 0;
-        BOOST_FOREACH(pair_type &pair, particles) total_weight += pair.first;
-        
-        BOOST_FOREACH(pair_type &pair, particles) pair.first /= total_weight;
-        infinite_p /= total_weight;
-        
-        
-        // find mode
-        pair_type max_p; max_p.first = -1;
-        BOOST_FOREACH(pair_type &pair, particles)
-            if(pair.first > max_p.first) max_p = pair;
-        assert(max_p.first >= 0);
-        
+        std::vector<Particle> max_ps;
+        BOOST_FOREACH(const ParticleFilter &particle_filter, particle_filters) {
+            max_ps.push_back(particle_filter.get_best());
+        }
         
         { // send marker message for particle visualization
             visualization_msgs::Marker msg;
@@ -475,12 +423,11 @@ struct Node {
             msg.type = visualization_msgs::Marker::POINTS;
             msg.scale = make_xyz<Vector3>(.1, .1, 1);
             msg.color.a = 1;
-            BOOST_FOREACH(pair_type &pair, particles) {
-                BOOST_FOREACH(const PoseGuess &poseguess,
-                        pair.second.poseguesses) {
-                    msg.points.push_back(vec2xyz<Point>(poseguess.pos));
+            BOOST_FOREACH(const ParticleFilter &particle_filter, particle_filters) {
+                BOOST_FOREACH(const Particle &particle, particle_filter.particles) { int i = &particle - particle_filter.particles.data();
+                    msg.points.push_back(vec2xyz<Point>(particle.pos));
                     msg.colors.push_back(make_rgba<ColorRGBA>(
-                        pair.first/max_p.first, 0, 1-pair.first/max_p.first, 1));
+                        particle.smoothed_last_P/max_ps[i].smoothed_last_P, 0, 1-particle.smoothed_last_P/max_ps[i].smoothed_last_P, 1));
                 }
             }
             particles_pub.publish(msg);
@@ -490,24 +437,23 @@ struct Node {
             PoseStamped msg;
             msg.header.frame_id = goal.header.frame_id;
             msg.header.stamp = image->header.stamp;
-            msg.pose.position = vec2xyz<Point>(max_p.second.poseguesses[0].pos);
+            msg.pose.position = vec2xyz<Point>(max_ps[0].pos);
             msg.pose.orientation = quat2xyzw<geometry_msgs::Quaternion>(
-                max_p.second.poseguesses[0].q);
+                max_ps[0].q);
             pose_pub.publish(msg);
         }
         
         { // send action feedback
             object_finder::FindFeedback feedback;
-            BOOST_FOREACH(const PoseGuess &poseguess,
-                    max_p.second.poseguesses) {
+            BOOST_FOREACH(const Particle &particle, max_ps) {
                 TargetRes targetres;
-                targetres.pose.position = vec2xyz<Point>(poseguess.pos);
+                targetres.pose.position = vec2xyz<Point>(particle.pos);
                 targetres.pose.orientation =
-                     quat2xyzw<geometry_msgs::Quaternion>(poseguess.q);
-                targetres.color = make_rgba<ColorRGBA>(poseguess.last_color[0],
-                    poseguess.last_color[1], poseguess.last_color[2], 1);
-                if(poseguess.obj) {
-                    BOOST_FOREACH(const Marker &marker, poseguess.obj->markers) {
+                     quat2xyzw<geometry_msgs::Quaternion>(particle.q);
+                targetres.color = make_rgba<ColorRGBA>(particle.last_color[0],
+                    particle.last_color[1], particle.last_color[2], 1);
+                if(particle.obj) {
+                    BOOST_FOREACH(const Marker &marker, particle.obj->markers) {
                         targetres.markers.push_back(object_finder::MarkerPoint());
                         targetres.markers[targetres.markers.size()-1].name =
                             marker.name;
@@ -515,19 +461,36 @@ struct Node {
                             vec2xyz<Point>(marker.position);
                     }
                 }
+                targetres.P = particle.last_P;
+                targetres.smoothed_last_P = particle.smoothed_last_P;
                 feedback.targetreses.push_back(targetres);
             }
-            feedback.P = max_p.second.P(img);
-            feedback.P_within_10cm = 0;
-            BOOST_FOREACH(pair_type &pair, particles)
-                if(pair.second.dist(max_p.second) <= .2)
-                    feedback.P_within_10cm += pair.first;
-            actionserver.publishFeedback(feedback);
+            //RenderBuffer rb(img);
+            // XXX
+            //feedback.P = max_p.P(img, rb);
+            //feedback.P_within_10cm = 0;
+            //BOOST_FOREACH(Particle &particle, particles)
+            //    if(particle.dist(max_p) <= .2)
+            //        feedback.P_within_10cm += particle.smoothed_last_P/total_smoothed_last_P;
+            feedback_callback(feedback);
         }
         
+        ros::WallTime end_time = ros::WallTime::now();
+        if(end_time - start_time > ros::WallDuration(.1)) {
+            N *= .9;
+        } else {
+            N /= .9;
+        }
+        cout << "N = " << N << endl;
+        
         if(image_pub.getNumSubscribers()) { // send debug image
+            RenderBuffer rb(img);
+            BOOST_FOREACH(Particle &max_p, max_ps) { // XXX make const
+                max_p.P(img, rb, true);
+            }
+            
             vector<int> dbg_image(image->width*image->height, 0);
-            max_p.second.P(img, &dbg_image);
+            rb.draw_debug_regions(dbg_image);
             
             Image msg;
             msg.header = image->header;
@@ -541,13 +504,47 @@ struct Node {
                 for(unsigned int x = 0; x < image->width; x++) {
                     Vector3d orig_color = img.get_pixel(y, x);
                     msg.data[msg.step*y + 3*x + 0] =
-                        100*dbg_image[image->width*y + x];
+                        255.*dbg_image[image->width*y + x]/(rb.areas.size() + 1);
                     msg.data[msg.step*y + 3*x + 1] = 255*orig_color[1];
                     msg.data[msg.step*y + 3*x + 2] = 255*orig_color[2];
                 }
             }
             image_pub.publish(msg);
         }
+    }
+};
+
+
+struct Node {
+    ros::NodeHandle nh;
+    
+    typedef actionlib::SimpleActionServer<object_finder::FindAction> actionserverType;
+    actionserverType actionserver;
+    
+    boost::optional<GoalExecutor> goal_executor;
+    
+    Node() :
+        actionserver(nh, "find", false),
+        goal_executor(boost::none) {
+        
+        actionserver.registerGoalCallback(
+            boost::bind(&Node::goalCallback, this));
+        actionserver.registerPreemptCallback(
+            boost::bind(&Node::preemptCallback, this));
+        actionserver.start();
+    }
+    
+    void goalCallback() {
+        boost::shared_ptr<const object_finder::FindGoal> new_goal =
+            actionserver.acceptNewGoal();
+        goal_executor = boost::in_place(*new_goal, boost::bind(boost::mem_fn(
+            (void (actionserverType::*)(const actionserverType::Feedback &))
+            &actionserverType::publishFeedback), // this was fun
+        &actionserver, _1));
+    }
+    
+    void preemptCallback() {
+        goal_executor = boost::none;
     }
 };
 

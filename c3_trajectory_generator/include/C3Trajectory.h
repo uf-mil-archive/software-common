@@ -31,6 +31,12 @@ namespace subjugator {
                 return q_difference.dot(q_difference) < 1e-6;
             }
         };
+        
+        struct PointWithAcceleration : public Point {
+            Vector6d qdotdot;
+            PointWithAcceleration(const Vector6d &q, const Vector6d &qdot, const Vector6d &qdotdot) :
+                Point(q, qdot), qdotdot(qdotdot) { }
+        };
 
         struct Waypoint {
             Point r;
@@ -45,7 +51,7 @@ namespace subjugator {
         C3Trajectory(const Point &start, const Limits &limits);
         void update(double dt, const Waypoint &waypoint, double waypoint_t);
 
-        Point getCurrentPoint() const;
+        PointWithAcceleration getCurrentPoint() const;
 
     private:
         Vector6d q;

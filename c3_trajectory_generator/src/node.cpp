@@ -40,7 +40,7 @@ subjugator::C3Trajectory::Point Point_from_PoseTwist(const Pose &pose, const Twi
     return res;
 }
 
-PoseTwist PoseTwist_from_Point(const subjugator::C3Trajectory::Point p) {
+PoseTwist PoseTwist_from_PointWithAcceleration(const subjugator::C3Trajectory::PointWithAcceleration &p) {
     tf::Quaternion orient = tf::createQuaternionFromRPY(p.q[3], p.q[4], p.q[5]);
     
     PoseTwist res;
@@ -48,12 +48,17 @@ PoseTwist PoseTwist_from_Point(const subjugator::C3Trajectory::Point p) {
     res.pose.position = vec2xyz<Point>(p.q.head(3));
     quaternionTFToMsg(orient, res.pose.orientation);
     
-    res.twist.linear = vec2xyz<Vector3>(tf::Matrix3x3(orient.inverse()) * vec2vec(p.qdot.head(3)));
-    res.twist.angular = vec2xyz<Vector3>((Eigen::Matrix3d() <<
+    Eigen::Matrix3d worldangvel_from_eulerrates = (Eigen::Matrix3d() <<
         1,            0,              -sin(p.q[4]),
         0,  cos(p.q[3]), sin(p.q[3]) * cos(p.q[4]),
         0, -sin(p.q[3]), cos(p.q[3]) * cos(p.q[4])
-    ).finished() * p.qdot.tail(3));
+    ).finished();
+    
+    res.twist.linear = vec2xyz<Vector3>(tf::Matrix3x3(orient.inverse()) * vec2vec(p.qdot.head(3)));
+    res.twist.angular = vec2xyz<Vector3>(worldangvel_from_eulerrates * p.qdot.tail(3));
+    
+    res.acceleration.linear = vec2xyz<Vector3>(tf::Matrix3x3(orient.inverse()) * vec2vec(p.qdotdot.head(3)));
+    res.acceleration.angular = vec2xyz<Vector3>(worldangvel_from_eulerrates * p.qdotdot.tail(3));
     
     return res;
 }
@@ -159,7 +164,7 @@ struct Node {
         PoseTwistStamped msg;
         msg.header.stamp = c3trajectory_t;
         msg.header.frame_id = fixed_frame;
-        msg.posetwist = PoseTwist_from_Point(c3trajectory->getCurrentPoint());
+        msg.posetwist = PoseTwist_from_PointWithAcceleration(c3trajectory->getCurrentPoint());
         
         trajectory_pub.publish(msg);
         

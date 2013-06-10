@@ -12,6 +12,7 @@
   <depend package="rqt_gui"/>
   <depend package="rqt_gui_py"/>
   <depend package="thruster_handling"/>
+  <depend package="kill_handling"/>
   <depend package="uf_common"/>
 
   <export>

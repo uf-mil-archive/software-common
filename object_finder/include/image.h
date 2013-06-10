@@ -52,6 +52,12 @@ struct ResultWithArea : public Result {
     ResultWithArea() { }
     ResultWithArea(Result result, double area) : Result(result), area(area) { }
     Eigen::Vector3d avg_color_assuming_unseen_is(Eigen::Vector3d unseen_color) const {
+        if(area < count) {
+            if(area < count*.9) {
+                std::cout << "area (" << area << ") < count (" << count << ") * .9 !" << std::endl;
+            }
+            return avg_color();
+        }
         return (total_color+(area-count)*unseen_color)/area;
     }
     static ResultWithArea Zero() {
