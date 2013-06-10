@@ -254,12 +254,16 @@ struct Particle {
                 predict());
         }
     }
+    double dist(const Particle &other) {
+        return (pos - other.pos).norm();
+    }
 };
 
 struct ParticleFilter {
     TargetDesc targetdesc;
     boost::shared_ptr<const Obj> obj;
     std::vector<Particle> particles;
+    double total_last_P;
     
     ParticleFilter(const TargetDesc &targetdesc, boost::shared_ptr<const Obj> obj, const TaggedImage &img, double N) :
         targetdesc(targetdesc),
@@ -269,7 +273,6 @@ struct ParticleFilter {
     }
     
     RenderBuffer update(const TaggedImage &img, const RenderBuffer &rb, double N) {
-        
         double original_total_last_P = 0;
         BOOST_FOREACH(const Particle &particle, particles) original_total_last_P += particle.last_P;
         
@@ -288,6 +291,9 @@ struct ParticleFilter {
             RenderBuffer tmp_rb = rb;
             particle.update(img, tmp_rb);
         }
+        
+        total_last_P = 0;
+        BOOST_FOREACH(Particle &particle, particles) total_last_P += particle.last_P;
         
         RenderBuffer res = rb;
         get_best().P(img, res);
@@ -463,6 +469,11 @@ struct GoalExecutor {
                 }
                 targetres.P = particle.last_P;
                 targetres.smoothed_last_P = particle.smoothed_last_P;
+                targetres.P_within_10cm = 0;
+                ParticleFilter &particle_filter = particle_filters[&particle-max_ps.data()];
+                BOOST_FOREACH(Particle &particle, particle_filter.particles)
+                    if(particle.dist(particle) <= .2)
+                        targetres.P_within_10cm += particle.last_P/particle_filter.total_last_P;
                 feedback.targetreses.push_back(targetres);
             }
             //RenderBuffer rb(img);

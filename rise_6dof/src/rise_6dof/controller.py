@@ -49,9 +49,11 @@ class Controller(object):
             )),
         ])
         
-        error_velocity_world = (desired_x_dot + self.config['k'] * error_position_world) - x_dot
+        world_from_body2 = numpy.zeros((6, 6))
+        world_from_body2[:3, :3] = world_from_body;world_from_body2[3:, 3:] = world_from_body
+        error_velocity_world = (desired_x_dot + world_from_body2.dot(self.config['k'] * world_from_body2.T.dot(error_position_world))) - x_dot
         
-        pd_output = self.config['ks'] * error_velocity_world
+        pd_output = world_from_body2.dot(self.config['ks'] * world_from_body2.T.dot(error_velocity_world))
         
         output = pd_output
         if self.config['use_rise']:

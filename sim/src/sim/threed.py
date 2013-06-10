@@ -21,6 +21,7 @@ from nav_msgs.msg import Odometry
 from geometry_msgs.msg import Point, Vector3, Quaternion
 
 from vector import v, V
+import vector
 
 @apply
 class GLMatrix(object):
@@ -461,6 +462,56 @@ class Interface(object):
         self.world.draw()
         
         pygame.display.flip()
+
+import ode
+
+class Capsules(object):
+    def __init__(self, world, space, pos, color, capsules, radius, mass=2):
+        "capsules is a list of (start, end) points"
+        
+        self.capsules = capsules
+        
+        self.body = ode.Body(world)
+        self.body.setPosition(pos)
+        m = ode.Mass()
+        # computing MOI assuming sphere with .5 m radius
+        m.setSphere(mass/(4/3*math.pi*.5**3), .5) # setSphereTotal is broken
+        self.body.setMass(m)
+        
+        self.geoms = []
+        self.geoms2 = []
+        for start, end in capsules:
+            self.geoms.append(ode.GeomTransform(space))
+            x = ode.GeomCapsule(None, radius, (end-start).mag())
+            self.geoms2.append(x)
+            self.geoms[-1].setGeom(x)
+            self.geoms[-1].setBody(self.body)
+            x.setPosition((start+end)/2 + v(random.gauss(0, .01), random.gauss(0, .01), random.gauss(0, .01)))
+            a = (end - start).unit()
+            b = v(0, 0, 1)
+            x.setQuaternion(vector.axisangle_to_quat((a%b).unit(), -math.acos(a*b)))
+        
+        self.color = color
+        self.radius = radius
+    
+    def draw(self):
+        q = gluNewQuadric()
+        glColor3f(*self.color)
+        with GLMatrix:
+            rotate_to_body(self.body)
+            for start, end in self.capsules:
+                with GLMatrix:
+                    glTranslate(*start)
+                    gluSphere(q, self.radius, 30, 15)
+                with GLMatrix:
+                    glTranslate(*end)
+                    gluSphere(q, self.radius, 30, 15)
+                with GLMatrix:
+                    glTranslate(*start)
+                    a = (end - start).unit()
+                    b = v(0, 0, 1)
+                    glRotate(-math.degrees(math.acos(a*b)), *(a%b).unit())
+                    gluCylinder(q, self.radius, self.radius, (end - start).mag(), 10, 1)
 
 if __name__ == '__main__':
     w = World()
