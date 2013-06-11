@@ -471,9 +471,10 @@ struct GoalExecutor {
                 targetres.smoothed_last_P = particle.smoothed_last_P;
                 targetres.P_within_10cm = 0;
                 ParticleFilter &particle_filter = particle_filters[&particle-max_ps.data()];
-                BOOST_FOREACH(Particle &particle, particle_filter.particles)
-                    if(particle.dist(particle) <= .2)
-                        targetres.P_within_10cm += particle.last_P/particle_filter.total_last_P;
+                BOOST_FOREACH(Particle &particle2, particle_filter.particles) {
+                    if(particle2.dist(particle) <= .2)
+                        targetres.P_within_10cm += particle2.last_P/particle_filter.total_last_P;
+                }
                 feedback.targetreses.push_back(targetres);
             }
             //RenderBuffer rb(img);
