@@ -272,7 +272,7 @@ struct ParticleFilter {
             particles.push_back(Particle(targetdesc, obj, img));
     }
     
-    RenderBuffer update(const TaggedImage &img, const RenderBuffer &rb, double N) {
+    void update(const TaggedImage &img, const RenderBuffer &rb, double N) {
         double original_total_last_P = 0;
         BOOST_FOREACH(const Particle &particle, particles) original_total_last_P += particle.last_P;
         
@@ -294,10 +294,6 @@ struct ParticleFilter {
         
         total_last_P = 0;
         BOOST_FOREACH(Particle &particle, particles) total_last_P += particle.last_P;
-        
-        RenderBuffer res = rb;
-        get_best().P(img, res);
-        return res;
     }
     
     Particle get_best() const {
@@ -411,9 +407,13 @@ struct GoalExecutor {
         //BOOST_FOREACH(Particle &particle, particles) total_smoothed_last_P += particle.smoothed_last_P;
         
         {
-            RenderBuffer rb(img);
             BOOST_FOREACH(ParticleFilter &particle_filter, particle_filters) {
-                rb = particle_filter.update(img, rb, N);
+                RenderBuffer rb(img);
+                BOOST_FOREACH(ParticleFilter &particle_filter2, particle_filters) {
+                    if(&particle_filter2 == &particle_filter) continue;
+                    particle_filter2.get_best().P(img, rb);
+                }
+                particle_filter.update(img, rb, N);
             }
         }
         
