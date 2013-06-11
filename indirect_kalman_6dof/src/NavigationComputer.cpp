@@ -33,9 +33,12 @@ boost::optional<NavigationComputer::State> NavigationComputer::getState() const 
 }
 
 void NavigationComputer::updateINS(const INS::Measurement &measurement,
-                                   double measurement_time) {
+                                   double measurement_time,
+                                   double now_time) {
     if (!ins) {
         ins_init.updateAccel(measurement.y_a);
+        ins_time = measurement_time;
+        tryInitINS();
         return;
     }
 
@@ -51,28 +54,32 @@ void NavigationComputer::updateINS(const INS::Measurement &measurement,
     int updates = static_cast<int>(round(T_delta / config.T_imu));
 
     if (updates <= 0) {
-        // T_imu could be incorrect, or just a message from the past
-        ROS_WARN_STREAM("Out of order or too frequent IMU measurements, dropping "
+        ROS_WARN_STREAM("Too frequent IMU measusrements, dropping"
                         "(T_delta " << T_delta << " T_imu " << config.T_imu << ")");
-        return;
     }
 
-    if (updates >= 20) {
-        // too many dropped messages, just advance time
+    if (updates >= 5) {
+        // too many dropped messages, just advance time.
         ROS_WARN_STREAM("Dropped or too infrequent IMU measurements, advancing time "
                         "(T_delta " << T_delta << " T_imu " << config.T_imu << ")");
         ins_time += (updates-1)*config.T_imu;
         updates = 1;
     }
 
-    if (updates >= 3) {
-        ROS_WARN_STREAM("Dropped " << updates << " INS messages");
+    if (updates >= 2) {
+        ROS_WARN_STREAM("Performing " << updates << " updates to compensate for dropped or infrequent INS messages");
     }
 
     // Run the correct number of INS updates
     for (int i=0; i<updates; i++) {
         ins->update(measurement, config.T_imu);
         ins_time += config.T_imu;
+    }
+
+    // If we're not relying on timestamps, keep ins_time synced with
+    // current time
+    if (!config.verify_timestamps) {
+        ins_time = now_time;
     }
 }
 
@@ -81,6 +88,7 @@ void NavigationComputer::updateMag(const Eigen::Vector3d &y_m,
     // if we don't have an INS, forward to the INSInitializer
     if (!ins) {
         ins_init.updateMag(y_m);
+        tryInitINS();
         return;
     }
 
@@ -115,6 +123,7 @@ void NavigationComputer::updateDVL(const Eigen::Matrix<double, 4, 1> &y_d,
 void NavigationComputer::updateDepth(double y_z, double measurement_time) {
     if (!ins) {
         ins_init.updateDepth(y_z);
+        tryInitINS();
         return;
     }
 
@@ -125,17 +134,26 @@ void NavigationComputer::updateDepth(double y_z, double measurement_time) {
     this->y_z = y_z;
 }
 
-void NavigationComputer::run(double run_time) {
-    // if we don't have an INS yet, try to initialize one
+void NavigationComputer::updateKalman() {
     if (!ins) {
-        tryInitINS(run_time);
         return;
     }
 
     // compute how many predictions are necessary to bring kalman
-    // even with the INS
+    // even or slightly past the INS
     double T_delta = ins_time - kalman_time;
     int predicts = static_cast<int>(round(T_delta / config.T_kalman));
+
+    // Not yet time for a predict, so quit
+    if (predicts == 0) {
+        return;
+    }
+
+    if (predicts > 5) {
+        ROS_WARN_STREAM("Running " << predicts << " kalman predictions to catch up to INS time");
+    } else if (predicts > 1) {
+        ROS_DEBUG_STREAM("Running " << predicts << " kalman predictions to catch up to INS time");
+    }
 
     // run the correct number of predicts
     predict(predicts);
@@ -151,7 +169,7 @@ void NavigationComputer::run(double run_time) {
     }
 }
 
-void NavigationComputer::tryInitINS(double run_time) {
+void NavigationComputer::tryInitINS() {
     if (!ins_init.ready()) {
         return;
     }
@@ -176,9 +194,8 @@ void NavigationComputer::tryInitINS(double run_time) {
 
     ins_init.clear();
     kalman.reset();
-    ins_time = run_time;
-    kalman_time = run_time;
-    last_correction_time = run_time;
+    kalman_time = ins_time;
+    last_correction_time = ins_time;
 }
 
 void NavigationComputer::predict(int predicts) {
@@ -240,11 +257,11 @@ bool NavigationComputer::verifyKalmanTime(const std::string &sensor,
         ROS_WARN_STREAM("Late " << sensor << " message, discarding " \
                         "(dt = " << dt);
         return false;
-    } else if (dt > 2*config.T_kalman) {
-        ROS_WARN_STREAM(sensor << " message originates from future, discarding " \
+    } else if (dt > 3.0/2*config.T_kalman) {
+        ROS_WARN_STREAM("Future " << sensor << " message, discarding " \
                         "(dt = " << dt);
         return false;
-    } else {
-        return true;
     }
+
+    return true;
 }

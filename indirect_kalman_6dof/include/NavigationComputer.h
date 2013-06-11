@@ -41,18 +41,19 @@ public:
     boost::optional<State> getState() const;
     INS::Error getINSError() const;
 
-    void updateINS(const INS::Measurement &measurement, double measurement_time);
+    void updateINS(const INS::Measurement &measurement, double measurement_time, double now_time);
     void updateMag(const Eigen::Vector3d &y_m, double measurement_time);
     void updateDVL(const Eigen::Matrix<double, 4, 1> &y_d,
                    const boost::array<bool, 4> &d_valid,
                    double measurement_time);
     void updateDepth(double y_z, double measurement_time);
 
-    void run(double run_time);
+    void updateKalman();
 
 private:
+    void tryInitINS();
+
     // run sub-methods
-    void tryInitINS(double run_time);
     void predict(int updates);
     void update();
 

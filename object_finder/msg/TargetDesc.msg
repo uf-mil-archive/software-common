@@ -14,4 +14,7 @@ bool check_180z_flip
 
 bool allow_pitching
 
+std_msgs/ColorRGBA bg_color
+std_msgs/ColorRGBA fg_color
+
 bool is_180z_symmetric

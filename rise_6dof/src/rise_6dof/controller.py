@@ -50,14 +50,18 @@ class Controller(object):
         ])
         
         world_from_body2 = numpy.zeros((6, 6))
-        world_from_body2[:3, :3] = world_from_body;world_from_body2[3:, 3:] = world_from_body
-        error_velocity_world = (desired_x_dot + world_from_body2.dot(self.config['k'] * world_from_body2.T.dot(error_position_world))) - x_dot
+        world_from_body2[:3, :3] = world_from_body2[3:, 3:] = world_from_body
+        body_gain = lambda x: world_from_body2.dot(x).dot(world_from_body2.T)
         
-        pd_output = world_from_body2.dot(self.config['ks'] * world_from_body2.T.dot(error_velocity_world))
+        
+        error_velocity_world = (desired_x_dot + body_gain(numpy.diag(self.config['k'])).dot(error_position_world)) - x_dot
+        
+        pd_output = body_gain(numpy.diag(self.config['ks'])).dot(error_velocity_world)
         
         output = pd_output
         if self.config['use_rise']:
-            rise_term_int = self.config['ks']*self.config['alpha']*error_velocity_world + self.config['beta']*numpy.sign(error_velocity_world)
+            rise_term_int = body_gain(numpy.diag(self.config['ks'] * self.config['alpha'])).dot(error_velocity_world) + \
+                            body_gain(numpy.diag(self.config['beta'])).dot(numpy.sign(error_velocity_world))
             
             self._rise_term = self._rise_term + dt/2*(rise_term_int + self._rise_term_int_prev)
             self._rise_term_int_prev = rise_term_int
@@ -67,8 +71,8 @@ class Controller(object):
             # zero rise term so it doesn't wind up over time
             self._rise_term = numpy.zeros(6)
             self._rise_term_int_prev = numpy.zeros(6)
-        output = output + self.config['accel_feedforward'] * desired_x_dotdot
-        output = output + self.config['vel_feedforward'] * desired_x_dot
+        output = output + body_gain(numpy.diag(self.config['accel_feedforward'])).dot(desired_x_dotdot)
+        output = output + body_gain(numpy.diag(self.config['vel_feedforward'])).dot(desired_x_dot)
         
         wrench_from_vec = lambda output: (world_from_body.T.dot(output[0:3]), world_from_body.T.dot(output[3:6]))
         return wrench_from_vec(pd_output), wrench_from_vec(output)

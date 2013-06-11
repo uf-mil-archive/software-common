@@ -7,6 +7,12 @@ INSInitializer::INSInitializer(const Config &config) :
     config(config) { }
 
 bool INSInitializer::ready() const {
+    ROS_DEBUG_STREAM("INSInitializer ready status: "
+                     "accel " << y_a_log.size() << "/" << config.accel_samples << " "
+                     "mag " << y_m_log.size() << "/" << config.mag_samples << " "
+                     "DVL " << y_d_log.size() << "/" << config.dvl_samples << " "
+                     "depth " << y_z_log.size() << "/" << config.depth_samples);
+
     return y_a_log.size() >= config.accel_samples
         && y_m_log.size() >= config.mag_samples
         && y_d_log.size() >= config.dvl_samples
