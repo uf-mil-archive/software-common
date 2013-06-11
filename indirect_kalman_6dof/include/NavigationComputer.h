@@ -48,11 +48,12 @@ public:
                    double measurement_time);
     void updateDepth(double y_z, double measurement_time);
 
-    void run(double run_time);
+    void updateKalman();
 
 private:
+    void tryInitINS();
+
     // run sub-methods
-    void tryInitINS(double run_time);
     void predict(int updates);
     void update();
 
