@@ -70,6 +70,10 @@ Quaterniond quat_from_rotvec(Vector3d r) {
     return Quaterniond(AngleAxisd(r.norm(), r.normalized()));
 }
 
+Vector3d ColorRGBA_to_vec(std_msgs::ColorRGBA c) {
+    return Vector3d(c.r, c.g, c.b);
+}
+
 struct Particle {
     TargetDesc goal;
     boost::shared_ptr<const Obj> obj;
@@ -177,6 +181,9 @@ struct Particle {
             *last_color_dest = inner_result.avg_color();
         }
         
+        Vector3d inner_color_guess = ColorRGBA_to_vec(goal.fg_color);
+        Vector3d outer_color_guess = ColorRGBA_to_vec(goal.bg_color);
+        
         Vector3d inner_color = inner_result.avg_color().normalized();
         Vector3d outer_color = outer_result.avg_color().normalized();
         Vector3d far_color = far_result.avg_color().normalized();
@@ -192,10 +199,18 @@ struct Particle {
             } else {
                 Vector3d this_color = results[fg_region].avg_color_assuming_unseen_is(
                     outer_color).normalized();
-                P *= exp(10*(
-                    (this_color - outer_color).norm() -
-                    ( far_color - outer_color).norm() - .05
-                ));
+                if(outer_color_guess == inner_color_guess) {
+                    P *= exp(10*(
+                        (this_color - outer_color).norm() -
+                        ( far_color - outer_color).norm() - .05
+                    ));
+                } else {
+                    Vector3d dir = (inner_color_guess.normalized() - outer_color_guess.normalized()).normalized();
+                    P *= exp(10*(
+                        (this_color - outer_color).dot(dir) -
+                        ( far_color - outer_color).norm() - .05
+                    ));
+                }
             }
         }
         {
@@ -207,10 +222,18 @@ struct Particle {
             } else {
                 Vector3d this_color = results[bg_region].avg_color_assuming_unseen_is(
                     inner_color).normalized();
-                P *= exp(10*(
-                    (inner_color - this_color).norm() -
-                    (  far_color - this_color).norm() - .05
-                ));
+                if(outer_color_guess == inner_color_guess) {
+                    P *= exp(10*(
+                        (inner_color - this_color).norm() -
+                        (  far_color - this_color).norm() - .05
+                    ));
+                } else {
+                    Vector3d dir = (inner_color_guess.normalized() - outer_color_guess.normalized()).normalized();
+                    P *= exp(10*(
+                        (inner_color - this_color).dot(dir) -
+                        (  far_color - this_color).norm() - .05
+                    ));
+                }
             }
         }
         
