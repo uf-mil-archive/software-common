@@ -75,8 +75,6 @@ struct Particle {
     boost::shared_ptr<const Obj> obj;
     Vector3d pos;
     Quaterniond q;
-    RenderBuffer::RegionType bg_region;
-    RenderBuffer::RegionType fg_region;
     
     Vector3d last_color;
     double last_P;
@@ -138,33 +136,28 @@ struct Particle {
             return realpredict(.1);
         }
     }
-    void draw1(RenderBuffer &renderbuffer) {
-        bg_region = renderbuffer.new_region();
+    double P(const TaggedImage &img, RenderBuffer &rb, bool print_debug_info=false, Vector3d *last_color_dest=NULL) const {
+        RenderBuffer::RegionType fg_region = rb.new_region();
         if(!obj) {
-            sphere_draw(renderbuffer, bg_region, pos, 2*goal.sphere_radius);
-            return;
-        }
-        BOOST_FOREACH(const Component &component, obj->components) {
-            if(component.name.find("background_") == 0) {
-                component.draw(renderbuffer, bg_region, pos, q);
+            sphere_draw(rb, fg_region, pos, goal.sphere_radius);
+        } else {
+            BOOST_FOREACH(const Component &component, obj->components) {
+                if(component.name.find("solid_") == 0) {
+                    component.draw(rb, fg_region, pos, q);
+                }
             }
         }
-    }
-    void draw2(RenderBuffer &renderbuffer) {
-        fg_region = renderbuffer.new_region();
+        RenderBuffer::RegionType bg_region = rb.new_region();
         if(!obj) {
-            sphere_draw(renderbuffer, fg_region, pos, goal.sphere_radius);
-            return;
-        }
-        BOOST_FOREACH(const Component &component, obj->components) {
-            if(component.name.find("solid_") == 0) {
-                component.draw(renderbuffer, fg_region, pos, q);
+            sphere_draw(rb, bg_region, pos, 2*goal.sphere_radius);
+        } else {
+            BOOST_FOREACH(const Component &component, obj->components) {
+                if(component.name.find("background_") == 0) {
+                    component.draw(rb, bg_region, pos, q);
+                }
             }
         }
-    }
-    double P(const TaggedImage &img, RenderBuffer &rb, bool print_debug_info=false) {
-        draw2(rb);
-        draw1(rb);
+        
         vector<ResultWithArea> results = rb.get_results();
         Result inner_result = results[fg_region];
         Result outer_result = results[bg_region];
@@ -180,7 +173,9 @@ struct Particle {
             return 0.001;
         }
         
-        last_color = inner_result.avg_color(); // XXX
+        if(last_color_dest) {
+            *last_color_dest = inner_result.avg_color();
+        }
         
         Vector3d inner_color = inner_result.avg_color().normalized();
         Vector3d outer_color = outer_result.avg_color().normalized();
@@ -240,7 +235,7 @@ struct Particle {
         return P;
     }
     void update(const TaggedImage &img, RenderBuffer &rb, bool print_debug_info=false) {
-        double P = this->P(img, rb, print_debug_info);
+        double P = this->P(img, rb, print_debug_info, &last_color);
         
         last_P = P;
         
@@ -254,7 +249,7 @@ struct Particle {
                 predict());
         }
     }
-    double dist(const Particle &other) {
+    double dist(const Particle &other) const {
         return (pos - other.pos).norm();
     }
 };
@@ -497,7 +492,7 @@ struct GoalExecutor {
         
         if(image_pub.getNumSubscribers()) { // send debug image
             RenderBuffer rb(img);
-            BOOST_FOREACH(Particle &max_p, max_ps) { // XXX make const
+            BOOST_FOREACH(const Particle &max_p, max_ps) {
                 max_p.P(img, rb, true);
             }
             
