@@ -401,12 +401,18 @@ struct GoalExecutor {
         //double total_smoothed_last_P = 0;
         //BOOST_FOREACH(Particle &particle, particles) total_smoothed_last_P += particle.smoothed_last_P;
         
+        std::vector<Particle> prev_max_ps;
+        BOOST_FOREACH(const ParticleFilter &particle_filter, particle_filters) {
+            prev_max_ps.push_back(particle_filter.get_best());
+        }
+        
         {
             BOOST_FOREACH(ParticleFilter &particle_filter, particle_filters) {
                 RenderBuffer rb(img);
-                BOOST_FOREACH(ParticleFilter &particle_filter2, particle_filters) {
-                    if(&particle_filter2 == &particle_filter) continue;
-                    particle_filter2.get_best().P(img, rb);
+                BOOST_FOREACH(const Particle &p, prev_max_ps) {
+                    if(p.smoothed_last_P > particle_filter.get_best().smoothed_last_P) {
+                        p.P(img, rb);
+                    }
                 }
                 particle_filter.update(img, rb, N);
             }
