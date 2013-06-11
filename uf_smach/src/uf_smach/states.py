@@ -7,141 +7,154 @@ import smach_ros
 import actionlib
 
 from uf_common.orientation_helpers import PoseEditor, xyz_array, xyzw_array
-from uf_common.msg import MoveToAction, MoveToGoal, PoseTwist
+from uf_common.msg import MoveToAction, MoveToGoal, PoseTwist, PoseTwistStamped
 from object_finder.msg import FindAction, FindGoal, TargetDesc
 from nav_msgs.msg import Odometry
 import tf
+from tf import transformations
 
-class WaypointState(smach_ros.SimpleActionState):
-    def __init__(self, goal_func):
+class WaypointState(smach.State):
+    def __init__(self, shared, goal_func):
+        smach.State.__init__(self, outcomes=['succeeded'])
+
+        self._shared = shared
         self._goal_func = goal_func
+        self._cond = threading.Condition()
+        self._done = False
 
-        # Make sure pose_func is valid
+        # Make sure goal_func is valid
         assert(isinstance(self._goal_func(PoseEditor('/test',
                                                      numpy.array([0, 0, 0]),
                                                      numpy.array([1, 0, 0, 0]))),
                           PoseEditor))
 
-        smach_ros.SimpleActionState.__init__(
-            self, 'moveto', MoveToAction, goal_cb=self._goal_cb)
-
-    def _goal_cb(self, userdata, goal):
+    def execute(self, userdata):
         current = PoseEditor.from_PoseTwistStamped_topic('/trajectory')
         goal = self._goal_func(current)
-        return goal.as_MoveToGoal()
-
-class VelocityState(smach.State):
-    def __init__(self, vel):
-        smach.State.__init__(self, outcomes=['succeeded'])
-        self._vel = vel
-        self._client = actionlib.SimpleActionClient('moveto', MoveToAction)
-        self._client.wait_for_server()
-
-    def execute(self, userdata):
-        current = PoseEditor.from_PoseTwistStamped_topic('/trajectory')
-        self._client.send_goal(current.as_MoveToGoal(linear=self._vel))
-        return 'succeeded'
-
-class WaitForSingleObjectState(smach.State):
-    def __init__(self, action, targetdesc, timeout=60):
-        smach.State.__init__(self, outcomes=['succeeded', 'timeout'])
-        self._timeout = rospy.Duration(timeout)
-        self._targetdesc = targetdesc
-        self._cond = threading.Condition()
-        self._found = False
-
-        self._client = actionlib.SimpleActionClient(action, FindAction)
-        self._client.wait_for_server()
-
-    def execute(self, userdata):
-        goal = FindGoal()
-        goal.header.frame_id = "/map"
-        goal.targetdescs = [self._targetdesc]
-        self._client.send_goal(goal, feedback_cb=self._feedback_cb)
-
-        end_time = rospy.Time.now() + self._timeout
-        with self._cond:
-            while not self._found and rospy.Time.now() < end_time:
-                self._cond.wait(1)
-
-        self._client.stop_tracking_goal()
-        return 'succeeded' if self._found else 'timeout'
-
-    def _feedback_cb(self, feedback):
-        if len(feedback.targetreses) == 0:
-            return
-        result = feedback.targetreses[0]
-        if result.P > 50:
-            with self._cond:
-                self._found = True
-                self._cond.notify_all()
-
-class BaseManeuverObjectState(smach.State):
-    def __init__(self, action, targetdesc):
-        smach.State.__init__(self, outcomes=['succeeded'])
-
-        self._cond = threading.Condition()
-        self._targetdesc = targetdesc
-        self._odom_current = None
-        self._odom_start = None
-        self._done = False
-
-        # TODO Share these somehow to avoid reinitializing the SimpleActionClient
-        self._vision_client = actionlib.SimpleActionClient(action, FindAction)
-        self._vision_client.wait_for_server()
-        self._move_client = actionlib.SimpleActionClient('moveto', MoveToAction)
-        self._move_client.wait_for_server()
-        self._odom_sub = rospy.Subscriber('/odom', Odometry, self._odometry_cb)
-
-    def execute(self, userdata):
-        vision_goal = FindGoal()
-        vision_goal.header.frame_id = "/map"
-        vision_goal.targetdescs = [self._targetdesc]
-        self._vision_client.send_goal(vision_goal, feedback_cb=self._feedback_cb)
+        self._shared['moveto'].send_goal(goal, done_cb=self._done_cb)
 
         with self._cond:
             while not self._done:
                 self._cond.wait()
 
-        self._vision_client.stop_tracking_goal()
+        self._shared.clear_callbacks()
         return 'succeeded'
-
-    def _feedback_cb(self, feedback):
-        with self._cond:
-            if len(feedback.targetreses) == 0 or self._odom_current is None:
-                return
-            result = feedback.targetreses[0]
-            if result.P < 10:
-                return
-            target = self._get_target(result)
-            self._move_client.send_goal(target.as_MoveToGoal(speed=.5),
-                                        done_cb=self._done_cb)
 
     def _done_cb(self, state, result):
         with self._cond:
             self._done = True
             self._cond.notify_all()
 
-    def _odometry_cb(self, odometry):
+class VelocityState(smach.State):
+    def __init__(self, shared, vel):
+        smach.State.__init__(self, outcomes=['succeeded'])
+
+        self._shared = shared
+        self._vel = vel
+
+    def execute(self, userdata):
+        current = PoseEditor.from_PoseTwistStamped_topic('/trajectory')
+        self._shared['moveto'].send_goal(current.as_MoveToGoal(linear=self._vel))
+        return 'succeeded'
+
+class WaitForObjectsState(smach.State):
+    def __init__(self, shared, action, targetdescs, P_within_10cm_thresh, timeout=60):
+        smach.State.__init__(self, outcomes=['succeeded', 'timeout'])
+
+        self._shared = shared
+        self._targetdescs = targetdescs
+        self._P_within_10cm_thresh = P_within_10cm_thresh
+        self._timeout = rospy.Duration(timeout)
+        self._cond = threading.Condition()
+        self._found = False
+        self._action = action
+
+    def execute(self, userdata):
+        if len(self._targetdescs) > 0:
+            goal = FindGoal()
+            goal.header.frame_id = "/map"
+            goal.targetdescs = self._targetdescs
+            self._shared[self._action].send_goal(goal, feedback_cb=self._feedback_cb)
+        else:
+            self._shared[self._action].set_callbacks(feedback_cb=self._feedback_cb)
+
+        end_time = rospy.Time.now() + self._timeout
         with self._cond:
-            self._odom_current = odometry
-            if self._odom_start is None:
-                self._odom_start = odometry
+            while not self._found and rospy.Time.now() < end_time:
+                self._cond.wait(1)
+
+        self._shared.clear_callbacks()
+        return 'succeeded' if self._found else 'timeout'
+
+    def _feedback_cb(self, feedback):
+        print [result.P_within_10cm for result in feedback.targetreses]
+        if all(result.P_within_10cm > self._P_within_10cm_thresh
+               for result in feedback.targetreses):
+            with self._cond:
+                self._found = True
+                self._cond.notify_all()
+
+class BaseManeuverObjectState(smach.State):
+    def __init__(self, shared, action, selector=None):
+        smach.State.__init__(self, outcomes=['succeeded', 'failed'])
+
+        self._shared = shared
+        self._action = action
+        self._selector = selector
+        self._cond = threading.Condition()
+        self._done = False
+        self._failed = False
+
+    def execute(self, userdata):
+        self._traj_start = PoseEditor.from_PoseTwistStamped_topic('/trajectory')
+        self._shared[self._action].set_callbacks(
+            feedback_cb=lambda feedback: self._feedback_cb(feedback, self._shared))
+
+        with self._cond:
+            while not self._done and not self._failed:
+                self._cond.wait()
+            self._shared.clear_callbacks()
+
+        return 'succeeded' if self._done else 'failed'
+
+    def _feedback_cb(self, feedback, shared):
+        with self._cond:
+            print [result.P_within_10cm for result in feedback.targetreses]
+            good_results = [result for result in feedback.targetreses
+                            if result.P_within_10cm > .75]
+            if len(good_results) == 0:
+                self._failed = True;
+                self._cond.notify_all()
+                return
+
+            if self._selector is not None:
+                result = self._selector(good_results, self._traj_start)
+            else:
+                result = good_results[0]
+            target = self._get_target(result)
+            shared['moveto'].send_goal(target.as_MoveToGoal(speed=.5),
+                                       done_cb=self._done_cb)
+
+    def _done_cb(self, state, result):
+        with self._cond:
+            self._done = True
+            self._cond.notify_all()
 
 class ApproachObjectState(BaseManeuverObjectState):
-    def __init__(self, action, targetdesc, approach_frame, approach_dist):
-        BaseManeuverObjectState.__init__(self, action, targetdesc)
-        tf_listener = tf.TransformListener()
+    def __init__(self, shared, action, approach_frame, approach_dist, selector=None):
+        BaseManeuverObjectState.__init__(self, shared, action, selector)
+        self._approach_dist = approach_dist
+
+        tf_listener = self._shared['tf_listener']
         tf_listener.waitForTransform('/base_link', approach_frame,
-                                     rospy.Time(0), rospy.Duration(1000000))
+                                     rospy.Time(0), rospy.Duration(10))
         self._approach_pos, _ = tf_listener.lookupTransform('/base_link',
                                                             approach_frame,
                                                             rospy.Time(0))
         self._approach_pos = numpy.array(self._approach_pos)
-        self._approach_dist = approach_dist
 
     def _get_target(self, result):
-        target = PoseEditor.from_Odometry(self._odom_start)
+        target = self._traj_start
         target = target.look_at_without_pitching(xyz_array(result.pose.position)) \
                        .set_position(xyz_array(result.pose.position))
         target = target.relative(-self._approach_pos) \
@@ -150,9 +163,15 @@ class ApproachObjectState(BaseManeuverObjectState):
 
 class AlignObjectState(BaseManeuverObjectState):
     def _get_target(self, result):
-        start_depth = self._odom_start.pose.pose.position.z # TODO use start trajectory
-        target = PoseEditor.from_Odometry(self._odom_start)
-        target = target.set_position(xyz_array(result.pose.position)) \
-                        .set_orientation(xyzw_array(result.pose.orientation)) \
-                        .depth(start_depth)
+        dest_pos = xyz_array(result.pose.position)
+        dest_orientation = xyzw_array(result.pose.orientation)
+
+        # Rotate dest_orientation by 180 degrees if we're about to turn more than 90
+        if numpy.dot(self._traj_start.orientation, dest_orientation)**2 < .5:
+            dest_orientation = transformations.quaternion_multiply(dest_orientation,
+                                                                   [0, 0, 1, 0])
+
+        return self._traj_start.set_position(dest_pos) \
+                               .set_orientation(dest_orientation) \
+                               .height(self._traj_start.position[2])
         return target
