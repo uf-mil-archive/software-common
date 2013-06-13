@@ -6,10 +6,10 @@ from thruster_handling.msg import ThrusterCommand, ThrusterInfo
 
 class ThrusterListener(object):
     def _thrusterinfo_callback(self, msg):
-        if msg.id in self._thruster_cache and msg.header.stamp < self._thruster_cache[msg.id].header.stamp:
+        if msg.id in self._thruster_cache and msg.header.stamp < self._thruster_cache[msg.id][0].header.stamp:
             return # this is older than current info
 
-        self._thruster_cache[msg.id] = msg
+        self._thruster_cache[msg.id] = (msg, rospy.Time.now())
 
     def _thrustercommand_callback(self, id, msg):
         self._command_cache[id] = msg
@@ -25,10 +25,10 @@ class ThrusterListener(object):
 
     def get_thrusters(self):
         t = rospy.Time.now()
-        return [thruster for thruster in self._thruster_cache.values() if thruster.header.stamp + thruster.lifetime >= t and thruster.active]
+        return [thruster for thruster, received in self._thruster_cache.values() if received + thruster.lifetime >= t and thruster.active]
 
     def get_thruster(self, id):
-        return self._thruster_cache[id]
+        return self._thruster_cache[id][0]
 
     def send_command(self, id, force):
         if id not in self._command_pubs:
