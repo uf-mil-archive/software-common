@@ -229,22 +229,21 @@ class PoseEditor(object):
             ),
         )
     
-    def as_PoseTwistStamped(self, *args, **kwargs):
+    def as_PoseTwistStamped(self, linear=[0, 0, 0], angular=[0, 0, 0]):
         return PoseTwistStamped(
             header=Header(
                 frame_id=self.frame_id,
             ),
-            posetwist=self.as_PoseTwist(*args, **kwargs),
+            posetwist=self.as_PoseTwist(linear, angular),
         )
     
-    def as_MoveToGoal(self, speed=0, *args, **kwargs):
+    def as_MoveToGoal(self, linear=[0, 0, 0], angular=[0, 0, 0], **kwargs):
         return MoveToGoal(
             header=Header(
                 frame_id=self.frame_id,
             ),
-            posetwist=self.as_PoseTwist(*args, **kwargs),
-            speed=speed,
-        )
+            posetwist=self.as_PoseTwist(linear, angular),
+        **kwargs)
     
     # allow implicit usage in place of a PoseTwistStamped
     @property
@@ -258,4 +257,13 @@ class PoseEditor(object):
     # and in place of a MoveToGoal
     @property
     def speed(self):
+        return 0
+    @property
+    def uncoordinated(self):
+        return False
+    @property
+    def linear_tolerance(self):
+        return 0
+    @property
+    def angular_tolerance(self):
         return 0

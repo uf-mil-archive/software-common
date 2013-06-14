@@ -97,6 +97,8 @@ struct Node {
     subjugator::C3Trajectory::Waypoint current_waypoint;
     ros::Time current_waypoint_t;
 
+    double linear_tolerance, angular_tolerance;
+    
     void killed_callback() {
         c3trajectory.reset();
     }
@@ -155,8 +157,10 @@ struct Node {
             boost::shared_ptr<const uf_common::MoveToGoal> goal = actionserver.acceptNewGoal();
             current_waypoint = subjugator::C3Trajectory::Waypoint(
                 Point_from_PoseTwist(goal->posetwist.pose, goal->posetwist.twist),
-                goal->speed);
+                goal->speed, !goal->uncoordinated);
             current_waypoint_t = now; // goal->header.stamp;
+            this->linear_tolerance = goal->linear_tolerance;
+            this->angular_tolerance = goal->angular_tolerance;
         }
         if(actionserver.isPreemptRequested()) {
             current_waypoint = c3trajectory->getCurrentPoint();
@@ -185,7 +189,7 @@ struct Node {
         posemsg.pose = Pose_from_Waypoint(current_waypoint);
         waypoint_pose_pub.publish(posemsg);
 
-        if(actionserver.isActive() && c3trajectory->getCurrentPoint().is_approximately(current_waypoint.r) && current_waypoint.r.qdot == subjugator::Vector6d::Zero()) {
+        if(actionserver.isActive() && c3trajectory->getCurrentPoint().is_approximately(current_waypoint.r, max(1e-3, linear_tolerance), max(1e-3, angular_tolerance)) && current_waypoint.r.qdot == subjugator::Vector6d::Zero()) {
             actionserver.setSucceeded();
         }
     }
