@@ -42,10 +42,11 @@ int main() {
     
     Obj obj = Obj("shooter.obj");
     BOOST_FOREACH(const Component &component, obj.components) {
-        component.draw(rb, rb.new_region(), Vector3d(0, 0, 2), Quaterniond(.5, .5, -.5, .5));
+        component.draw(rb, rb.new_region(), Vector3d(-1.5, 0, 2), Quaterniond(.5, .5, -.5, .5));
     }
-    sphere_draw(rb, rb.new_region(), Vector3d(1.5, 0, 2), .3);
+    sphere_draw(rb, rb.new_region(), Vector3d(0, 0, 2), .3);
     sphere_draw(rb, rb.new_region(), Vector3d(1.5, 0, 2), .2);
+    sphere_draw(rb, rb.new_region(), Vector3d(1.5, 0, 2), .3);
     
     vector<int> dbg_image(width*height, 0);
     rb.draw_debug_regions(dbg_image);
