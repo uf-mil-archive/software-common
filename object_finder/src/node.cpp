@@ -134,10 +134,14 @@ struct Particle {
         return p;
     }
     Particle predict() const {
-        if(uniform() < .5) {
+        static int i = 0;
+        i++; if(i == 3) i = 0;
+        if(i == 0) {
             return realpredict(.01);
-        } else {
+        } else if(i == 1) {
             return realpredict(.1);
+        } else {
+            return realpredict(1);
         }
     }
     double P(const TaggedImage &img, RenderBuffer &rb, bool print_debug_info=false, Vector3d *last_color_dest=NULL) const {
@@ -542,7 +546,7 @@ struct GoalExecutor {
                 for(unsigned int x = 0; x < image->width; x++) {
                     Vector3d orig_color = img.get_pixel(y, x);
                     msg.data[msg.step*y + 3*x + 0] =
-                        255.*dbg_image[image->width*y + x]/(rb.areas.size() + 1);
+                        255.*dbg_image[image->width*y + x]/(rb.areas.size() + 10);
                     msg.data[msg.step*y + 3*x + 1] = 255*orig_color[1];
                     msg.data[msg.step*y + 3*x + 2] = 255*orig_color[2];
                 }
