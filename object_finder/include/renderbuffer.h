@@ -1,8 +1,6 @@
 #ifndef RENDERBUFFER_H
 #define RENDERBUFFER_H
 
-#include <queue>
-
 #include <boost/foreach.hpp>
 
 #include "image.h"
@@ -41,18 +39,16 @@ struct Segment {
     double z(double x) const {
         return z_0 + z_slope * x;
     }
+    inline bool includes(int x) const {
+        return x_start <= x && x < x_end;
+    }
 };
 
 struct cmpclass {
     const std::vector<Segment> &segments;
     cmpclass(const std::vector<Segment> &segments) : segments(segments) { }
-    bool operator() (int i,int j) {
-        int x1 = i >= 0 ? segments[i].x_start : segments[-i-1].x_end;
-        int x2 = j >= 0 ? segments[j].x_start : segments[-j-1].x_end;
-        if(x1 == x2) {
-            return i > j; // always have start before end
-        }
-        return x1 < x2;
+    bool operator() (unsigned int i,unsigned int j) {
+        return segments[i].x_start < segments[j].x_start;
     }
 };
 struct ScanLine {
@@ -68,86 +64,47 @@ struct ScanLine {
         }
     }
     void accumulate_results(std::vector<Result> &results, const TaggedImage &img, unsigned int Y, std::vector<int> *dbg_image=NULL) {
-        unsigned int indices_size = segments.size()*2;
-        int indices[indices_size];
-        for(unsigned int i = 0; i < segments.size(); i++) {
+        unsigned int segs = segments.size();
+        if(!segs)
+            return;
+        
+        unsigned int indices[segs];
+        for(unsigned int i = 0; i < segs; i++) {
             indices[i] = i;
         }
-        for(unsigned int i = 0; i < segments.size(); i++) {
-            indices[segments.size()+i] = -i-1;
-        }
-        std::sort(indices, indices + indices_size, cmpclass(segments));
+        std::sort(indices, indices + segs, cmpclass(segments));
         
-        bool active[segments.size()];
-        for(unsigned int i = 0; i < segments.size(); i++) {
-            active[i] = false;
-        }
-        static std::priority_queue<int> activelist;
-        assert(activelist.empty());
-        int last_x = -1;
-        for(unsigned int i = 0; i < indices_size; i++) {
-            //std::cout << "INDEX " << i << std::endl;
-            // find current top segment
-            int best = -1;
-            if(last_x >= 0) {
-                while(!activelist.empty()) {
-                    if(active[-activelist.top()]) {
-                        best = -activelist.top();
-                        break;
-                    } else {
-                        activelist.pop();
-                    }
-                }
-            }
-            /*
-            int best2 = -1;
-            for(unsigned int j = 0; j < segments.size(); j++) {
-                if(active[j]) {
-                    best2 = j;
-                    break;
-                }
-            }
-            assert(best == best2);
-            */
-            //std::cout << "  BEST " << best << std::endl;
+        unsigned int best = indices[0];
+        int start_x = segments[best].x_start;
+        unsigned int seg_pos = 1;
+        while(true) {
+            int possible_end_x1 = best != segs ? segments[best].x_end : INT_MAX;
+            int possible_end_x2 = seg_pos != segs ? segments[indices[seg_pos]].x_start : INT_MAX;
             
-            // apply start or end
-            int index = indices[i];
-            int this_x;
-            if(index >= 0) { // start
-                int seg = index;
-                //assert(!active[seg]);
-                active[seg] = true;
-                activelist.push(-seg);
-                this_x = segments[seg].x_start;
-                //std::cout << "START " << seg << std::endl;
-            } else { // end
-                int seg = -index-1;
-                //assert(active[seg]);
-                active[seg] = false;
-                this_x = segments[seg].x_end;
-                //std::cout << "END " << seg << std::endl;
-            }
+            int end_x = std::min(possible_end_x1, possible_end_x2);
+            if(end_x == INT_MAX)
+                break;
             
-            if(last_x >= 0) {
-                //assert(this_x >= last_x);
-                if(best != -1 && this_x > last_x) {
-                    const Segment &segment = segments[best];
-                    //assert(*last_x >= segment.x_start);
-                    //assert(this_x <= segment.x_end);
-                    results[segment.region] += img.get_line_sum(Y, last_x, this_x);
-                    if(dbg_image) {
-                        for(int X = last_x; X < this_x; X++) {
-                            (*dbg_image)[Y * img.cam_info.width + X] = segment.region + 10;
-                        }
+            if(best != segs && end_x != start_x) {
+                const Segment &segment = segments[best];
+                results[segment.region] += img.get_line_sum(Y, start_x, end_x);
+                if(dbg_image) {
+                    for(int X = start_x; X < end_x; X++) {
+                        (*dbg_image)[Y * img.cam_info.width + X] = segment.region + 10;
                     }
                 }
             }
             
-            last_x = this_x;
-        }
-        while(!activelist.empty()) {
-            activelist.pop();
+            if(end_x == possible_end_x2) { // a new segment overlapped this one
+                best = std::min(best, indices[seg_pos]); // become it if it has a higher weight
+                seg_pos++;
+            } else { // this segment ended first
+                while(best != segs && !segments[best].includes(end_x)) { // find the segment to fall down to
+                    best++;
+                }
+            }
+            
+            start_x = end_x;
         }
     }
     void reset() {
