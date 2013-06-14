@@ -55,6 +55,19 @@ struct ScanLine {
     std::vector<Segment> segments;
     
     void add_segment(const Segment &add) { // underwrites
+        unsigned int size = segments.size();
+        if(size) {
+            Segment &lastseg = segments[size-1];
+            if(lastseg.region == add.region) {
+                if(lastseg.x_end == add.x_start) {
+                    lastseg.x_end = add.x_end;
+                    return;
+                } else if(lastseg.x_start == add.x_end) {
+                    lastseg.x_start = add.x_start;
+                    return;
+                }
+            }
+        }
         segments.push_back(add);
     }
     void finalize_layer() {
