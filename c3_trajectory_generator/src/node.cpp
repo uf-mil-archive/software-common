@@ -123,7 +123,7 @@ struct Node {
         odom_sub = nh.subscribe<Odometry>("odom", 1, boost::bind(&Node::odom_callback, this, _1));
 
         trajectory_pub = nh.advertise<PoseTwistStamped>("trajectory", 1);
-        waypoint_pose_pub = nh.advertise<PoseStamped>("~waypoint", 1);
+        waypoint_pose_pub = private_nh.advertise<PoseStamped>("waypoint", 1);
 
         update_timer = nh.createTimer(ros::Duration(1./50), boost::bind(&Node::timer_callback, this, _1));
 
