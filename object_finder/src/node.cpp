@@ -134,17 +134,58 @@ struct Particle {
         return p;
     }
     Particle predict() const {
-        static int i = 0;
-        i++; if(i == 3) i = 0;
-        if(i == 0) {
-            return realpredict(.01);
-        } else if(i == 1) {
-            return realpredict(.1);
+        if(uniform() < .5) {
+            return realpredict(.02);
         } else {
-            return realpredict(1);
+            return realpredict(.06);
         }
     }
     double P(const TaggedImage &img, RenderBuffer &rb, bool print_debug_info=false, Vector3d *last_color_dest=NULL) const {
+        typedef std::pair<const Component *, RenderBuffer::RegionType> Pair;
+        static std::vector<Pair> regions; regions.clear();
+        BOOST_FOREACH(const Component &component, obj->components) {
+            RenderBuffer::RegionType region = rb.new_region();
+            component.draw(rb, region, pos, q);
+            regions.push_back(make_pair(&component, region));
+        }
+        
+        
+        vector<ResultWithArea> results = rb.get_results();
+        
+        double P = 1;
+        BOOST_FOREACH(const Pair &p1, regions) {
+            const ResultWithArea &p1_result = results[p1.second];
+            BOOST_FOREACH(const Pair &p2, regions) {
+                if(&p2 >= &p1) continue;
+                const ResultWithArea &p2_result = results[p2.second];
+                
+                istringstream p1_ss(p1.first->name);
+                string p1_prefix; p1_ss >> p1_prefix;
+                string p1_op; p1_ss >> p1_op;
+                Vector3d p1_dcolor; p1_ss >> p1_dcolor[0] >> p1_dcolor[1] >> p1_dcolor[2];
+                
+                istringstream p2_ss(p2.first->name);
+                string p2_prefix; p2_ss >> p2_prefix;
+                string p2_op; p2_ss >> p2_op;
+                Vector3d p2_dcolor; p2_ss >> p2_dcolor[0] >> p2_dcolor[1] >> p2_dcolor[2];
+                
+                if(p2_dcolor == p1_dcolor) continue;
+                Vector3d dir = (p2_dcolor - p1_dcolor).normalized();
+                
+                if(p1_result.count < 10 || p2_result.count < 10) {
+                    P *= 0;
+                    continue;
+                }
+                
+                P *= exp(30*(p2_result.avg_color_assuming_unseen_is(p1_result.avg_color()) - p1_result.avg_color_assuming_unseen_is(p2_result.avg_color())).dot(dir));
+            }
+        }
+        if(print_debug_info) {
+            cout << "P " << P << endl;
+        }
+        
+        /*
+        
         RenderBuffer::RegionType fg_region = rb.new_region();
         if(!obj) {
             sphere_draw(rb, fg_region, pos, goal.sphere_radius);
@@ -166,7 +207,6 @@ struct Particle {
             }
         }
         
-        vector<ResultWithArea> results = rb.get_results();
         Result inner_result = results[fg_region];
         Result outer_result = results[bg_region];
         Result far_result = img.total_result - inner_result; //- outer_result;
@@ -255,6 +295,7 @@ struct Particle {
             cout << endl;
             cout << "P " << P << endl;
         }
+        */
         if(!(isfinite(P) && P >= 0)) {
             cout << "bad P: " << P << endl;
             assert(false);
