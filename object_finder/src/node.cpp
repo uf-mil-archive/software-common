@@ -141,6 +141,88 @@ struct Particle {
         }
     }
     double P(const TaggedImage &img, RenderBuffer &rb, bool print_debug_info=false, Vector3d *last_color_dest=NULL) const {
+        if(!obj) {
+            RenderBuffer::RegionType fg_region = rb.new_region();
+            sphere_draw(rb, fg_region, pos, goal.sphere_radius);
+            RenderBuffer::RegionType bg_region = rb.new_region();
+            sphere_draw(rb, bg_region, pos, 2*goal.sphere_radius);
+            vector<ResultWithArea> results = rb.get_results();
+            Result inner_result = results[fg_region];
+            Result outer_result = results[bg_region];
+            Result far_result = img.total_result - inner_result; //- outer_result;
+            
+            if(inner_result.count < 100 || outer_result.count < 100 || far_result.count < 100) {
+                if(print_debug_info) {
+                    cout << endl;
+                    cout << endl;
+                    cout << "NOT VISIBLE" << endl;
+                }
+                // not visible
+                return 0.001;
+            }
+            
+            if(last_color_dest) {
+                *last_color_dest = inner_result.avg_color();
+            }
+            
+            Vector3d inner_color_guess = ColorRGBA_to_vec(goal.fg_color);
+            Vector3d outer_color_guess = ColorRGBA_to_vec(goal.bg_color);
+            
+            Vector3d inner_color = inner_result.avg_color().normalized();
+            Vector3d outer_color = outer_result.avg_color().normalized();
+            Vector3d far_color = far_result.avg_color().normalized();
+            //double P2 = (inner_color - outer_color).norm();
+            //double P = P2* pow(far_color.dot(outer_color), 5);
+            double P = 1;
+            {
+                if(results[fg_region].count < 100) {
+                    if(print_debug_info) {
+                        cout << "TOO SMALL FG" << endl;
+                    }
+                    P *= 0.5;
+                } else {
+                    Vector3d this_color = results[fg_region].avg_color_assuming_unseen_is(
+                        outer_color).normalized();
+                    if(outer_color_guess == inner_color_guess) {
+                        P *= exp(10*(
+                            (this_color - outer_color).norm() -
+                            ( far_color - outer_color).norm() - .05
+                        ));
+                    } else {
+                        Vector3d dir = (inner_color_guess.normalized() - outer_color_guess.normalized()).normalized();
+                        P *= exp(10*(
+                            (this_color - outer_color).dot(dir) -
+                            ( far_color - outer_color).norm() - .05
+                        ));
+                    }
+                }
+            }
+            {
+                if(results[bg_region].count < 100) {
+                    if(print_debug_info) {
+                        cout << "TOO SMALL BG" << endl;
+                    }
+                    P *= 0.5;
+                } else {
+                    Vector3d this_color = results[bg_region].avg_color_assuming_unseen_is(
+                        inner_color).normalized();
+                    if(outer_color_guess == inner_color_guess) {
+                        P *= exp(10*(
+                            (inner_color - this_color).norm() -
+                            (  far_color - this_color).norm() - .05
+                        ));
+                    } else {
+                        Vector3d dir = (inner_color_guess.normalized() - outer_color_guess.normalized()).normalized();
+                        P *= exp(10*(
+                            (inner_color - this_color).dot(dir) -
+                            (  far_color - this_color).norm() - .05
+                        ));
+                    }
+                }
+            }
+            return P;
+        }
+        
         typedef std::pair<const Component *, RenderBuffer::RegionType> Pair;
         static std::vector<Pair> regions; regions.clear();
         BOOST_FOREACH(const Component &component, obj->components) {
