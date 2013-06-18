@@ -129,10 +129,10 @@ class Mesh(object):
                     ])
             _vbo = vbo.VBO(numpy.array(vecs, 'f'))
             vbo_count = len(vecs)
-            vbos[mtl] = _vbo
+            vbos[mtl] = _vbo, vbo_count
         
         def draw():
-            for mtl, vbo in vbos.iteritems():
+            for mtl, (vbo, vbo_count) in vbos.iteritems():
                 mtl.apply()
                 vbo.bind()
                 glEnableClientState(GL_VERTEX_ARRAY)
