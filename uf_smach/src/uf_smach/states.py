@@ -6,12 +6,16 @@ import smach
 import smach_ros
 import actionlib
 
+from nav_msgs.msg import Odometry
+from geometry_msgs.msg import Wrench, Vector3
+import tf
+from tf import transformations
+
 from uf_common.orientation_helpers import PoseEditor, xyz_array, xyzw_array
 from uf_common.msg import MoveToAction, MoveToGoal, PoseTwist, PoseTwistStamped
 from object_finder.msg import FindAction, FindGoal, TargetDesc
-from nav_msgs.msg import Odometry
-import tf
-from tf import transformations
+from rise_6dof.srv import SendConstantWrench
+from indirect_kalman_6dof.srv import SetPosition
 
 class WaypointState(smach.State):
     def __init__(self, shared, goal_func):
@@ -175,3 +179,24 @@ class AlignObjectState(BaseManeuverObjectState):
                                .set_orientation(dest_orientation) \
                                .height(self._traj_start.position[2])
         return target
+
+class OpenLoopState(smach.State):
+    def __init__(self, shared, torque, time):
+        smach.State.__init__(self, outcomes=['succeeded'])
+
+        self._shared = shared
+        self._torque = torque
+        self._time = time
+
+    def execute(self, userdata):
+        initial_odom = rospy.wait_for_message('/imu_odom', Odometry)
+        send_constant_wrench = rospy.ServiceProxy('/send_constant_wrench',
+                                                  SendConstantWrench)
+        set_position = rospy.ServiceProxy('/indirect_kalman_6dof/set_position',
+                                          SetPosition)
+
+        send_constant_wrench(Wrench(Vector3(0, 0, 0),
+                                    Vector3(*self._torque)),
+                             rospy.Duration(self._time))
+        set_position(initial_odom.pose.pose.position)
+        return 'succeeded'
