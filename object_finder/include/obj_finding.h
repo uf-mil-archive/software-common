@@ -47,6 +47,9 @@ struct Component {
         return total_centroid/total_area;
     }
     void draw(RenderBuffer &renderbuffer, int region, Eigen::Vector3d pos, Eigen::Quaterniond orientation) const;
+    bool operator<(const Component &other) const {
+        return name < other.name;
+    }
 };
 
 struct Marker {

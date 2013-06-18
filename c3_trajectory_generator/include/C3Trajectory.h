@@ -26,9 +26,9 @@ namespace subjugator {
             Point(const Vector6d &q, const Vector6d &qdot) :
                 q(q), qdot(qdot) { }
             
-            bool is_approximately(const Point &other) {
+            bool is_approximately(const Point &other, double linear_tolerance, double angular_tolerance) {
                 Vector6d q_difference = q - other.q;
-                return q_difference.dot(q_difference) < 1e-6;
+                return q_difference.segment<3>(0).norm() < linear_tolerance && q_difference.segment<3>(3).norm() < angular_tolerance;
             }
         };
         
@@ -44,8 +44,9 @@ namespace subjugator {
             bool coordinate_unaligned;
 
             Waypoint() { }
-            Waypoint(const Point &r) : r(r), speed(0), coordinate_unaligned(true) { }
-            Waypoint(const Point &r, double speed) : r(r), speed(speed), coordinate_unaligned(true) { }
+            Waypoint(const Point &r, double speed=0,
+                     bool coordinate_unaligned=true) :
+                r(r), speed(speed), coordinate_unaligned(coordinate_unaligned) { }
         };
 
         C3Trajectory(const Point &start, const Limits &limits);

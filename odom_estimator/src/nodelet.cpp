@@ -10,7 +10,7 @@
 #include <sensor_msgs/Imu.h>
 #include <geometry_msgs/Vector3Stamped.h>
 //#include <sensor_msgs/FluidPressure.h>
-#include <skytraq_driver/Measurements.h>
+#include <rawgps_common/Measurements.h>
 
 #include "util.h"
 
@@ -219,7 +219,7 @@ struct AugmentedState : public State {
 static const Vector3d mag_world = Vector3d(-2341.1e-9, 24138.5e-9, -40313.5e-9); // T
 class Nodelet : public nodelet::Nodelet {
   public:
-    Nodelet() : last_mag(boost::none), state(boost::none) { }
+    Nodelet() : last_mag(boost::none), last_good_gps(boost::none), state(boost::none) { }
     
     virtual void onInit() {
       ros::NodeHandle& nh = getNodeHandle();
@@ -229,7 +229,7 @@ class Nodelet : public nodelet::Nodelet {
         boost::bind(&Nodelet::got_mag, this, _1));
       //press_sub = nh.subscribe<sensor_msgs::FluidPressure>("imu/pressure", 10,
       //  boost::bind(&Nodelet::got_press, this, _1));
-      gps_sub = nh.subscribe<skytraq_driver::Measurements>("gps", 10,
+      gps_sub = nh.subscribe<rawgps_common::Measurements>("gps", 10,
         boost::bind(&Nodelet::got_gps, this, _1));
       
       odom_pub = nh.advertise<nav_msgs::Odometry>("odom", 10);
@@ -251,9 +251,12 @@ class Nodelet : public nodelet::Nodelet {
         last_mag = boost::none;
         state = boost::none;
       }
+      if(state && (last_good_gps < ros::Time::now() - ros::Duration(5.))) {
+        NODELET_ERROR("reset due to no good gps data");
+      }
       
       if(!state) {
-        if(last_mag) {
+        if(last_mag && last_good_gps && *last_good_gps > ros::Time::now() - ros::Duration(1.)) {
           State::StateType stdev = (State::StateType() <<
             0,0,0, .05,.05,.05, .1,.1,.1, .5,.5,.5, 0.1, 1e3).finished();
           AugmentedState::CovType tmp = stdev.asDiagonal();
@@ -360,25 +363,31 @@ class Nodelet : public nodelet::Nodelet {
     } */
     
     
-    VectorXd gps_observer(const skytraq_driver::Measurements &msg,
+    VectorXd gps_observer(const rawgps_common::Measurements &msg,
         const State &state, VectorXd noise) {
       VectorXd res(msg.satellites.size());
       for(unsigned int i = 0; i < msg.satellites.size(); i++) {
-        const skytraq_driver::Satellite &sat = msg.satellites[i];
+        const rawgps_common::Satellite &sat = msg.satellites[i];
         double predicted = state.vel.dot(xyz2vec(sat.direction_enu)) + noise(i) + noise(noise.size()-1);
         res[i] = sat.velocity_plus_drift - predicted;
       }
       return res;
     }
-    static bool cmp_cn0(const skytraq_driver::Satellite &a, const skytraq_driver::Satellite &b) {
+    static bool cmp_cn0(const rawgps_common::Satellite &a, const rawgps_common::Satellite &b) {
       return a.cn0 > b.cn0;
     }
-    void got_gps(const skytraq_driver::MeasurementsConstPtr &msgp) {
-      skytraq_driver::Measurements msg = *msgp;
+    void got_gps(const rawgps_common::MeasurementsConstPtr &msgp) {
+      rawgps_common::Measurements msg = *msgp;
       
       std::sort(msg.satellites.begin(), msg.satellites.end(), cmp_cn0);
       while(msg.satellites.size() > 4 && msg.satellites[msg.satellites.size()-1].cn0 < msg.satellites[3].cn0 - 5) {
         msg.satellites.pop_back();
+      }
+      
+      if(msg.satellites.size() >= 4) {
+        last_good_gps = ros::Time::now();
+      } else {
+        return;
       }
       
       if(!state) return;
@@ -407,6 +416,7 @@ class Nodelet : public nodelet::Nodelet {
     ros::Publisher odom_pub;
     
     boost::optional<Vector3d> last_mag;
+    boost::optional<ros::Time> last_good_gps;
     boost::optional<AugmentedState> state;
 };
 

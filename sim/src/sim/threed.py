@@ -1,5 +1,6 @@
 from __future__ import division
 
+import itertools
 import math
 import sys
 import time
@@ -48,73 +49,109 @@ def rotate_vec(vec, m):
     x = numpy.dot((vec[0], vec[1], vec[2], 1), m)
     return V(x[:3])/x[3]
 
-def mesh_from_obj(file):
+class Material(object):
+    pass # no defaults
+    def apply(self):
+        glColor3f(*self.Kd)
+def parse_mtl(filename):
+    current_mtl = None
+    res = {}
+    for line in open(filename):
+        line = line.strip('\r\n')
+        if '#' in line:
+            line = line[:line.index("#")]
+        if not line: continue
+        line = line.split(' ')
+        print line
+        if line[0] == "newmtl":
+            current_mtl = line[1]
+            res[current_mtl] = Material()
+        else:
+            setattr(res[current_mtl], line[0], map(float, line[1:]))
+    return res
+
+def mesh_from_obj(filename):
+    mtllib = parse_mtl(filename[:-3] + 'mtl')
     vertices = []
     texcoords = []
     normals = []
     indices = []
+    materials = []
     ignore = False
-    for line in file:
-        line = line.strip()
+    current_mtl = None
+    for line in open(filename):
+        line = line.strip('\r\n')
         if '#' in line:
             line = line[:line.index("#")]
         if not line: continue
         line = line.split(' ')
         if line[0] == "o":
-            if line[1].startswith('background_'):
+            if line[1].startswith('background_') or line[1].startswith('marker_'):
                 ignore = True
             else:
                 ignore = False
         elif line[0] == "v":
             vertices.append(V(float(x) for x in line[1:]))
-        if line[0] == "vt":
+        elif line[0] == "vt":
             texcoords.append(V(float(x) for x in line[1:]))
-        if line[0] == "vn":
+        elif line[0] == "vn":
             normals.append(V(float(x) for x in line[1:]))
+        elif line[0] == 'usemtl':
+            current_mtl = line[1]
         elif line[0] == "f":
             if not ignore:
                 indices.append(tuple(tuple(int(y)-1 if y else None for y in (x.split('/')+['',''])[:3]) for x in line[1:]))
-    return Mesh(vertices, texcoords, normals, indices)
+                materials.append(mtllib[current_mtl])
+    return Mesh(vertices, texcoords, normals, indices, materials)
 
 class Mesh(object):
-    def __init__(self, vertices, texcoords, normals, indices):
+    def __init__(self, vertices, texcoords, normals, indices, materials):
         self.vertices = vertices
         self.texcoords = texcoords
         self.normals = normals
         self.indices = indices
+        self.materials = materials
         
-        self.vbo = None
+        self.draw2 = None
     
     def generate(self):
-        assert self.vbo is None
+        vbos = {}
+        for mtl, x in itertools.groupby(zip(self.indices, self.materials), lambda (triangle, mtl): mtl):
+            print mtl, x
+            vecs = []
+            for triangle, mtl in x:
+                assert len(triangle) == 3
+                for vert_index, tex_index, normal_index in triangle:
+                    vecs.append([
+                        self.vertices[vert_index],
+                        self.texcoords[tex_index] if tex_index is not None else (0, 0, 0),
+                        self.normals[normal_index] if normal_index is not None else (0, 0, 0),
+                    ])
+            _vbo = vbo.VBO(numpy.array(vecs, 'f'))
+            vbo_count = len(vecs)
+            vbos[mtl] = _vbo
         
-        vecs = []
-        for triangle in self.indices:
-            assert len(triangle) == 3
-            for vert_index, tex_index, normal_index in triangle:
-                vecs.append([
-                    self.vertices[vert_index],
-                    self.texcoords[tex_index] if tex_index is not None else (0, 0, 0),
-                    self.normals[normal_index] if normal_index is not None else (0, 0, 0),
-                ])
-        self.vbo = vbo.VBO(numpy.array(vecs, 'f'))
-        self.vbo_count = len(vecs)
+        def draw():
+            for mtl, vbo in vbos.iteritems():
+                mtl.apply()
+                vbo.bind()
+                glEnableClientState(GL_VERTEX_ARRAY)
+                glEnableClientState(GL_NORMAL_ARRAY)
+                glEnableClientState(GL_TEXTURE_COORD_ARRAY)
+                glVertexPointer(3, GL_FLOAT, 36, vbo)
+                glNormalPointer(GL_FLOAT, 36, vbo + 12)
+                glTexCoordPointer(3, GL_FLOAT, 36, vbo + 24)
+                glDrawArrays(GL_TRIANGLES, 0, vbo_count)
+                glDisableClientState(GL_VERTEX_ARRAY)
+                glDisableClientState(GL_NORMAL_ARRAY)
+                glDisableClientState(GL_TEXTURE_COORD_ARRAY)
+                vbo.unbind()
+        return draw
     
     def draw(self):
-        if self.vbo is None:
-            self.generate()
-        self.vbo.bind()
-        glEnableClientState(GL_VERTEX_ARRAY)
-        glEnableClientState(GL_NORMAL_ARRAY)
-        glEnableClientState(GL_TEXTURE_COORD_ARRAY)
-        glVertexPointer(3, GL_FLOAT, 36, self.vbo)
-        glNormalPointer(GL_FLOAT, 36, self.vbo + 12)
-        glTexCoordPointer(3, GL_FLOAT, 36, self.vbo + 24)
-        glDrawArrays(GL_TRIANGLES, 0, self.vbo_count)
-        glDisableClientState(GL_VERTEX_ARRAY)
-        glDisableClientState(GL_NORMAL_ARRAY)
-        glDisableClientState(GL_TEXTURE_COORD_ARRAY)
-        self.vbo.unbind()
+        if self.draw2 is None:
+            self.draw2 = self.generate()
+        self.draw2()
     
     @property
     def ode_trimeshdata(self):
@@ -124,10 +161,10 @@ class Mesh(object):
         return x
     
     def translate(self, dx):
-        return Mesh([x+dx for x in self.vertices], self.texcoords, self.normals, self.indices)
+        return Mesh([x+dx for x in self.vertices], self.texcoords, self.normals, self.indices, self.materials)
     
     def rotate(self, q):
-        return Mesh([q.quat_rot(x) for x in self.vertices], self.texcoords, [q.quat_rot(x) for x in self.normals], self.indices)
+        return Mesh([q.quat_rot(x) for x in self.vertices], self.texcoords, [q.quat_rot(x) for x in self.normals], self.indices, self.materials)
 
 
 def rotate_to_body(body, inv=False):
@@ -141,16 +178,6 @@ def rotate_to_body(body, inv=False):
         rot = numpy.linalg.inv(rot)
     rot = list(rot[0])+list(rot[1])+list(rot[2])+list(rot[3])
     glMultMatrixd(rot)
-
-
-class MeshDrawer(object):
-    def __init__(self, mesh, color):
-        self.mesh = mesh
-        self.color = color
-    
-    def draw(self):
-        glColor3f(*self.color)
-        self.mesh.draw()
 
 class VectorField(object):
     def __init__(self, func):
@@ -466,13 +493,14 @@ class Interface(object):
 import ode
 
 class Capsules(object):
-    def __init__(self, world, space, pos, color, capsules, radius, mass=2):
+    def __init__(self, world, space, pos, color, capsules, radius, mass=2, fixed=False, orientation=v(1, 0, 0, 0)):
         "capsules is a list of (start, end) points"
         
         self.capsules = capsules
         
         self.body = ode.Body(world)
         self.body.setPosition(pos)
+        self.body.setQuaternion(orientation)
         m = ode.Mass()
         # computing MOI assuming sphere with .5 m radius
         m.setSphere(mass/(4/3*math.pi*.5**3), .5) # setSphereTotal is broken
@@ -493,6 +521,11 @@ class Capsules(object):
         
         self.color = color
         self.radius = radius
+        
+        if fixed:
+            self.joint = ode.FixedJoint(world)
+            self.joint.attach(self.body, None)
+            self.joint.setFixed()
     
     def draw(self):
         q = gluNewQuadric()

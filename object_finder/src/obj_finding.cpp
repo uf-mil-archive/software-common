@@ -104,7 +104,8 @@ Obj::Obj(const string filename) {
         
         if(command == "o") {
             string name; ss >> name;
-            if(name.find("ignore_") != 0) {
+            replace(name.begin(), name.end(), '_', ' ');
+            if(name.find("ignore ") != 0) {
                 components.push_back(Component());
                 components[components.size()-1].name = name;
                 ignore_faces = false;
@@ -122,6 +123,7 @@ Obj::Obj(const string filename) {
             }
         }
     }
+    sort(components.begin(), components.end()); // sort by name
     
     BOOST_FOREACH(const Component &component, components) {
         if(component.name.find("marker_") != 0) continue;

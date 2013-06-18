@@ -1,18 +1,18 @@
 <package>
-  <description brief="odom_estimator">
+  <description brief="nv08c_driver">
 
-     odom_estimator
+     nv08c_driver
 
   </description>
   <author>Forrest Voight</author>
   <license>BSD</license>
   <review status="unreviewed" notes=""/>
-  <url>http://ros.org/wiki/odom_estimator</url>
+  <url>http://ros.org/wiki/nv08c_driver</url>
+  <depend package="roscpp"/>
   <depend package="nodelet"/>
-  <depend package="sensor_msgs"/>
+
+  <depend package="skytraq_driver"/>
   <depend package="rawgps_common"/>
-  
-  <rosdep name="eigen" />
 
   <export>
     <nodelet plugin="${prefix}/nodelet.xml"/>
