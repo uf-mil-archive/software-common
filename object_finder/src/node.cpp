@@ -629,7 +629,8 @@ struct GoalExecutor {
                 BOOST_FOREACH(Particle &particle2, particle_filter.particles) {
                     if(particle2.dist(particle) <= .2)
                         targetres.P_within_10cm += particle2.last_P/particle_filter.total_last_P;
-                    if(((particle2.pos-c).normalized() - (particle.pos-c).normalized()).norm() <= .2)
+                    double dist = sqrt((particle.pos-c).norm() * (particle2.pos-c).norm());
+                    if(((particle2.pos-c).normalized() - (particle.pos-c).normalized()).norm()*dist <= .2)
                         targetres.P_within_10cm_xy += particle2.last_P/particle_filter.total_last_P;
                 }
                 feedback.targetreses.push_back(targetres);
