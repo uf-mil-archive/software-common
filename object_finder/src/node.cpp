@@ -623,20 +623,17 @@ struct GoalExecutor {
                 targetres.P = particle.last_P;
                 targetres.smoothed_last_P = particle.smoothed_last_P;
                 targetres.P_within_10cm = 0;
+                targetres.P_within_10cm_xy = 0;
                 ParticleFilter &particle_filter = particle_filters[&particle-max_ps.data()];
+                Vector3d c = img.transform * Vector3d::Zero();
                 BOOST_FOREACH(Particle &particle2, particle_filter.particles) {
                     if(particle2.dist(particle) <= .2)
                         targetres.P_within_10cm += particle2.last_P/particle_filter.total_last_P;
+                    if(((particle2.pos-c).normalized() - (particle.pos-c).normalized()).norm() <= .2)
+                        targetres.P_within_10cm_xy += particle2.last_P/particle_filter.total_last_P;
                 }
                 feedback.targetreses.push_back(targetres);
             }
-            //RenderBuffer rb(img);
-            // XXX
-            //feedback.P = max_p.P(img, rb);
-            //feedback.P_within_10cm = 0;
-            //BOOST_FOREACH(Particle &particle, particles)
-            //    if(particle.dist(max_p) <= .2)
-            //        feedback.P_within_10cm += particle.smoothed_last_P/total_smoothed_last_P;
             feedback_callback(feedback);
         }
         
