@@ -108,6 +108,7 @@ class BaseManeuverObjectState(smach.State):
         self._cond = threading.Condition()
         self._done = False
         self._failed = False
+        self._fail_ctr = 0
 
     def execute(self, userdata):
         self._traj_start = PoseEditor.from_PoseTwistStamped_topic('/trajectory')
@@ -127,9 +128,13 @@ class BaseManeuverObjectState(smach.State):
             good_results = [result for result in feedback.targetreses
                             if result.P_within_10cm > .75]
             if len(good_results) == 0:
-                self._failed = True;
-                self._cond.notify_all()
+                self._fail_ctr += 1
+                if self._fail_ctr > 10:
+                    self._failed = True;
+                    self._cond.notify_all()
                 return
+            else:
+                self._fail_ctr = 0
 
             if self._selector is not None:
                 result = self._selector(good_results, self._traj_start)

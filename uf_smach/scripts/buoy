@@ -35,7 +35,7 @@ def main():
         smach.Sequence.add('APPROACH', VelocityState(shared, numpy.array([.2, 0, 0])))
         smach.Sequence.add('WAIT_BUOYS',
                            WaitForObjectsState(shared, 'find_forward',
-                                                    [buoy_desc]*3, .95))
+                                                    [buoy_desc]*3, .85))
         smach.Sequence.add('APPROACH_LEFT_BUOY',
                            ApproachObjectState(shared, 'find_forward',
                                                'forward_camera', 2,
@@ -44,7 +44,7 @@ def main():
         smach.Sequence.add('BACKWARD', VelocityState(shared, numpy.array([-.2, 0, 0])))
         smach.Sequence.add('WAIT_BUOYS2',
                            WaitForObjectsState(shared, 'find_forward',
-                                                    [buoy_desc]*3, .95))
+                                                    [buoy_desc]*3, .85))
         smach.Sequence.add('APPROACH_RIGHT_BUOY',
                            ApproachObjectState(shared, 'find_forward',
                                                'forward_camera', 2,
