@@ -1,0 +1,123 @@
+#!/usr/bin/env python
+
+import roslib; roslib.load_manifest('c3_trajectory_generator')
+import rospy
+
+import actionlib
+import tf
+from interactive_markers.interactive_marker_server import *
+from geometry_msgs.msg import Quaternion, Twist, Pose, Point
+from uf_common.msg import MoveToAction, MoveToGoal, PoseTwist
+
+CENTER_TO_VEHICLE = 1
+SET_DEPTH = 9
+SET_DEPTH_ZERO = 10
+
+class Node(object):
+    def __init__(self):
+        self._tf_listener = tf.TransformListener()
+        self._server = InteractiveMarkerServer("moveto_marker")
+        self._move_client = actionlib.SimpleActionClient('moveto', MoveToAction)
+        self._move_client.wait_for_server()
+        self._marker_pose = None
+        self._marker_pose_time = None
+        self._marker_pose_sent = False
+        self.setup_markers()
+
+    def setup_markers(self):
+        while True:
+            try:
+                self._tf_listener.waitForTransform('map', 'base_link',
+                                                   rospy.Time(0), rospy.Duration(1))
+                trans, rot = self._tf_listener.lookupTransform('map', 'base_link',
+                                                               rospy.Time(0))
+                break
+            except tf.Exception as ex:
+                print ex
+                continue
+        self._marker_pose = Pose(position=Point(*trans),
+                               orientation=Quaternion(*rot))
+
+        int_marker = InteractiveMarker()
+        int_marker.header.frame_id = "/map"
+        int_marker.name = "moveto"
+        int_marker.description = "moveto"
+        int_marker.pose = self._marker_pose
+
+        for axis, dir in [('x', (1, 0, 0)),
+                          ('y', (0, 1, 0)),
+                          ('z', (0, 0, 1))]:
+            control = InteractiveMarkerControl()
+            control.name = axis
+            control.orientation = Quaternion(*(dir + (1,))) # w must be 1?
+            control.interaction_mode = InteractiveMarkerControl.MOVE_AXIS
+            int_marker.controls.append(control);
+
+        yaw_control = InteractiveMarkerControl()
+        yaw_control.name = "yaw"
+        yaw_control.orientation = Quaternion(0, 1, 0, 1)
+        yaw_control.interaction_mode = InteractiveMarkerControl.ROTATE_AXIS
+        int_marker.controls.append(yaw_control);
+
+        reset_menu = MenuEntry()
+        reset_menu.id = CENTER_TO_VEHICLE
+        reset_menu.title = 'Center to vehicle'
+        int_marker.menu_entries.append(reset_menu)
+
+        depth_menu = MenuEntry()
+        depth_menu.id = SET_DEPTH
+        depth_menu.title = 'Set depth'
+        int_marker.menu_entries.append(depth_menu)
+
+        for d in xrange(6):
+            menu = MenuEntry()
+            menu.id = SET_DEPTH_ZERO + d
+            menu.parent_id = SET_DEPTH
+            menu.title = '%d m' % d
+            int_marker.menu_entries.append(menu)
+
+        self._server.insert(int_marker, self.onFeedback)
+        self._server.applyChanges()
+
+    def onFeedback(self, feedback):
+        applyChanges = True
+
+        if feedback.menu_entry_id == CENTER_TO_VEHICLE:
+            trans, rot = self._tf_listener.lookupTransform('map', 'base_link',
+                                                           rospy.Time(0))
+            self._marker_pose = Pose(position=Point(*trans),
+                                     orientation=Quaternion(*rot))
+        elif feedback.menu_entry_id >= SET_DEPTH_ZERO:
+            self._marker_pose.position.z = -(feedback.menu_entry_id - SET_DEPTH_ZERO)
+        else:
+            self._marker_pose = feedback.pose
+            applyChanges = False # Don't need to apply feedback back to rviz
+
+        self._marker_pose_time = rospy.Time.now()
+        self._marker_pose_sent = False
+        if applyChanges:
+            self._server.setPose('moveto', self._marker_pose)
+            self._server.applyChanges()
+
+    def run(self):
+        while not rospy.is_shutdown():
+            rospy.sleep(.2)
+            if self._marker_pose_time is None:
+                continue
+            if self._marker_pose_sent:
+                continue
+            if rospy.Time.now() - self._marker_pose_time > rospy.Duration(.5):
+                self.send_goal()
+
+    def send_goal(self):
+        self._move_client.send_goal(MoveToGoal(
+                header=Header(frame_id='/map'),
+                posetwist=PoseTwist(
+                    pose=self._marker_pose)))
+        self._marker_pose_sent = True
+
+if __name__ == "__main__":
+    rospy.init_node("interactive_marker_moveto")
+    node = Node()
+    node.run()
+
