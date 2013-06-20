@@ -122,14 +122,16 @@ struct Particle {
         p.smoothed_last_P = 1.;
         // diffusion to test near solutions to try to find a better fit
         p.pos += amount * gaussvec();
-        if(false) { // allow_rolling
-            p.q *= quat_from_rotvec(amount * gaussvec());
-        } else {
+        if(!goal.disallow_yawing) {
             p.q = quat_from_rotvec(Vector3d(0, 0, amount * gauss())) * p.q;
-            if(goal.allow_pitching) {
-                p.q = p.q * quat_from_rotvec(
-                    Vector3d(0, amount * gauss(), 0));
-            }
+        }
+        if(goal.allow_pitching) {
+            p.q = p.q * quat_from_rotvec(
+                Vector3d(0, amount * gauss(), 0));
+        }
+        if(goal.allow_rolling) {
+            p.q = p.q * quat_from_rotvec(
+                Vector3d(amount * gauss(), 0, 0));
         }
         return p;
     }
@@ -466,6 +468,7 @@ struct GoalExecutor {
     ros::Publisher particles_pub;
     ros::Publisher pose_pub;
     ros::Publisher image_pub;
+    std::vector<ros::Publisher> extracted_image_pubs;
     boost::function1<void, const object_finder::FindFeedback&> feedback_callback;
     
     vector<boost::shared_ptr<Obj> > current_objs;
@@ -491,6 +494,8 @@ struct GoalExecutor {
             current_objs.push_back(targetdesc.type == TargetDesc::TYPE_OBJECT
                 ? boost::make_shared<Obj>(targetdesc.object_filename)
                 : boost::shared_ptr<Obj>());
+            ostringstream tmp; tmp << "extracted_images/" << &targetdesc - goal.targetdescs.data();
+            extracted_image_pubs.push_back(private_nh.advertise<sensor_msgs::Image>(tmp.str(), 1));
         }
         
         particles_pub = private_nh.advertise<visualization_msgs::Marker>(
@@ -673,6 +678,41 @@ struct GoalExecutor {
                 }
             }
             image_pub.publish(msg);
+        }
+        BOOST_FOREACH(const Particle &max_p, max_ps) { // send contained images
+            ros::Publisher pub = extracted_image_pubs[&max_p - max_ps.data()];
+            if(!pub.getNumSubscribers()) continue;
+            
+            Image msg;
+            msg.header.stamp = image->header.stamp;
+            msg.height = max_p.goal.extract_y_pixels;
+            msg.width = max_p.goal.extract_x_pixels;
+            msg.encoding = "rgb8";
+            msg.is_bigendian = 0;
+            msg.step = msg.width*3;
+            msg.data.resize(msg.width*msg.height*3);
+            for(unsigned int y = 0; y < msg.height; y++) {
+                for(unsigned int x = 0; x < msg.width; x++) {
+                    Vector3d pos_body = xyz2vec(max_p.goal.extract_origin) + (x+.5)/(double)msg.width * xyz2vec(max_p.goal.extract_x) + (y+.5)/(double)msg.height * xyz2vec(max_p.goal.extract_y);
+                    Vector3d c0_camera = img.transform_inverse * (max_p.pos + max_p.q._transformVector(pos_body));
+                    Vector3d c0_homo = img.proj * c0_camera.homogeneous();
+                    
+                    Vector3d orig_color = Vector3d::Zero();
+                    if(c0_homo(2) > 0) { // check if behind camera
+                        Vector2d c0 = c0_homo.hnormalized();
+                        
+                        int orig_x = c0(0) + .5, orig_y = c0(1) + .5;
+                        if(orig_x >= 0 && orig_x < (int)img.cam_info.width && orig_y >= 0 && orig_y < (int)img.cam_info.height) {
+                            orig_color = img.get_pixel(orig_y, orig_x);
+                        }
+                    }
+                    
+                    msg.data[msg.step*y + 3*x + 0] = 255*orig_color[0];
+                    msg.data[msg.step*y + 3*x + 1] = 255*orig_color[1];
+                    msg.data[msg.step*y + 3*x + 2] = 255*orig_color[2];
+                }
+            }
+            pub.publish(msg);
         }
     }
 };
