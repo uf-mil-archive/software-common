@@ -12,7 +12,8 @@
   <depend package="geometry_msgs"/>
   <depend package="tf"/>
   <depend package="actionlib"/>
-  
+  <depend package="interactive_markers"/>
+
   <rosdep name="eigen" />
 
   <export>

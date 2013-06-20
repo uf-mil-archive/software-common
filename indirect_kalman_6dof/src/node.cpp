@@ -1,5 +1,6 @@
 #include "NavigationComputer.h"
 #include "indirect_kalman_6dof/Debug.h"
+#include "indirect_kalman_6dof/SetPosition.h"
 
 #include <uf_common/param_helpers.h>
 #include <uf_common/msg_helpers.h>
@@ -36,6 +37,7 @@ struct Node {
     ros::Publisher odometry_pub;
     ros::Publisher pose_pub;
     ros::Publisher debug_pub;
+    ros::ServiceServer set_position_srv;
 
     boost::scoped_ptr<NavigationComputer> navcomp;
 
@@ -110,7 +112,8 @@ struct Node {
         pub_timer = nh.createTimer(ros::Duration(config.T_kalman), &Node::onPub, this);
         odometry_pub = nh.advertise<nav_msgs::Odometry>("odom", 1);
         pose_pub = nh.advertise<geometry_msgs::PoseStamped>("pose", 1);
-        debug_pub = nh.advertise<indirect_kalman_6dof::Debug>("debug", 1);
+        debug_pub = private_nh.advertise<indirect_kalman_6dof::Debug>("debug", 1);
+        set_position_srv = private_nh.advertiseService("set_position", &Node::onSetPosition, this);
     }
 
     void onImu(sensor_msgs::ImuConstPtr imu) {
@@ -193,6 +196,11 @@ struct Node {
         debugmsg.y_d_count = state->stats.y_d_count;
         debugmsg.y_z_count = state->stats.y_z_count;
         debug_pub.publish(debugmsg);
+    }
+
+    bool onSetPosition(indirect_kalman_6dof::SetPosition::Request &request,
+                       indirect_kalman_6dof::SetPosition::Response &response) {
+        return navcomp->setPosition(uf_common::xyz2vec(request.position));
     }
 };
 

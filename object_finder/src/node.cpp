@@ -122,14 +122,16 @@ struct Particle {
         p.smoothed_last_P = 1.;
         // diffusion to test near solutions to try to find a better fit
         p.pos += amount * gaussvec();
-        if(false) { // allow_rolling
-            p.q *= quat_from_rotvec(amount * gaussvec());
-        } else {
+        if(!goal.disallow_yawing) {
             p.q = quat_from_rotvec(Vector3d(0, 0, amount * gauss())) * p.q;
-            if(goal.allow_pitching) {
-                p.q = p.q * quat_from_rotvec(
-                    Vector3d(0, amount * gauss(), 0));
-            }
+        }
+        if(goal.allow_pitching) {
+            p.q = p.q * quat_from_rotvec(
+                Vector3d(0, amount * gauss(), 0));
+        }
+        if(goal.allow_rolling) {
+            p.q = p.q * quat_from_rotvec(
+                Vector3d(amount * gauss(), 0, 0));
         }
         return p;
     }
@@ -141,6 +143,88 @@ struct Particle {
         }
     }
     double P(const TaggedImage &img, RenderBuffer &rb, bool print_debug_info=false, Vector3d *last_color_dest=NULL) const {
+        if(!obj) {
+            RenderBuffer::RegionType fg_region = rb.new_region();
+            sphere_draw(rb, fg_region, pos, goal.sphere_radius);
+            RenderBuffer::RegionType bg_region = rb.new_region();
+            sphere_draw(rb, bg_region, pos, 2*goal.sphere_radius);
+            vector<ResultWithArea> results = rb.get_results();
+            Result inner_result = results[fg_region];
+            Result outer_result = results[bg_region];
+            Result far_result = img.total_result - inner_result; //- outer_result;
+            
+            if(inner_result.count < 100 || outer_result.count < 100 || far_result.count < 100) {
+                if(print_debug_info) {
+                    cout << endl;
+                    cout << endl;
+                    cout << "NOT VISIBLE" << endl;
+                }
+                // not visible
+                return 0.001;
+            }
+            
+            if(last_color_dest) {
+                *last_color_dest = inner_result.avg_color();
+            }
+            
+            Vector3d inner_color_guess = ColorRGBA_to_vec(goal.fg_color);
+            Vector3d outer_color_guess = ColorRGBA_to_vec(goal.bg_color);
+            
+            Vector3d inner_color = inner_result.avg_color().normalized();
+            Vector3d outer_color = outer_result.avg_color().normalized();
+            Vector3d far_color = far_result.avg_color().normalized();
+            //double P2 = (inner_color - outer_color).norm();
+            //double P = P2* pow(far_color.dot(outer_color), 5);
+            double P = 1;
+            {
+                if(results[fg_region].count < 100) {
+                    if(print_debug_info) {
+                        cout << "TOO SMALL FG" << endl;
+                    }
+                    P *= 0.5;
+                } else {
+                    Vector3d this_color = results[fg_region].avg_color_assuming_unseen_is(
+                        outer_color).normalized();
+                    if(outer_color_guess == inner_color_guess) {
+                        P *= exp(10*(
+                            (this_color - outer_color).norm() -
+                            ( far_color - outer_color).norm() - .05
+                        ));
+                    } else {
+                        Vector3d dir = (inner_color_guess.normalized() - outer_color_guess.normalized()).normalized();
+                        P *= exp(10*(
+                            (this_color - outer_color).dot(dir) -
+                            ( far_color - outer_color).norm() - .05
+                        ));
+                    }
+                }
+            }
+            {
+                if(results[bg_region].count < 100) {
+                    if(print_debug_info) {
+                        cout << "TOO SMALL BG" << endl;
+                    }
+                    P *= 0.5;
+                } else {
+                    Vector3d this_color = results[bg_region].avg_color_assuming_unseen_is(
+                        inner_color).normalized();
+                    if(outer_color_guess == inner_color_guess) {
+                        P *= exp(10*(
+                            (inner_color - this_color).norm() -
+                            (  far_color - this_color).norm() - .05
+                        ));
+                    } else {
+                        Vector3d dir = (inner_color_guess.normalized() - outer_color_guess.normalized()).normalized();
+                        P *= exp(10*(
+                            (inner_color - this_color).dot(dir) -
+                            (  far_color - this_color).norm() - .05
+                        ));
+                    }
+                }
+            }
+            return P;
+        }
+        
         typedef std::pair<const Component *, RenderBuffer::RegionType> Pair;
         static std::vector<Pair> regions; regions.clear();
         BOOST_FOREACH(const Component &component, obj->components) {
@@ -384,6 +468,7 @@ struct GoalExecutor {
     ros::Publisher particles_pub;
     ros::Publisher pose_pub;
     ros::Publisher image_pub;
+    std::vector<ros::Publisher> extracted_image_pubs;
     boost::function1<void, const object_finder::FindFeedback&> feedback_callback;
     
     vector<boost::shared_ptr<Obj> > current_objs;
@@ -409,6 +494,8 @@ struct GoalExecutor {
             current_objs.push_back(targetdesc.type == TargetDesc::TYPE_OBJECT
                 ? boost::make_shared<Obj>(targetdesc.object_filename)
                 : boost::shared_ptr<Obj>());
+            ostringstream tmp; tmp << "extracted_images/" << &targetdesc - goal.targetdescs.data();
+            extracted_image_pubs.push_back(private_nh.advertise<sensor_msgs::Image>(tmp.str(), 1));
         }
         
         particles_pub = private_nh.advertise<visualization_msgs::Marker>(
@@ -541,20 +628,18 @@ struct GoalExecutor {
                 targetres.P = particle.last_P;
                 targetres.smoothed_last_P = particle.smoothed_last_P;
                 targetres.P_within_10cm = 0;
+                targetres.P_within_10cm_xy = 0;
                 ParticleFilter &particle_filter = particle_filters[&particle-max_ps.data()];
+                Vector3d c = img.transform * Vector3d::Zero();
                 BOOST_FOREACH(Particle &particle2, particle_filter.particles) {
                     if(particle2.dist(particle) <= .2)
                         targetres.P_within_10cm += particle2.last_P/particle_filter.total_last_P;
+                    double dist = sqrt((particle.pos-c).norm() * (particle2.pos-c).norm());
+                    if(((particle2.pos-c).normalized() - (particle.pos-c).normalized()).norm()*dist <= .2)
+                        targetres.P_within_10cm_xy += particle2.last_P/particle_filter.total_last_P;
                 }
                 feedback.targetreses.push_back(targetres);
             }
-            //RenderBuffer rb(img);
-            // XXX
-            //feedback.P = max_p.P(img, rb);
-            //feedback.P_within_10cm = 0;
-            //BOOST_FOREACH(Particle &particle, particles)
-            //    if(particle.dist(max_p) <= .2)
-            //        feedback.P_within_10cm += particle.smoothed_last_P/total_smoothed_last_P;
             feedback_callback(feedback);
         }
         
@@ -593,6 +678,41 @@ struct GoalExecutor {
                 }
             }
             image_pub.publish(msg);
+        }
+        BOOST_FOREACH(const Particle &max_p, max_ps) { // send contained images
+            ros::Publisher pub = extracted_image_pubs[&max_p - max_ps.data()];
+            if(!pub.getNumSubscribers()) continue;
+            
+            Image msg;
+            msg.header.stamp = image->header.stamp;
+            msg.height = max_p.goal.extract_y_pixels;
+            msg.width = max_p.goal.extract_x_pixels;
+            msg.encoding = "rgb8";
+            msg.is_bigendian = 0;
+            msg.step = msg.width*3;
+            msg.data.resize(msg.width*msg.height*3);
+            for(unsigned int y = 0; y < msg.height; y++) {
+                for(unsigned int x = 0; x < msg.width; x++) {
+                    Vector3d pos_body = xyz2vec(max_p.goal.extract_origin) + (x+.5)/(double)msg.width * xyz2vec(max_p.goal.extract_x) + (y+.5)/(double)msg.height * xyz2vec(max_p.goal.extract_y);
+                    Vector3d c0_camera = img.transform_inverse * (max_p.pos + max_p.q._transformVector(pos_body));
+                    Vector3d c0_homo = img.proj * c0_camera.homogeneous();
+                    
+                    Vector3d orig_color = Vector3d::Zero();
+                    if(c0_homo(2) > 0) { // check if behind camera
+                        Vector2d c0 = c0_homo.hnormalized();
+                        
+                        int orig_x = c0(0) + .5, orig_y = c0(1) + .5;
+                        if(orig_x >= 0 && orig_x < (int)img.cam_info.width && orig_y >= 0 && orig_y < (int)img.cam_info.height) {
+                            orig_color = img.get_pixel(orig_y, orig_x);
+                        }
+                    }
+                    
+                    msg.data[msg.step*y + 3*x + 0] = 255*orig_color[0];
+                    msg.data[msg.step*y + 3*x + 1] = 255*orig_color[1];
+                    msg.data[msg.step*y + 3*x + 2] = 255*orig_color[2];
+                }
+            }
+            pub.publish(msg);
         }
     }
 };

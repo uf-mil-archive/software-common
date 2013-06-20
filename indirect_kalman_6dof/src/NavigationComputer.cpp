@@ -169,6 +169,24 @@ void NavigationComputer::updateKalman() {
     }
 }
 
+bool NavigationComputer::setPosition(const Eigen::Vector3d &pos) {
+    if (!ins) {
+        return false;
+    }
+
+    INS::Error error;
+    error.q = Eigen::Quaterniond(1, 0, 0, 0);
+    error.v_nav = Eigen::Vector3d::Zero() - ins->getState().v_nav; // clear velocity
+    error.p_nav = pos - ins->getState().p_nav;
+    error.p_nav[2] = 0; // don't correct depth, just ticks off kalman
+    error.b_g = Eigen::Vector3d::Zero();
+
+    last_correction_time = kalman_time;
+    ins->correct(error);
+    kalman.resetINSError();
+    return true;
+}
+
 void NavigationComputer::tryInitINS() {
     if (!ins_init.ready()) {
         return;
