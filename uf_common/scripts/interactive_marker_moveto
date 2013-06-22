@@ -5,6 +5,7 @@ import rospy
 
 import actionlib
 import tf
+from tf import transformations
 from interactive_markers.interactive_marker_server import *
 from geometry_msgs.msg import Quaternion, Twist, Pose, Point
 from uf_common.msg import MoveToAction, MoveToGoal, PoseTwist
@@ -76,17 +77,18 @@ class Node(object):
             menu.title = '%d m' % d
             int_marker.menu_entries.append(menu)
 
-        self._server.insert(int_marker, self.onFeedback)
+        self._server.insert(int_marker, self.on_feedback)
         self._server.applyChanges()
 
-    def onFeedback(self, feedback):
+    def on_feedback(self, feedback):
         applyChanges = True
 
         if feedback.menu_entry_id == CENTER_TO_VEHICLE:
             trans, rot = self._tf_listener.lookupTransform('map', 'base_link',
                                                            rospy.Time(0))
+            yaw = transformations.euler_from_quaternion(rot)[2]
             self._marker_pose = Pose(position=Point(*trans),
-                                     orientation=Quaternion(*rot))
+                                     orientation=Quaternion(*transformations.quaternion_from_euler(0, 0, yaw)))
         elif feedback.menu_entry_id >= SET_DEPTH_ZERO:
             self._marker_pose.position.z = -(feedback.menu_entry_id - SET_DEPTH_ZERO)
         else:
