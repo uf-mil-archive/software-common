@@ -7,6 +7,7 @@ import rospy
 
 import rospy
 from std_msgs.msg import Header
+from geometry_msgs.msg import PointStamped
 from sensor_msgs.msg import NavSatFix
 from qt_gui.plugin import Plugin
 from python_qt_binding import loadUi
@@ -15,8 +16,12 @@ from python_qt_binding.QtGui import QWidget, QPushButton,QCheckBox,QListWidget,Q
 
 uipath = os.path.dirname(os.path.realpath(__file__))
 
+global position
+position = [0,0,0]
+
 def pos_callback(msg):
-        global 
+        global position 
+        position = [msg.x,msg.y,msg.z]
 
 class GPSPlugin(Plugin):
     def __init__(self, context):
@@ -25,10 +30,10 @@ class GPSPlugin(Plugin):
 
         self._widget = QWidget()
         loadUi(os.path.join(uipath, 'gps.ui'), self._widget)
-        context.add_widget(self._widget)control/controller/src/pd_controller.py
+        context.add_widget(self._widget)
 
         self.waypoint = rospy.Publisher('/gps_latlong_waypoint',NavSatFix)
-        rospy.Subscriber('/gps_pos',PointStamped,pos_callback)
+        rospy.Subscriber('/gps_parser/pos',PointStamped,pos_callback)
 
         self._widget.findChild(QPushButton, 'record_entered_waypoint').clicked.connect(self._on_record_entered_clicked)
         self._widget.findChild(QPushButton, 'record_current_waypoint').clicked.connect(self._on_record_current_clicked)
@@ -51,9 +56,10 @@ class GPSPlugin(Plugin):
 	        ))
     
     def _on_record_current_clicked(self):
+        global position
         self.name = self._widget.findChild(QLineEdit, 'waypoint_name').displayText()
         self._widget.findChild(QLineEdit, 'waypoint_name').clear()
-        self._widget.findChild(QListWidget, 'waypoint_list').addItem(str(self.name+','+'1'+','+'2'+','+'3'))
+        self._widget.findChild(QListWidget, 'waypoint_list').addItem(str(self.name+'(ENU)'','+str(position[0])+','+str(pos[1])+','+str(pos[2])))
 
     def _on_record_entered_clicked(self):
         self.lat = self._widget.findChild(QLineEdit, 'lat_in').displayText()
