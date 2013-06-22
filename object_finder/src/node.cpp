@@ -228,6 +228,7 @@ struct Particle {
         typedef std::pair<const Component *, RenderBuffer::RegionType> Pair;
         static std::vector<Pair> regions; regions.clear();
         BOOST_FOREACH(const Component &component, obj->components) {
+            if(component.name.find("marker ") == 0 || component.name.find("ignore ") == 0) continue;
             RenderBuffer::RegionType region = rb.new_region();
             component.draw(rb, region, pos, q);
             regions.push_back(make_pair(&component, region));

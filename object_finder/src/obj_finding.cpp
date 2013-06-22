@@ -126,9 +126,9 @@ Obj::Obj(const string filename) {
     sort(components.begin(), components.end()); // sort by name
     
     BOOST_FOREACH(const Component &component, components) {
-        if(component.name.find("marker_") != 0) continue;
+        if(component.name.find("marker ") != 0) continue;
         Marker marker;
-        marker.name = component.name.substr(string("marker_").length());
+        marker.name = component.name.substr(string("marker ").length());
         marker.position = component.center_of_mass();
         markers.push_back(marker);
     }
