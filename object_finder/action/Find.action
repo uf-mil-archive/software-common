@@ -8,5 +8,3 @@ TargetDesc[] targetdescs
 ---
 # feedback
 TargetRes[] targetreses
-float64 P
-float64 P_within_10cm
