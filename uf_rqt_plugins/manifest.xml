@@ -14,7 +14,7 @@
   <depend package="thruster_handling"/>
   <depend package="kill_handling"/>
   <depend package="uf_common"/>
-  <depend package="propagator_motor_driver"/>
+  <depend package="thruster_handling"/>
   <depend package="skytraq_driver"/>
 
   <export>
