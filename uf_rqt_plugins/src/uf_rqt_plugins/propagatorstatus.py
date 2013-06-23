@@ -13,36 +13,48 @@ from qt_gui.plugin import Plugin
 from python_qt_binding import loadUi
 from python_qt_binding.QtCore import SIGNAL,QTimer,Qt
 from python_qt_binding.QtGui import QWidget, QPushButton,QCheckBox,QListWidget,QLineEdit,QListWidgetItem
-from propagator_motor_driver.msg import motor_driver_statistics
+from thruster_handling.msg import ThrusterInfo
 from skytraq_driver.msg import SerialPacket
 
 uipath = os.path.dirname(os.path.realpath(__file__))
 
-global active
+global active,check
 active = []
+check = []
 
 def kill(event):
-        global active
+        global active,check
         active = []
+        for i in ['FR','FL','BR','BL','GPS','IMU','LIDAR','CAMERA']:
+                if (i in check):
+                        active.append(i)
+        check = []
 
 def motordriver_callback(msg):
-        global active
-        if (msg.id == FR):
+        if (msg.id == 'FR'):
                 active.append('FR')
-        elif(msg.id == FL):
+                check.append('FR')
+        elif(msg.id == 'FL'):
                 active.append('FL')
-        elif(msg.id == BR):
+                check.append('FL')
+        elif(msg.id == 'BR'):
                 active.append('BR')
-        elif(msg.id == BL):
+                check.append('BR')
+        elif(msg.id == 'BL'):
                 active.append('BL')
+                check.append('BL')
 def gps_callback(msg):
         active.append('GPS')
+        check.append('GPS')
 def imu_callback(msg):
         active.append('IMU')
+        check.append('IMU')
 def lidar_callback(msg):
         active.append('LIDAR')
+        check.append('LIDAR')
 def camera_callback(msg):
         active.append('CAMERA')
+        check.append('CAMERA')
 
 class PropStatus(Plugin):
     def __init__(self, context):
@@ -53,7 +65,7 @@ class PropStatus(Plugin):
         loadUi(os.path.join(uipath, 'propagatorstatus.ui'), self._widget)
         context.add_widget(self._widget)
         
-        rospy.Subscriber('/motor_driver_statistics',motor_driver_statistics,motordriver_callback)
+        rospy.Subscriber('/thrusters/info',ThrusterInfo,motordriver_callback)
         rospy.Subscriber('/skytraq_serial',SerialPacket,gps_callback)
         rospy.Subscriber('/imu/data_raw',Imu,imu_callback)
         rospy.Subscriber('/scan',LaserScan,lidar_callback)
