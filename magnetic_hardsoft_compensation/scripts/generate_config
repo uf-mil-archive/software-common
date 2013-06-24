@@ -52,11 +52,12 @@ def fit_ellipsoid(points):
         [X[4], X[5], X[2]],
     ]))
     shift = ka.dot(X[6:9])
+    print ka
     
     # the A matrix has eigenvalues which are squares of the axis scale factors, so
     # taking the matrix square root yields the transform from a sphere to the ellipse
     scale = scipy.linalg.sqrtm(ka)
-    assert numpy.isreal(scale).all()
+    assert numpy.isreal(scale).all(), scale
     scale = numpy.real(scale)
     
     # the matrix is then normalized to get rid of the k factor and to center the
