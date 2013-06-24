@@ -128,7 +128,8 @@ Obj::Obj(const string filename) {
     BOOST_FOREACH(const Component &component, components) {
         if(component.name.find("marker ") != 0) continue;
         Marker marker;
-        marker.name = component.name.substr(string("marker ").length());
+        istringstream ss(component.name.substr(string("marker ").length()));
+        ss >> marker.name;
         marker.position = component.center_of_mass();
         markers.push_back(marker);
     }
