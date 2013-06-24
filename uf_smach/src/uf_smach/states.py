@@ -126,7 +126,7 @@ class BaseManeuverObjectState(smach.State):
         with self._cond:
             print [result.P_within_10cm for result in feedback.targetreses]
             good_results = [result for result in feedback.targetreses
-                            if result.P_within_10cm > .75]
+                            if result.P_within_10cm_xy > .75]
             if len(good_results) == 0:
                 self._fail_ctr += 1
                 if self._fail_ctr > 10:
@@ -150,9 +150,10 @@ class BaseManeuverObjectState(smach.State):
             self._cond.notify_all()
 
 class ApproachObjectState(BaseManeuverObjectState):
-    def __init__(self, shared, action, approach_frame, approach_dist, selector=None):
+    def __init__(self, shared, action, approach_frame, approach_dist, selector=None, marker=None):
         BaseManeuverObjectState.__init__(self, shared, action, selector)
         self._approach_dist = approach_dist
+        self._marker = marker
 
         tf_listener = self._shared['tf_listener']
         tf_listener.waitForTransform('/base_link', approach_frame,
@@ -163,9 +164,15 @@ class ApproachObjectState(BaseManeuverObjectState):
         self._approach_pos = numpy.array(self._approach_pos)
 
     def _get_target(self, result):
+        origin = PoseEditor.from_Pose(self._traj_start.frame_id, result.pose)
+        markers = dict((markerpoint.name, xyz_array(markerpoint.position))
+            for markerpoint in result.markers)
+        pose = origin.relative(markers[self._marker]) \
+            if self._marker is not None else origin
+        
         target = self._traj_start
-        target = target.look_at_without_pitching(xyz_array(result.pose.position)) \
-                       .set_position(xyz_array(result.pose.position))
+        #target = target.look_at_without_pitching(pose.position)
+        target = target.set_position(pose.position)
         target = target.relative(-self._approach_pos) \
                        .backward(self._approach_dist)
         return target
