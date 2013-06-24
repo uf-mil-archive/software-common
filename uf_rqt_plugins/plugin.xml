@@ -38,4 +38,17 @@
       <statustip>GPS Waypoints</statustip>
     </qtgui>
   </class>
+  <class name="Status" type="uf_rqt_plugins.propagatorstatus.PropStatus" base_class_type="rqt_gui_py::Plugin">
+    <description>
+     Displays status of all devices
+    </description>
+    <qtgui>
+      <group>
+        <icon type="file">uf.ico</icon>
+        <label>UF</label>
+      </group>
+      <label>Status</label>
+      <statustip>PropaGator Status</statustip>
+    </qtgui>
+  </class>
 </library>
