@@ -21,7 +21,7 @@ position = [0,0,0]
 
 def pos_callback(msg):
         global position 
-        position = [msg.x,msg.y,msg.z]
+        position = [msg.point.x,msg.point.y,msg.point.z]
 
 class GPSPlugin(Plugin):
     def __init__(self, context):
@@ -34,7 +34,7 @@ class GPSPlugin(Plugin):
 
         self.waypoint_latlong = rospy.Publisher('/gps_latlong_waypoint',NavSatFix)
         self.waypoint_ecef = rospy.Publisher('/gps_ecef_waypoint',PointStamped)
-        rospy.Subscriber('/gps_parser/pos',PointStamped,pos_callback)
+        rospy.Subscriber('/gps2_parser/pos',PointStamped,pos_callback)
 
         self._widget.findChild(QPushButton, 'record_entered_waypoint').clicked.connect(self._on_record_entered_clicked)
         self._widget.findChild(QPushButton, 'record_current_waypoint').clicked.connect(self._on_record_current_clicked)
