@@ -132,6 +132,7 @@ class Mesh(object):
             vbos[mtl] = _vbo, vbo_count
         
         def draw():
+            glDisable(GL_CULL_FACE)
             for mtl, (vbo, vbo_count) in vbos.iteritems():
                 mtl.apply()
                 vbo.bind()
@@ -146,6 +147,7 @@ class Mesh(object):
                 glDisableClientState(GL_NORMAL_ARRAY)
                 glDisableClientState(GL_TEXTURE_COORD_ARRAY)
                 vbo.unbind()
+            glEnable(GL_CULL_FACE)
         return draw
     
     def draw(self):
