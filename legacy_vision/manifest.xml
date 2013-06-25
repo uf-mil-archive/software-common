@@ -1,0 +1,24 @@
+<package>
+  <description brief="legacy_vision">
+
+     legacy_vision
+
+  </description>
+  <author>Forrest Voight</author>
+  <license>BSD</license>
+  <review status="unreviewed" notes=""/>
+  <url>http://ros.org/wiki/legacy_vision</url>
+
+  <depend package="roscpp"/>
+  <depend package="actionlib"/>
+  <depend package="nodelet"/>
+  <depend package="cv_bridge"/>
+  <depend package="message_filters"/>
+
+  <export>
+    <nodelet plugin="${prefix}/nodelet.xml"/>
+  </export>
+
+</package>
+
+
