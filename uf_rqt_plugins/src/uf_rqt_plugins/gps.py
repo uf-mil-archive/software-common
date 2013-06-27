@@ -19,7 +19,16 @@ uipath = os.path.dirname(os.path.realpath(__file__))
 
 global position,tasks
 position = [0,0,0]
-tasks = []
+rings_latlong = [1.0,2.0,3.0]
+buoys_latlong = [1.0,2.0,3.0]
+button_latlong = [1.0,2.0,3.0]
+spock_latlong = [1.0,2.0,3.0]
+
+
+tasks = [['rings',ecef_from_latlongheight(rings_latlong[0],rings_latlong[1],rings_latlong[2])],
+         ['buoys',ecef_from_latlongheight(buoys_latlong[0],buoys_latlong[1],buoys_latlong[2])],
+         ['button',ecef_from_latlongheight(button_latlong[0],button_latlong[1],button_latlong[2])],
+         ['spock',ecef_from_latlongheight(spock_latlong[0],spock_latlong[1],spock_latlong[2])]]
 
 def pos_callback(msg):
         global position 
@@ -47,6 +56,10 @@ class GPSPlugin(Plugin):
         self._update_timer = QTimer(self._widget)
         self._update_timer.timeout.connect(self._on_update)
         self._update_timer.start(1000)
+
+        global tasks
+        for i in tasks:
+                self._widget.findChild(QListWidget, 'waypoint_list').addItem(str(i[0])+','+str(i[1][0])+','+str(i[1][1])+','+str(i[1][2]))
 
     def _on_update(self):
         global tasks
@@ -82,6 +95,9 @@ class GPSPlugin(Plugin):
         self._widget.findChild(QListWidget, 'waypoint_list').addItem(str(self.name)+','+str(position[0])+','+str(position[1])+','+str(position[2]))
 
         if str(self.name) in ['rings','buoys','button']:
+                for i in tasks:
+                        if (i[0] == str(self.name)):
+                                tasks.remove(i)
                 tasks.append([str(self.name),[float(position[0]),float(position[1]),float(position[2])]])
 
     def _on_record_entered_clicked(self):
@@ -100,10 +116,20 @@ class GPSPlugin(Plugin):
 
         global tasks
         if str(self.name) in ['rings','buoys','button']:
+                for i in tasks:
+                        if (i[0] == str(self.name)):
+                                tasks.remove(i)
                 tasks.append([str(self.name),[float(ecef[0]),float(ecef[1]),float(ecef[2])]])
 
     def _on_delete_clicked(self):
-       for SelectedItem in self._widget.findChild(QListWidget, 'waypoint_list').selectedItems():
+        self.rec_waypoint = self._widget.findChild(QListWidget, 'waypoint_list').currentItem().text()
+        self.list = self.rec_waypoint.split(',')
+   
+        self.name = self.list[0]
+        for i in tasks:
+                        if (i[0] == str(self.name)):
+                                tasks.remove(i)
+        for SelectedItem in self._widget.findChild(QListWidget, 'waypoint_list').selectedItems():
                self._widget.findChild(QListWidget, 'waypoint_list').takeItem(self._widget.findChild(QListWidget, 'waypoint_list').row(SelectedItem))
         
 
