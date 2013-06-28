@@ -12,17 +12,28 @@ from sensor_msgs.msg import NavSatFix
 from qt_gui.plugin import Plugin
 from rawgps_common.gps import ecef_from_latlongheight,enu_from_ecef
 from python_qt_binding import loadUi
-from python_qt_binding.QtCore import SIGNAL,QTimer
+from python_qt_binding.QtCore import SIGNAL,QTimer,QSettings
 from python_qt_binding.QtGui import QWidget, QPushButton,QCheckBox,QListWidget,QLineEdit
 
 uipath = os.path.dirname(os.path.realpath(__file__))
 
 global position,tasks
 position = [0,0,0]
-rings_latlong = [1.0,2.0,3.0]
-buoys_latlong = [1.0,2.0,3.0]
-button_latlong = [1.0,2.0,3.0]
-spock_latlong = [1.0,2.0,3.0]
+
+path = roslib.packages.resource_file('gps_waypoints','saved','task_loc.txt')
+with open(path,'r+') as task_loc:
+    for line in task_loc:
+        data = line.split(',')
+
+        if data[0] == 'rings':
+            rings_latlong = [float(data[1]),float(data[2]),float(data[3])]
+        elif data[0] == 'buoys':            
+            buoys_latlong = [float(data[1]),float(data[2]),float(data[3])]             
+        elif data[0] == 'button':            
+            button_latlong = [float(data[1]),float(data[2]),float(data[3])]
+        elif data[0] == 'spock':            
+            spock_latlong = [float(data[1]),float(data[2]),float(data[3])]
+
 
 
 tasks = [['rings',ecef_from_latlongheight(rings_latlong[0],rings_latlong[1],rings_latlong[2])],
@@ -94,7 +105,7 @@ class GPSPlugin(Plugin):
         self._widget.findChild(QLineEdit, 'waypoint_name').clear()
         self._widget.findChild(QListWidget, 'waypoint_list').addItem(str(self.name)+','+str(position[0])+','+str(position[1])+','+str(position[2]))
 
-        if str(self.name) in ['rings','buoys','button']:
+        if str(self.name) in ['rings','buoys','button','spock']:
                 for i in tasks:
                         if (i[0] == str(self.name)):
                                 tasks.remove(i)
@@ -115,7 +126,7 @@ class GPSPlugin(Plugin):
         self._widget.findChild(QListWidget, 'waypoint_list').addItem(str(self.name)+','+str(ecef[0])+','+str(ecef[1])+','+str(ecef[2]))
 
         global tasks
-        if str(self.name) in ['rings','buoys','button']:
+        if str(self.name) in ['rings','buoys','button','spock']:
                 for i in tasks:
                         if (i[0] == str(self.name)):
                                 tasks.remove(i)
