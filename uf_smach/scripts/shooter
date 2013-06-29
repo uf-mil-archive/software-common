@@ -31,19 +31,19 @@ def main():
     
     target = TargetDesc()
     target.type = TargetDesc.TYPE_OBJECT
-    target.object_filename = roslib.packages.resource_file('auvsi_robosub', 'models', '2013/12in_hexagon.obj')
+    target.object_filename = roslib.packages.resource_file('auvsi_robosub', 'models', '2013/7in_hexagon.obj')
     target.prior_distribution.pose.orientation = Quaternion(*traj.turn_left_deg(180).orientation)
     cov = numpy.zeros((6, 6))
     a = numpy.array([traj.forward_vector]).T * 100
     cov[3:, 3:] += a.dot(a.T)
     target.prior_distribution.covariance = cov.flatten()
-    target.min_dist = .9
-    target.max_dist = 1/.9
+    target.min_dist = 2*.9
+    target.max_dist = 2/.9
     target.allow_rolling = True
     target.disallow_yawing = True
 
     # Create a SMACH state machine
-    sm = smach.Sequence(['succeeded', 'timeout', 'failed'], 'succeeded')
+    sm = smach.Sequence(['succeeded', 'timeout', 'failed', 'preempted'], 'succeeded')
 
     # Create all the stuff shared between states
     shared = StateSharedHandles()
@@ -52,7 +52,7 @@ def main():
     with sm:
         smach.Sequence.add('DEPTH', WaypointState(shared, lambda cur: cur.depth(1.5)))
         
-        smach.Sequence.add('APPROACH', VelocityState(shared, numpy.array([.2, 0, 0])))
+        smach.Sequence.add('APPROACH', VelocityState(shared, numpy.array([.4, 0, 0])))
         smach.Sequence.add('WAIT_SHOOTER',
                            WaitForObjectsState(shared, 'find_forward',
                                                     [shooter_desc], .85))
@@ -60,13 +60,13 @@ def main():
                            ApproachObjectState(shared, 'find_forward',
                                                'forward_camera', 5, marker='red'))
         
-        smach.Sequence.add('OPEN_LOOP_FORWARD', WaypointState(shared, lambda cur: cur.forward(4)))
+        smach.Sequence.add('OPEN_LOOP_FORWARD', WaypointState(shared, lambda cur: cur.forward(2)))
         smach.Sequence.add('WAIT_HEXAGON',
                            WaitForObjectsState(shared, 'find_forward',
                                                     [target], .85))
         smach.Sequence.add('APPROACH_HEXAGON',
                            ApproachObjectState(shared, 'find_forward',
-                                               'forward_camera', 1))
+                                               'forward_camera', 2))
         smach.Sequence.add('OPEN_LOOP_FORWARD2', WaypointState(shared, lambda cur: cur.forward(1)))
 
     sis = smach_ros.IntrospectionServer('shooter', sm, '/SM_ROOT')

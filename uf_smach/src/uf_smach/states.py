@@ -143,7 +143,7 @@ class BaseManeuverObjectState(smach.State):
             else:
                 result = good_results[0]
             target = self._get_target(result)
-            shared['moveto'].send_goal(target.as_MoveToGoal(speed=.5),
+            shared['moveto'].send_goal(target.as_MoveToGoal(speed=.2, linear_tolerance=.03),
                                        done_cb=self._done_cb)
 
     def _done_cb(self, state, result):

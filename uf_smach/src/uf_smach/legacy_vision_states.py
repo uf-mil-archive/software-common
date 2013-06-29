@@ -56,6 +56,7 @@ class BaseManeuverObjectState(smach.State):
         self._selector = selector
         self._cond = threading.Condition()
         self._done = False
+        self._done2 = False
         self._failed = False
         self._fail_ctr = 0
 
@@ -64,9 +65,9 @@ class BaseManeuverObjectState(smach.State):
         self._shared[self._action].set_callbacks(feedback_cb=self._feedback_cb)
 
         with self._cond:
-            while not self._done and not self._failed:
+            while not (self._done) and not self._failed:
                 self._cond.wait()
-            self._shared.clear_callbacks()
+        self._shared.clear_callbacks()
 
         return 'succeeded' if self._done else 'failed'
 
@@ -84,32 +85,41 @@ class BaseManeuverObjectState(smach.State):
                 self._fail_ctr = 0
 
             result = self._selector(good_results, self._traj_start)
-            twist = self._get_vel(result)
-            if twist is None:
+            goal = self._get_goal(result, PoseEditor.from_PoseTwistStamped_topic('/trajectory'))
+            if goal is None:
                 self._done = True
                 self._cond.notify_all()
                 return
-            linear, angular = twist
-            current = PoseEditor.from_PoseTwistStamped_topic('/trajectory')
-            self._shared['moveto'].send_goal(current.as_MoveToGoal(linear=linear, angular=angular))
+            self._done2 = False
+            self._shared['moveto'].send_goal(goal, done_cb=self._done_cb)
+    
+    def _done_cb(self, state, result):
+        with self._cond:
+            self._done2 = True
 
 class AlignObjectState(BaseManeuverObjectState):
-    def _get_vel(self, result):
+    good_count = 0
+    def _get_goal(self, result, current):
         vec = numpy.array(map(float, result['center']))
         vec /= numpy.linalg.norm(vec)
         angle = float(result['angle'])
         angle_error = angle - math.radians(90)
         angle_error = (angle_error + math.radians(90)) % math.radians(180) - math.radians(90)
         
-        linear = [-1*vec[1], -1*vec[0], 0]
-        angular = [0, 0, -.3*angle_error]
+        linear = [-.5*vec[1], -.5*vec[0], 0]
         
-        if vec.dot([0, 0, 1]) < math.cos(math.radians(5)) and abs(angle_error) < math.radians(5):
-            return None
+        print vec.dot([0, 0, 1])
+        if vec.dot([0, 0, 1]) > math.cos(math.radians(5)):
+            print "yawing", angle_error
+            current = current.yaw_right(angle_error)
+            linear = [0, 0, 0]
+            if abs(angle_error) < math.radians(5):
+                self.good_count = self.good_count + 1
+                print 'good_count', self.good_count
+                if self.good_count >= 100:
+                    return None
         
-        #print vec, linear, angular
         print angle, angle_error
         #if numpy.linalg.norm(linear) < .01:
         #    return None
-        
-        return linear, angular
+        return current.as_MoveToGoal(linear=linear)
