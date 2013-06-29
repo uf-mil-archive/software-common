@@ -88,40 +88,40 @@ private:
         
         FindFeedback feedback;
         BOOST_FOREACH(const FinderPair &finder, finders) { int i = &finder - finders.data();
-	        cout << "Looking for " << finder.first << endl;
+            cout << "Looking for " << finder.first << endl;
             
-	        vector<boost::property_tree::ptree> fResult;
-	        boost::optional<cv::Mat> res;
-	        boost::optional<cv::Mat> dbg;
-	        try {
-		        IFinder::FinderResult result = finder.second->find(img);
-		        fResult = result.results;
-		        res = result.res;
-		        dbg = result.dbg;
-	        } catch(const std::exception &exc) {
-		        boost::property_tree::ptree error_result;
-		        error_result.put("objectName", "error");
-		        error_result.put("what", exc.what());
-		        fResult.push_back(error_result);
-	        }
+            vector<boost::property_tree::ptree> fResult;
+            boost::optional<cv::Mat> res;
+            boost::optional<cv::Mat> dbg;
+            try {
+                IFinder::FinderResult result = finder.second->find(img);
+                fResult = result.results;
+                res = result.res;
+                dbg = result.dbg;
+            } catch(const std::exception &exc) {
+                boost::property_tree::ptree error_result;
+                error_result.put("objectName", "error");
+                error_result.put("what", exc.what());
+                fResult.push_back(error_result);
+            }
             
+            TargetRes targetres;
             boost::property_tree::ptree results;
-	        BOOST_FOREACH(const boost::property_tree::ptree &pt, fResult) {
-		        ostringstream s; boost::property_tree::json_parser::write_json(s, pt);
-		        cout << "Found object: " << s.str() << endl;
-		        
-		        results.push_back(make_pair("", pt));
-	        }
-	        
-	        ostringstream s; boost::property_tree::json_parser::write_json(s, results);
-	        feedback.object_results.push_back(s.str());
-	        
-	        if(res && res_pubs[i].getNumSubscribers()) {
-	            res_pubs[i].publish(cv_bridge::CvImage(cvimage->header, cvimage->encoding, *res).toImageMsg());
+            BOOST_FOREACH(const boost::property_tree::ptree &pt, fResult) {
+                ostringstream s; boost::property_tree::json_parser::write_json(s, pt);
+                cout << "Found object: " << s.str() << endl;
+                
+                targetres.object_results.push_back(s.str());
+            }
+            
+            feedback.targetreses.push_back(targetres);
+            
+            if(res && res_pubs[i].getNumSubscribers()) {
+                res_pubs[i].publish(cv_bridge::CvImage(cvimage->header, cvimage->encoding, *res).toImageMsg());
             }
             
             if(dbg && dbg_pubs[i].getNumSubscribers()) {
-	            dbg_pubs[i].publish(cv_bridge::CvImage(cvimage->header, "mono8", *dbg).toImageMsg());
+                dbg_pubs[i].publish(cv_bridge::CvImage(cvimage->header, "mono8", *dbg).toImageMsg());
             }
         }
         

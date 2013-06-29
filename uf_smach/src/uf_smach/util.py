@@ -5,6 +5,7 @@ import actionlib
 from uf_common.msg import MoveToAction
 from uf_common.orientation_helpers import xyz_array, xyzw_array
 from object_finder.msg import FindAction
+from legacy_vision.msg import FindAction as Find2Action
 import tf
 from tf import transformations
 
@@ -45,11 +46,16 @@ class SharedActionClient(object):
         self._feedback = feedback
         if self._feedback_callback is not None:
             self._feedback_callback(feedback)
+    
+    def cancel_goal(self):
+        self._client.cancel_goal()
 
 class StateSharedHandles(dict):
     def __init__(self):
         self['find_forward'] = SharedActionClient('find_forward', FindAction)
         self['find_down'] = SharedActionClient('find_down', FindAction)
+        self['find2_forward_camera'] = SharedActionClient('find2_forward_camera', Find2Action)
+        self['find2_down_camera'] = SharedActionClient('find2_down_camera', Find2Action)
         self['moveto'] = SharedActionClient('moveto', MoveToAction)
         self['tf_listener'] = tf.TransformListener()
 

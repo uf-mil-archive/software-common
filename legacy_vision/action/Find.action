@@ -3,4 +3,4 @@ string[] object_names
 # Result only happens on error
 string error
 ---
-string[] object_results
+TargetRes[] targetreses

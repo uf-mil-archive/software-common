@@ -1,35 +1,20 @@
 #!/usr/bin/env python
 
 import roslib; roslib.load_manifest('uf_smach')
-from uf_smach.states import WaypointState, VelocityState, WaitForObjectsState, ApproachObjectState, AlignObjectState
-from object_finder.msg import TargetDesc
+from uf_smach.states import WaypointState, VelocityState
+from uf_smach import legacy_vision_states
 from uf_smach.util import StateSharedHandles, left_orientation_selector, right_orientation_selector
-from std_msgs.msg import ColorRGBA
 
 import numpy
 import rospy
 import smach
 import smach_ros
 
-pipe_desc = TargetDesc()
-pipe_desc.type = TargetDesc.TYPE_OBJECT
-pipe_desc.object_filename = roslib.packages.resource_file('auvsi_robosub', 'models', '2012_uf_mock/path.obj')
-pipe_desc.prior_distribution.pose.orientation.w = 1
-pipe_desc.prior_distribution.covariance[0+6*0] = 1
-pipe_desc.prior_distribution.covariance[1+6*1] = 1
-pipe_desc.prior_distribution.covariance[2+6*2] = 1
-pipe_desc.prior_distribution.covariance[5+6*5] = 100
-pipe_desc.min_dist = 2
-pipe_desc.max_dist = 5
-pipe_desc.is_180z_symmetric = True
-pipe_desc.fg_color = ColorRGBA(1, .5, 0, 1)
-pipe_desc.bg_color = ColorRGBA(0, 0, 1, 1)
-
 def main():
     rospy.init_node('smach_example_state_machine')
 
     # Create a SMACH state machine
-    sm = smach.Sequence(['succeeded', 'failed', 'timeout'], 'succeeded')
+    sm = smach.Sequence(['succeeded', 'failed', 'timeout', 'preempted'], 'succeeded')
 
     # Create all the stuff shared between states
     shared = StateSharedHandles()
@@ -39,17 +24,14 @@ def main():
         smach.Sequence.add('DEPTH', WaypointState(shared, lambda cur: cur.depth(.4)))
         smach.Sequence.add('APPROACH', VelocityState(shared, numpy.array([.2, 0, 0])))
         smach.Sequence.add('WAIT_PIPE_PRE',
-                           WaitForObjectsState(shared, 'find_down',
-                                               [pipe_desc]*2, .6))
+                           legacy_vision_states.WaitForObjectsState(shared, 'find2_down_camera', 'pipe'))
         smach.Sequence.add('SLOW', VelocityState(shared, numpy.array([.05, 0, 0])))
         smach.Sequence.add('WAIT_PIPE',
-                           WaitForObjectsState(shared, 'find_down',
-                                               [], .95, timeout=10), # TODO better syntax for this
+                           legacy_vision_states.WaitForObjectsState(shared, 'find2_down_camera'),
                            transitions={'timeout':'APPROACH'})
 
 
-        smach.Sequence.add('ALIGN_PIPE', AlignObjectState(shared, 'find_down',
-                                                          left_orientation_selector))
+        smach.Sequence.add('ALIGN_PIPE', legacy_vision_states.AlignObjectState(shared, 'find2_down_camera'))#, left_orientation_selector))
         smach.Sequence.add('FORWARD', WaypointState(shared, lambda cur: cur.forward(2)))
 
     sis = smach_ros.IntrospectionServer('path', sm, '/SM_ROOT')

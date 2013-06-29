@@ -19,7 +19,7 @@ from indirect_kalman_6dof.srv import SetPosition
 
 class WaypointState(smach.State):
     def __init__(self, shared, goal_func):
-        smach.State.__init__(self, outcomes=['succeeded'])
+        smach.State.__init__(self, outcomes=['succeeded', 'preempted'])
 
         self._shared = shared
         self._goal_func = goal_func
@@ -38,10 +38,12 @@ class WaypointState(smach.State):
         self._shared['moveto'].send_goal(goal, done_cb=self._done_cb)
 
         with self._cond:
-            while not self._done:
-                self._cond.wait()
+            while not self._done and not self.preempt_requested():
+                self._cond.wait(0.1)
 
         self._shared.clear_callbacks()
+        if self.preempt_requested():
+            return 'preempted'
         return 'succeeded'
 
     def _done_cb(self, state, result):

@@ -13,6 +13,7 @@
   <depend package="smach_ros"/>
   <depend package="uf_common"/>
   <depend package="object_finder"/>
+  <depend package="legacy_vision"/>
   <depend package="rise_6dof"/>
   <depend package="indirect_kalman_6dof"/>
 </package>
