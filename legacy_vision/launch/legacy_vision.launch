@@ -1,0 +1,56 @@
+<launch>
+  <arg name="camera"/>
+  
+  <node pkg="nodelet" type="nodelet" args="standalone legacy_vision/nodelet" name="$(arg camera)_legacy_vision">
+    <remap from="camera" to="$(arg camera)"/>
+    <remap from="find" to="find2_$(arg camera)"/>
+    <rosparam>
+
+bins:
+    minContour: 1000
+    maxContour: 50000
+    maxPerimeter: 2000
+pipe:
+    Canny:
+        thresh1: 50
+        thresh2: 200
+        apertureSize: 3
+    Hough:
+        rho: 1
+        theta: 0.0087263
+        thresh: 80
+        minLineLength: 60
+        minLineGap: 50
+    minAngleDiff: 20
+wreath:
+    thresh:
+        r: 246
+        g: 108
+        b: 51
+        angle: 0.2
+
+buoy:
+    minContour: 250
+    maxContour: 80000
+    maxPerimeter: 2000
+hedge:
+    Canny:
+        thresh1: 50
+        thresh2: 200
+        apertureSize: 3
+    Hough:
+        rho: 1
+        theta: 0.0087263
+        thresh: 100
+        minLineLength: 120
+        minLineGap: 50
+    minAngleDiff: 20
+shooter:
+    dp: 1
+    min_dist: 50
+    canny_thres: 50
+    circle_thres: 23
+
+    </rosparam>
+  </node>
+</launch>

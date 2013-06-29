@@ -1,0 +1,7 @@
+<library path="lib/libnodelet">
+  <class name="legacy_vision/nodelet" type="legacy_vision::Nodelet" base_class_type="nodelet::Nodelet">
+    <description> 
+      legacy vision
+    </description>
+  </class>
+</library>
