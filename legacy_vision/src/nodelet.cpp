@@ -49,7 +49,7 @@ public:
     GoalExecutor(const legacy_vision::FindGoal &goal, ros::NodeHandle *nh_, ros::NodeHandle *private_nh_, boost::function1<void, const legacy_vision::FindFeedback&> feedback_callback) :
         nh(*nh_),
         private_nh(*private_nh_),
-        camera_nh("camera"),
+        camera_nh(nh, "camera"),
         image_sub(camera_nh, "image_rect_color", 1),
         info_sub(camera_nh, "camera_info", 1),
         sync(image_sub, info_sub, 10),
@@ -83,7 +83,8 @@ private:
         assert(image->header.stamp == cam_info->header.stamp);
         assert(image->header.frame_id == cam_info->header.frame_id);
         
-        cv_bridge::CvImageConstPtr img = cv_bridge::toCvShare(image, sensor_msgs::image_encodings::BGR8);
+        cv_bridge::CvImageConstPtr cvimage = cv_bridge::toCvShare(image, sensor_msgs::image_encodings::BGR8);
+        subjugator::ImageSource::Image img(cvimage->image, *cam_info);
         
         FindFeedback feedback;
         BOOST_FOREACH(const FinderPair &finder, finders) { int i = &finder - finders.data();
@@ -93,7 +94,7 @@ private:
 	        boost::optional<cv::Mat> res;
 	        boost::optional<cv::Mat> dbg;
 	        try {
-		        IFinder::FinderResult result = finder.second->find(subjugator::ImageSource::Image(img->image));
+		        IFinder::FinderResult result = finder.second->find(img);
 		        fResult = result.results;
 		        res = result.res;
 		        dbg = result.dbg;
@@ -116,11 +117,11 @@ private:
 	        feedback.object_results.push_back(s.str());
 	        
 	        if(res && res_pubs[i].getNumSubscribers()) {
-	            res_pubs[i].publish(cv_bridge::CvImage(img->header, img->encoding, *res).toImageMsg());
+	            res_pubs[i].publish(cv_bridge::CvImage(cvimage->header, cvimage->encoding, *res).toImageMsg());
             }
             
             if(dbg && dbg_pubs[i].getNumSubscribers()) {
-	            dbg_pubs[i].publish(cv_bridge::CvImage(img->header, "mono8", *dbg).toImageMsg());
+	            dbg_pubs[i].publish(cv_bridge::CvImage(cvimage->header, "mono8", *dbg).toImageMsg());
             }
         }
         
@@ -156,14 +157,23 @@ private:
     void goalCallback() {
         boost::shared_ptr<const legacy_vision::FindGoal> new_goal =
             actionserver.acceptNewGoal();
-        goal_executor = boost::in_place(*new_goal, &nh, &private_nh, boost::bind(boost::mem_fn(
-            (void (actionserverType::*)(const actionserverType::Feedback &))
-            &actionserverType::publishFeedback), // this was fun
-        &actionserver, _1));
+        
+        try {
+            goal_executor = boost::in_place(*new_goal, &nh, &private_nh, boost::bind(boost::mem_fn(
+                (void (actionserverType::*)(const actionserverType::Feedback &))
+                &actionserverType::publishFeedback), // this was fun
+            &actionserver, _1));
+        } catch(const std::exception &exc) {
+            FindResult result;
+            result.error = exc.what();
+            actionserver.setAborted(result);
+            goal_executor = boost::none;
+        }
     }
     
     void preemptCallback() {
         goal_executor = boost::none;
+        actionserver.setPreempted();
     }
 };
 

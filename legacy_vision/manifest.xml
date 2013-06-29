@@ -14,6 +14,7 @@
   <depend package="nodelet"/>
   <depend package="cv_bridge"/>
   <depend package="message_filters"/>
+  <depend package="image_geometry"/>
 
   <export>
     <nodelet plugin="${prefix}/nodelet.xml"/>

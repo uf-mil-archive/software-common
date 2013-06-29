@@ -29,10 +29,12 @@ class IFinder {
 		virtual FinderResult find(const subjugator::ImageSource::Image &img) = 0;
 	protected:
 		boost::property_tree::ptree config;
-		boost::property_tree::ptree Point_to_ptree(const cv::Point& p, const cv::Size& size) {
+		boost::property_tree::ptree Point_to_ptree(const cv::Point& p, const subjugator::ImageSource::Image &image) {
+		    cv::Point3d ray = image.camera_model.projectPixelTo3dRay(p);
 			boost::property_tree::ptree result;
-			result.push_back(std::make_pair("", boost::lexical_cast<std::string>(2*(p.x+0.5)/size.width  - 1)));
-			result.push_back(std::make_pair("", boost::lexical_cast<std::string>(1 - 2*(p.y+0.5)/size.height)));
+			result.push_back(std::make_pair("", boost::lexical_cast<std::string>(ray.x)));
+			result.push_back(std::make_pair("", boost::lexical_cast<std::string>(ray.y)));
+			result.push_back(std::make_pair("", boost::lexical_cast<std::string>(ray.z)));
 			return result;
 		}
 };

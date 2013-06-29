@@ -30,7 +30,7 @@ IFinder::FinderResult PipeFinder::find(const subjugator::ImageSource::Image &img
 	vector<property_tree::ptree> resultVector;
 	BOOST_FOREACH(const AvgLine &avgline, line.avgLines) {
 		property_tree::ptree fResult;
-		fResult.put_child("center", Point_to_ptree(avgline.centroid, img.image.size()));
+		fResult.put_child("center", Point_to_ptree(avgline.centroid, img));
 		fResult.put("angle", avgline.angle);
 		fResult.put("scale", avgline.length);
 		resultVector.push_back(fResult);

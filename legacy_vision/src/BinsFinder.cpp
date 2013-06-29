@@ -34,7 +34,7 @@ IFinder::FinderResult BinsFinder::find(const subjugator::ImageSource::Image &img
 		circle(res,centroidOfBoxes, 5, CV_RGB(255,140,0), -1,8);
 		if(contours.boxes.size() && !(contours.boxes.size() == 1 && contours.boxes[0].touches_edge)) {
 			property_tree::ptree fResult;
-			fResult.put_child("center", Point_to_ptree(centroidOfBoxes, img.image.size()));
+			fResult.put_child("center", Point_to_ptree(centroidOfBoxes, img));
 			fResult.put("number_of_boxes", contours.boxes.size());
 			// Scale returns the number of boxes that are currently being found.
 			// The idea is to align to centroid until 4 boxes are found.
@@ -108,7 +108,7 @@ IFinder::FinderResult BinsFinder::find(const subjugator::ImageSource::Image &img
 			else best = "shield";
 		
 			property_tree::ptree fResult;
-			fResult.put_child("center", Point_to_ptree(box.centroid, img.image.size()));
+			fResult.put_child("center", Point_to_ptree(box.centroid, img));
 			fResult.put("angle", box.angle);
 			fResult.put("scale", box.area);
 			fResult.put("diagonal", diagonal1/diagonal2);

@@ -33,7 +33,7 @@ IFinder::FinderResult GrapesFinder::find(const subjugator::ImageSource::Image &i
 		vector<property_tree::ptree> resultVector;
 		if(contours.boxes.size()) {
 			property_tree::ptree fResult;
-			fResult.put_child("center", Point_to_ptree(contours.boxes[0].centroid, img.image.size()));
+			fResult.put_child("center", Point_to_ptree(contours.boxes[0].centroid, img));
 			fResult.put("scale", contours.boxes[0].area);
 			fResult.put("angle", contours.boxes[0].orientationError);
 			resultVector.push_back(fResult);
@@ -60,7 +60,7 @@ IFinder::FinderResult GrapesFinder::find(const subjugator::ImageSource::Image &i
 		BOOST_FOREACH(const Blob::BlobData &b, blob.data) {
 			// Prepare results
 			property_tree::ptree fResult;
-			fResult.put_child("center", Point_to_ptree(b.centroid, img.image.size()));
+			fResult.put_child("center", Point_to_ptree(b.centroid, img));
 			fResult.put("scale", b.radius);
 			resultVector.push_back(fResult);
 		}
@@ -81,7 +81,7 @@ IFinder::FinderResult GrapesFinder::find(const subjugator::ImageSource::Image &i
 		vector<property_tree::ptree> resultVector;
 		BOOST_FOREACH(const Blob::BlobData &b, blob.data) {
 			property_tree::ptree fResult;
-			fResult.put_child("center", Point_to_ptree(b.centroid, img.image.size()));
+			fResult.put_child("center", Point_to_ptree(b.centroid, img));
 			fResult.put("scale", b.radius);
 			resultVector.push_back(fResult);
 		}

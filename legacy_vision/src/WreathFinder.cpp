@@ -30,7 +30,7 @@ IFinder::FinderResult WreathFinder::find(const subjugator::ImageSource::Image &i
 	BOOST_FOREACH(const Blob::BlobData &data, blob.data) {
 //			if(1.15 < data.aspect_ratio && data.aspect_ratio < 1.5) {
 			property_tree::ptree fResult;
-			fResult.put_child("center", Point_to_ptree(data.centroid, img.image.size()));
+			fResult.put_child("center", Point_to_ptree(data.centroid, img));
 			fResult.put("scale", data.radius);
 			double angle = data.angle-boost::math::constants::pi<double>()/2;
 			// wrap it to within [+pi, -pi]

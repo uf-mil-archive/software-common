@@ -80,7 +80,7 @@ IFinder::FinderResult HedgeFinder::find(const subjugator::ImageSource::Image &im
 	// Prepare results
 	vector<property_tree::ptree> resultVector;
 	property_tree::ptree fResult;
-	fResult.put_child("center", Point_to_ptree(center, img.image.size()));
+	fResult.put_child("center", Point_to_ptree(center, img));
 	fResult.put("scale", scale);
 	resultVector.push_back(fResult);
 	return FinderResult(resultVector, res, dbg);

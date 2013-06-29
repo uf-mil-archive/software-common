@@ -36,7 +36,7 @@ IFinder::FinderResult BuoyFinder::find(const subjugator::ImageSource::Image &img
 	BOOST_FOREACH(const Blob::BlobData &b, blob.data) {
 		// Prepare results
 		property_tree::ptree fResult;
-		fResult.put_child("center", Point_to_ptree(b.centroid, img.image.size()));
+		fResult.put_child("center", Point_to_ptree(b.centroid, img));
 		fResult.put("scale", b.area);
 		
 		// Check for color of blob

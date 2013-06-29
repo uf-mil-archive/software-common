@@ -45,7 +45,7 @@ IFinder::FinderResult ShooterFinder::find(const subjugator::ImageSource::Image &
 		// Prepare results
 		if(contours.boxes.size() && contours.shapes.size()) {
 			property_tree::ptree fResult;
-			fResult.put_child("center", Point_to_ptree(contours.boxes[0].centroid, img.image.size()));
+			fResult.put_child("center", Point_to_ptree(contours.boxes[0].centroid, img));
 			fResult.put("scale", contours.boxes[0].area);
 			fResult.put("angle", contours.boxes[0].orientationError);
 			resultVector.push_back(fResult);
@@ -76,7 +76,7 @@ IFinder::FinderResult ShooterFinder::find(const subjugator::ImageSource::Image &
 			circle(res, bestShape2.centroid, 10, CV_RGB(255, 255, 0), 2);
 
 			property_tree::ptree fResult;
-			fResult.put_child("center", Point_to_ptree(bestShape2.centroid, img.image.size()));
+			fResult.put_child("center", Point_to_ptree(bestShape2.centroid, img));
 			//fResult.put("angle", contours.boxes[0].orientationError);
 			fResult.put("scale", bestShape2.area);
 			resultVector.push_back(fResult);
@@ -85,7 +85,7 @@ IFinder::FinderResult ShooterFinder::find(const subjugator::ImageSource::Image &
 		if(contours.shapes.size()) {
 			Contours::InnerContour shape = contours.findLargestShape();
 			property_tree::ptree fResult;
-			fResult.put_child("center", Point_to_ptree(shape.centroid, img.image.size()));
+			fResult.put_child("center", Point_to_ptree(shape.centroid, img));
 			//fResult.put("angle", contours.boxes[0].orientationError);
 			fResult.put("scale", shape.area);
 			resultVector.push_back(fResult);
