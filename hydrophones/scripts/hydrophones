@@ -1,0 +1,45 @@
+#!/usr/bin/env python
+
+import os
+import numpy
+import threading
+
+import roslib
+roslib.load_manifest('hydrophones')
+import rospy
+
+from hydrophones import algorithms
+from hydrophones.msg import Ping, Debug
+from std_msgs.msg import Header
+from geometry_msgs.msg import PointStamped, Point, PoseStamped, Pose
+
+def process_ping(ping):
+    samples = numpy.array(ping.data, dtype=numpy.float64).reshape((ping.samples, ping.channels)).transpose()
+    
+    sample_rate = ping.sample_rate
+    samples_proc, sample_rate_proc = algorithms.preprocess(samples, sample_rate)
+    deltas = algorithms.compute_deltas(samples_proc, sample_rate_proc, 25e3, template_periods)
+    
+    pos = algorithms.compute_pos_4hyd(deltas, sample_rate_proc, v_sound, dist_h, dist_h4)
+    
+    pub.publish(header=Header(stamp=ping.header.stamp,
+                              frame_id=ping.header.frame_id),
+                point=Point(*pos.tolist()))
+    pub_pose.publish(header=Header(stamp=ping.header.stamp,
+                               frame_id=ping.header.frame_id),
+                 pose=Pose(position=Point(*pos.tolist())))
+    pub_debug.publish(header=Header(stamp=ping.header.stamp,
+                               frame_id=ping.header.frame_id),
+                      deltas=deltas.tolist())
+
+
+rospy.init_node('hydrophones')
+dist_h = rospy.get_param('~dist_h')
+dist_h4 = rospy.get_param('~dist_h4')
+v_sound = rospy.get_param('~v_sound')
+template_periods = rospy.get_param('~template_periods', 3)
+pub = rospy.Publisher('hydrophones/point', PointStamped)
+pub_pose = rospy.Publisher('hydrophones/pose', PoseStamped)
+pub_debug = rospy.Publisher('hydrophones/debug', Debug)
+sub = rospy.Subscriber('hydrophones/ping', Ping, process_ping)
+rospy.spin()

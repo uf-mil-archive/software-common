@@ -1,0 +1,14 @@
+<package>
+  <description brief="hydrophones">
+
+     hydrophones
+
+  </description>
+  <author>Matthew Thompson</author>
+  <license>BSD</license>
+  <review status="unreviewed" notes=""/>
+  <url>http://ros.org/wiki/hydrophones</url>
+  <depend package="rospy"/>
+</package>
+
+
