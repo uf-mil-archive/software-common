@@ -16,7 +16,7 @@ def preprocess(samples, sample_rate):
     samples = bandpass(samples, sample_rate)
     upsamples, upsample_rate = upsample(samples, sample_rate, 3e6)
     return upsamples, upsample_rate
-    
+
 def normalize(samples):
     """Zero means and normalizes samples to [-1, 1]"""
     samples = samples.copy()
@@ -26,8 +26,8 @@ def normalize(samples):
 
 def bandpass(samples, sample_rate):
     """Applies a 20-30khz bandpass FIR filter"""
-    fir = scipy.signal.firwin(127, 
-                              [19e3/(sample_rate/2), 31e3/(sample_rate/2)], 
+    fir = scipy.signal.firwin(127,
+                              [19e3/(sample_rate/2), 31e3/(sample_rate/2)],
                               pass_zero=False)
     return scipy.signal.lfilter(fir, 1, samples)
 
@@ -45,8 +45,8 @@ def compute_deltas(samples, sample_rate, ping_freq, template_periods=3, plot=Fal
     for the first channel and matching to all subsequent channels.
     """
     period = int(round(sample_rate / ping_freq))
-    template, template_pos = make_template(samples[0, :], 
-                                           .1, 
+    template, template_pos = make_template(samples[0, :],
+                                           .1,
                                            period*template_periods*2+1)
     start = template_pos - 2*period
     stop = template_pos + 2*period
@@ -63,7 +63,7 @@ def compute_deltas(samples, sample_rate, ping_freq, template_periods=3, plot=Fal
         plt.figure()
         plt.plot(template)
         plt.title('Template')
-        
+
         for i in xrange(deltas.shape[0]):
             plt.figure()
             plt.plot(numpy.arange(plot_start, plot_stop), samples[i+1, plot_start:plot_stop])
@@ -84,7 +84,7 @@ def make_template(channel, thresh, width):
     if pos < 0 or pos + width >= channel.shape[0]:
         raise AlgorithmError('Template positioned such that start or end points lie outside of data')
     return channel[pos:pos+width], pos
-                             
+
 def match_template(channel, start, stop, template):
     """
     Matches template to channel, returning the point where the start
@@ -96,7 +96,7 @@ def match_template(channel, start, stop, template):
     min_pt = find_zero(mad)
     if min_pt is None:
         raise AlgorithmError('No minimums near numpy.argmin??')
-    
+
     return start + min_pt
 
 def mean_absolute_difference(channel, start, stop, template):
@@ -119,7 +119,7 @@ def find_zero(data):
     """
     approx = numpy.argmin(numpy.abs(data))
     d_data = numpy.gradient(data)
-    
+
     for pos in xrange(max(approx-3,0), min(approx+3, d_data.shape[0]-1)):
         if numpy.sign(d_data[pos]) != numpy.sign(d_data[pos+1]):
             y2 = d_data[pos+1]
@@ -148,13 +148,13 @@ def compute_pos_4hyd(deltas, sample_rate, v_sound, dist_h, dist_h4):
     cos_alpha = (cos_alpha1 + cos_alpha2)/2;
 
     cos_beta = (2*dist*y3 + y3**2 - dist_h4**2)/(-2*dist*dist_h4);
-    
+
     dist_x = cos_alpha*dist
     dist_y = cos_beta*dist
     if dist**2 - (dist_x**2 + dist_y**2) < 0:
         dist_z = 0
     else:
-        dist_z = math.sqrt(dist**2 - (dist_x**2 + dist_y**2))
+        dist_z = -math.sqrt(dist**2 - (dist_x**2 + dist_y**2))
     return numpy.array([dist_x, dist_y, dist_z])
 
 if __name__ == '__main__':
