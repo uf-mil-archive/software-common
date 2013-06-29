@@ -12,6 +12,7 @@ class AlgorithmError(Exception):
 
 def preprocess(samples, sample_rate):
     """Preprocesses hydrophone data to be used with compute_deltas"""
+    samples = samples[:, :round(0.001 * sample_rate)]
     samples = normalize(samples)
     samples = bandpass(samples, sample_rate)
     upsamples, upsample_rate = upsample(samples, sample_rate, 3e6)
@@ -46,10 +47,10 @@ def compute_deltas(samples, sample_rate, ping_freq, template_periods=3, plot=Fal
     """
     period = int(round(sample_rate / ping_freq))
     template, template_pos = make_template(samples[0, :],
-                                           .1,
+                                           .05,
                                            period*template_periods*2+1)
-    start = template_pos - 2*period
-    stop = template_pos + 2*period
+    start = template_pos - period//2
+    stop = template_pos + period//2
 
     deltas = numpy.empty(samples.shape[0]-1)
     for i in xrange(deltas.shape[0]):
@@ -162,7 +163,6 @@ if __name__ == '__main__':
     sample_rate = 300e3
     if len(sys.argv) > 1:
         samples = numpy.loadtxt(sys.argv[1], delimiter=',').transpose()
-        print samples
     else:
         samples = util.make_ping([0, .25, 1.234, 20], {'freq': freq, 'sample_rate': sample_rate})
 
@@ -177,10 +177,10 @@ if __name__ == '__main__':
         plt.title('Processed ping')
 
         deltas = compute_deltas(samples_proc, sample_rate_proc, freq, plot=True)
-        print deltas
+        print 'deltas', deltas
 
         pos = compute_pos_4hyd(deltas, sample_rate_proc, 1497, 2.286000e-02, 2.286000e-02)
-        print pos
+        print 'pos (hyd coordinates)', pos
     finally:
         plt.show()
 
