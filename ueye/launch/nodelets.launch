@@ -1,0 +1,8 @@
+<?xml version="1.0"?>
+
+<launch>
+	<node pkg="nodelet" type="nodelet" name="ueye_manager" args="manager" output="screen"/>
+
+	<node pkg="nodelet" type="nodelet" name="camera_nodelet" args="load ueye/CameraNodelet ueye_manager"/>
+	<node pkg="nodelet" type="nodelet" name="framerate_nodelet" args="load ueye/FramerateNodelet ueye_manager"/>
+</launch>
