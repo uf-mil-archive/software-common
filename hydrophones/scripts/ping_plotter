@@ -25,7 +25,6 @@ class Node(object):
     def ping_callback(self, ping):
         with self.cond:
             self.samples = numpy.array(ping.data, dtype=numpy.float64).reshape((ping.samples, ping.channels)).transpose()
-            self.samples = algorithms.normalize(self.samples)
             self.cond.notify_all()
 
     def run(self):

@@ -12,25 +12,52 @@ class AlgorithmError(Exception):
 
 def preprocess(samples, sample_rate):
     """Preprocesses hydrophone data to be used with compute_deltas"""
-    samples = samples[:, :round(0.001 * sample_rate)]
-    samples = normalize(samples)
+    samples = samples[:, :round(0.001 * sample_rate)].copy()
+    samples -= numpy.mean(samples[:, 0:32], 1)[:, numpy.newaxis]
     samples = bandpass(samples, sample_rate)
+    samples /= numpy.amax(numpy.abs(samples), 1)[:, numpy.newaxis]
     upsamples, upsample_rate = upsample(samples, sample_rate, 3e6)
     return upsamples, upsample_rate
 
-def normalize(samples):
-    """Zero means and normalizes samples to [-1, 1]"""
-    samples = samples.copy()
-    samples -= numpy.mean(samples[:, 0:32], 1)[:, numpy.newaxis]
-    samples /= numpy.amax(numpy.abs(samples), 1)[:, numpy.newaxis]
-    return samples
-
 def bandpass(samples, sample_rate):
     """Applies a 20-30khz bandpass FIR filter"""
-    fir = scipy.signal.firwin(127,
+    fir = scipy.signal.firwin(128,
                               [19e3/(sample_rate/2), 31e3/(sample_rate/2)],
                               pass_zero=False)
     return scipy.signal.lfilter(fir, 1, samples)
+
+def bin_to_freq(bin, sample_rate, fft_length):
+    return (sample_rate/2) / (fft_length/2) * bin
+
+def check_data(samples, sample_rate, plot=False):
+    """Checks whether samples are likely a solid ping and returns the frequency."""
+    samples = samples.copy()
+    samples -= numpy.mean(samples[:, 0:32], 1)[:, numpy.newaxis]
+    sample_count = samples.shape[1]
+    
+    samples = bandpass(samples, sample_rate)
+    samples_window = samples * numpy.hamming(sample_count)
+    plt.figure()
+    plt.plot(samples_window.transpose())
+    
+    fft_length = 2048
+    samples_fft = numpy.absolute(numpy.fft.fft(samples_window, fft_length, axis=1))[:, :fft_length/2]
+    peaks = numpy.argmax(samples_fft, axis=1)
+    print bin_to_freq(peaks, sample_rate, fft_length)
+    
+    # Sort peaks, take mean of the middle
+    middle_peaks = numpy.sort(peaks)[1:3] #FIXME
+    peak = numpy.mean(middle_peaks)
+
+    freq = bin_to_freq(peak, sample_rate, fft_length)
+    
+    if plot:
+        plt.figure()
+        plt.plot(bin_to_freq(numpy.arange(0, fft_length/2), sample_rate, fft_length), 
+                 samples_fft.transpose())
+        plt.title('FFT')
+
+    return freq, True
 
 def upsample(samples, sample_rate, desired_sample_rate):
     """Upsamples data to have approx. desired_sample_rate."""
@@ -48,7 +75,7 @@ def compute_deltas(samples, sample_rate, ping_freq, template_periods=3, plot=Fal
     period = int(round(sample_rate / ping_freq))
     template, template_pos = make_template(samples[0, :],
                                            .05,
-                                           period*template_periods*2+1)
+                                           period*template_periods*3+1)
     start = template_pos - period//2
     stop = template_pos + period//2
 
@@ -159,17 +186,19 @@ def compute_pos_4hyd(deltas, sample_rate, v_sound, dist_h, dist_h4):
     return numpy.array([dist_x, dist_y, dist_z])
 
 if __name__ == '__main__':
-    freq = 24e3
     sample_rate = 300e3
     if len(sys.argv) > 1:
         samples = numpy.loadtxt(sys.argv[1], delimiter=',').transpose()
     else:
-        samples = util.make_ping([0, .25, 1.234, 20], {'freq': freq, 'sample_rate': sample_rate})
+        samples = util.make_ping([0, .25, 1.234, -5], {'freq': 25e3, 'sample_rate': sample_rate})
 
     try:
         plt.figure()
         plt.plot(samples.transpose())
         plt.title('Raw ping')
+        
+        freq = check_data(samples, sample_rate, plot=True)
+        print 'freq', freq
 
         samples_proc, sample_rate_proc = preprocess(samples, sample_rate)
         plt.figure()
