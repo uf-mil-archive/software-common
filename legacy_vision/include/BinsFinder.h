@@ -10,6 +10,7 @@ class BinsFinder : public IFinder
 			if(objectPath.size() != 1 || !(
 					objectPath[0] == "all" ||
 					objectPath[0] == "single" ||
+					objectPath[0] == "single_save" ||
 			false))
 				throw std::runtime_error("invalid objectPath");
 		};

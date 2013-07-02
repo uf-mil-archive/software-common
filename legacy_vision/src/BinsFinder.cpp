@@ -1,4 +1,5 @@
 #include <boost/foreach.hpp>
+#include <boost/iterator/permutation_iterator.hpp>
 
 #include <stdio.h>
 #include <sstream>
@@ -41,8 +42,10 @@ IFinder::FinderResult BinsFinder::find(const subjugator::ImageSource::Image &img
 			fResult.put("angle", contours.calcAngleOfAllBoxes());
 			resultVector.push_back(fResult);
 		}
-	} else { assert(objectPath[0] == "single");
-		BOOST_FOREACH(const Contours::OuterBox &box, contours.boxes) {
+	} else { assert(objectPath[0] == "single" || objectPath[0] == "single_save");
+	    vector<Mat> bins;
+	    vector<Point> centroids;
+		BOOST_FOREACH(const Contours::OuterBox &box, contours.boxes) { int box_index = &box - contours.boxes.data();
 			bool touches_edge = false;
 			BOOST_FOREACH(const Point& p, box.corners)
 				if(p.x <= 1 || p.x >= img.image.cols-2 || p.y <= 1 || p.y >= img.image.rows-2)
@@ -66,6 +69,13 @@ IFinder::FinderResult BinsFinder::find(const subjugator::ImageSource::Image &img
 
 			Mat t = getPerspectiveTransform(src, dst);
 			Mat bin;warpPerspective(img.image, bin, t, Size(300, 150));
+			bins.push_back(bin.clone());
+			centroids.push_back(box.centroid);
+			
+			if(objectPath[0] == "single_save") {
+			    ostringstream ss; ss << config.get<string>("imagePath") << "/" << box_index << ".png";
+			    imwrite(ss.str(), bin);
+			}
 			
 			//imshow("before", bin);
 			std::vector<Mat> channels(bin.channels());
@@ -89,6 +99,7 @@ IFinder::FinderResult BinsFinder::find(const subjugator::ImageSource::Image &img
 
 			Mat redness_dbg; cvtColor(red, redness_dbg, CV_GRAY2BGR);
 			warpPerspective(redness_dbg, res, t, img.image.size(), WARP_INVERSE_MAP, BORDER_TRANSPARENT);
+			warpPerspective(bin, res, t, img.image.size(), WARP_INVERSE_MAP, BORDER_TRANSPARENT);
 
 			std::vector<std::vector<cv::Point> > contours;
 			std::vector<cv::Vec4i> hierarchy; // hierarchy holder for the contour tree
@@ -114,9 +125,49 @@ IFinder::FinderResult BinsFinder::find(const subjugator::ImageSource::Image &img
 			fResult.put("diagonal", diagonal1/diagonal2);
 			fResult.put("holes_count", negative_contours);
 			fResult.put("item", best);
-			putText(res,best.c_str(),box.centroid,FONT_HERSHEY_SIMPLEX,1,CV_RGB(0,0,255),3);
+			//putText(res,best.c_str(),box.centroid,FONT_HERSHEY_SIMPLEX,1,CV_RGB(0,0,255),3);
 			resultVector.push_back(fResult);
 		}
+	    cv::Mat templates[4];
+	    for(int box_index = 0; box_index < 4; box_index++) {
+		    ostringstream ss; ss << config.get<string>("imagePath") << "/" << box_index << ".png";
+		    templates[box_index] = imread(ss.str());
+	    }
+	    if(resultVector.size() == 4) {
+	        int indices[4] = {0, 1, 2, 3};
+	        int best_indices[4];
+	        optional<double> best_score;
+	        do {
+	            for(int rotate_mask = 0; rotate_mask < 16; rotate_mask++) {
+                    double dist = 0;
+	                for(int bin_index = 0; bin_index < 4; bin_index++) {
+	                    cv::Mat &a = bins[bin_index];
+	                    cv::Mat b = templates[indices[bin_index]];
+	                    if(rotate_mask & (1<<bin_index)) {
+	                        cv::Mat n; cv::flip(b, n, -1);
+	                        b = n;
+                        }
+	                    assert(a.rows == b.rows && a.cols == b.cols);
+			            for(int i = 0; i < a.rows; i++) {
+				            for(int j = 0; j < a.cols; j++) {
+				                Scalar diff = a.at<Scalar>(i, j) - b.at<Scalar>(i, j);
+				                dist += abs(diff[0]) + abs(diff[1]) + abs(diff[2]);
+			                }
+		                }
+                    }
+	                if(!best_score || dist < *best_score) {
+	                    best_score = dist;
+	                    for(int i = 0; i < 4; i++) best_indices[i] = indices[i];
+                    }
+                }
+            } while(next_permutation(indices, indices+4));
+            int names[4] = {10, 16, 37, 98};
+            for(int i = 0; i < 4; i++) {
+    			resultVector[i].put("image_index", best_indices[i]);
+    		    ostringstream ss; ss << names[best_indices[i]];
+    			putText(res,ss.str().c_str(),centroids[i],FONT_HERSHEY_SIMPLEX,1,CV_RGB(0,0,255),3);
+            }
+        }
 	}
 	return FinderResult(resultVector, res, dbg);
 }
