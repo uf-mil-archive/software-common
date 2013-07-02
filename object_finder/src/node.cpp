@@ -110,13 +110,6 @@ struct Particle {
             q = q * Quaterniond(0, 0, 1, 0);
         smoothed_last_P = 1;
     }
-    Particle(const TargetDesc &goal,
-             boost::shared_ptr<const Obj> obj,
-             Vector3d pos, Quaterniond q) :
-        goal(goal), obj(obj),
-        pos(pos), q(q) {
-        assert(false);
-    }
     Particle realpredict(double amount) const {
         Particle p(*this);
         p.smoothed_last_P = 1.;
