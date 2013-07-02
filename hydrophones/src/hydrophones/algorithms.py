@@ -43,7 +43,6 @@ def check_data(samples, sample_rate, plot=False):
     fft_length = 2048
     samples_fft = numpy.absolute(numpy.fft.fft(samples_window, fft_length, axis=1))[:, :fft_length/2]
     peaks = numpy.argmax(samples_fft, axis=1)
-    print bin_to_freq(peaks, sample_rate, fft_length)
     
     # Sort peaks, take mean of the middle
     middle_peaks = numpy.sort(peaks)[1:3] #FIXME
@@ -57,7 +56,7 @@ def check_data(samples, sample_rate, plot=False):
                  samples_fft.transpose())
         plt.title('FFT')
 
-    return freq, True
+    return True, freq
 
 def upsample(samples, sample_rate, desired_sample_rate):
     """Upsamples data to have approx. desired_sample_rate."""
@@ -197,7 +196,7 @@ if __name__ == '__main__':
         plt.plot(samples.transpose())
         plt.title('Raw ping')
         
-        freq = check_data(samples, sample_rate, plot=True)
+        valid, freq = check_data(samples, sample_rate, plot=True)
         print 'freq', freq
 
         samples_proc, sample_rate_proc = preprocess(samples, sample_rate)

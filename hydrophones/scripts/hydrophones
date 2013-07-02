@@ -20,7 +20,7 @@ def process_ping(ping):
     samples = numpy.array(ping.data, dtype=numpy.float64).reshape((ping.samples, ping.channels)).transpose()
     sample_rate = ping.sample_rate
 
-    freq, valid = algorithms.check_data(samples, sample_rate)
+    valid, freq = algorithms.check_data(samples, sample_rate)
  
     samples_proc, sample_rate_proc = algorithms.preprocess(samples, sample_rate)
     deltas = algorithms.compute_deltas(samples_proc, sample_rate_proc, 25e3, template_periods)
@@ -29,7 +29,7 @@ def process_ping(ping):
     _, quat = tf_listener.lookupTransform(output_frame, ping.header.frame_id, ping.header.stamp)
     pos_output = transformations.quaternion_matrix(quat)[:3, :3].dot(pos)
     heading = math.atan2(pos_output[1], pos_output[0])
-    declination = math.asin(-pos_output[2])
+    declination = math.atan2(-pos_output[2], numpy.linalg.norm(pos_output[0:2]))
     
     pub.publish(header=Header(stamp=ping.header.stamp,
                               frame_id=output_frame),
