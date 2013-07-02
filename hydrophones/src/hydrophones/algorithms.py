@@ -37,8 +37,6 @@ def check_data(samples, sample_rate, plot=False):
     
     samples = bandpass(samples, sample_rate)
     samples_window = samples * numpy.hamming(sample_count)
-    plt.figure()
-    plt.plot(samples_window.transpose())
     
     fft_length = 2048
     samples_fft = numpy.absolute(numpy.fft.fft(samples_window, fft_length, axis=1))[:, :fft_length/2]
