@@ -3,4 +3,5 @@ string[] object_names
 # Result only happens on error
 string error
 ---
+Header header
 TargetRes[] targetreses

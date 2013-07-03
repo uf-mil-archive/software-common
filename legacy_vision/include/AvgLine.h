@@ -7,6 +7,7 @@ class AvgLine {
 	public:
 		cv::Point2f centroid;
 		double length;
+		cv::Point2f direction;
 		double angle;
 
 		typedef std::pair<cv::Point2f, cv::Point2f> Line;

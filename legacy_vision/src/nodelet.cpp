@@ -87,6 +87,7 @@ private:
         subjugator::ImageSource::Image img(cvimage->image, *cam_info);
         
         FindFeedback feedback;
+        feedback.header = image->header;
         BOOST_FOREACH(const FinderPair &finder, finders) { int i = &finder - finders.data();
             cout << "Looking for " << finder.first << endl;
             
