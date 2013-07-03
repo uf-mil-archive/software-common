@@ -9,7 +9,7 @@ import roslib
 roslib.load_manifest('hydrophones')
 import rospy
 
-from hydrophones import algorithms
+from hydrophones import algorithms, util
 from hydrophones.msg import Ping, ProcessedPing, Debug
 from std_msgs.msg import Header
 from geometry_msgs.msg import Point, PoseStamped, Pose
@@ -17,32 +17,43 @@ import tf
 from tf import transformations
 
 def process_ping(ping):
-    samples = numpy.array(ping.data, dtype=numpy.float64).reshape((ping.samples, ping.channels)).transpose()
+    samples = util.ping_to_samples(ping)
     sample_rate = ping.sample_rate
-
-    valid, freq = algorithms.check_data(samples, sample_rate)
- 
-    samples_proc, sample_rate_proc = algorithms.preprocess(samples, sample_rate)
-    deltas = algorithms.compute_deltas(samples_proc, sample_rate_proc, 25e3, template_periods)
-    pos = algorithms.compute_pos_4hyd(deltas, sample_rate_proc, v_sound, dist_h, dist_h4)
-
-    _, quat = tf_listener.lookupTransform(output_frame, ping.header.frame_id, ping.header.stamp)
-    pos_output = transformations.quaternion_matrix(quat)[:3, :3].dot(pos)
-    heading = math.atan2(pos_output[1], pos_output[0])
-    declination = math.atan2(-pos_output[2], numpy.linalg.norm(pos_output[0:2]))
     
+    r = algorithms.run(samples, sample_rate, v_sound, dist_h, dist_h4)
+
+    valid = False
+    heading = 0
+    declination = 0
+    try:
+        _, quat = tf_listener.lookupTransform(output_frame, ping.header.frame_id, ping.header.stamp)
+        if len(r['pos']) > 0:
+            pos_output = transformations.quaternion_matrix(quat)[:3, :3].dot(r['pos'])
+            heading = math.atan2(pos_output[1], pos_output[0])
+            declination = math.atan2(-pos_output[2], numpy.linalg.norm(pos_output[0:2]))
+            if len(r['errors']) == 0:
+                valid = True
+    except tf.Exception, ex:
+        rospy.logerr('Cannot processing ping because of tf exception: ' + str(ex))
+
+    if len(r['errors']) > 0:
+        rospy.logwarn('Errors processing ping: ' + ", ".join(r['errors']))
+        
     pub.publish(header=Header(stamp=ping.header.stamp,
                               frame_id=output_frame),
                 heading=heading,
                 declination=declination,
-                freq=freq,
+                freq=r['freq'],
+                amplitude=r['amplitude'],
                 valid=valid)
     pub_pose.publish(header=Header(stamp=ping.header.stamp,
                                    frame_id=ping.header.frame_id),
-    pose=Pose(position=Point(*pos.tolist())))
+    pose=Pose(position=Point(*r['pos'].tolist())))
     pub_debug.publish(header=Header(stamp=ping.header.stamp,
                                     frame_id=ping.header.frame_id),
-                      deltas=deltas.tolist())
+                      deltas=r['deltas'].tolist(),
+                      delta_errors=r['delta_errors'].tolist(),
+                      fft_sharpness=r['fft_sharpness'])
 
 rospy.init_node('hydrophones')
 dist_h = rospy.get_param('~dist_h')
