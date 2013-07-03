@@ -31,7 +31,7 @@ Line::Line(int numberOfLinesToFind, property_tree::ptree config, const cv::Mat &
 	vector<vector<AvgLine::Line> > lines;
 	BOOST_FOREACH(const Vec4i &cvline, cvlines) {
 		AvgLine::Line line(Point2f(cvline[0], cvline[1]), Point2f(cvline[2], cvline[3]));
-		double angle = atan2(line.second.y-line.first.y, line.second.x-line.first.x);
+		double angle = AvgLine(vector<AvgLine::Line>(1, line)).angle;
 
 		if(numberOfLinesToFind == 1) { // case when looking for a single line (i.e. tube)
 			if(lines.size() == 0)
