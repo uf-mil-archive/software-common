@@ -30,7 +30,17 @@ class IFinder {
 	protected:
 		boost::property_tree::ptree config;
 		boost::property_tree::ptree Point_to_ptree(const cv::Point& p, const subjugator::ImageSource::Image &image) {
-		    cv::Point3d ray = image.camera_model.projectPixelTo3dRay(p);
+		    cv::Point3d ray = image.camera_model.projectPixelTo3dRay(p); ray *= 1/ray.z;
+			boost::property_tree::ptree result;
+			result.push_back(std::make_pair("", boost::lexical_cast<std::string>(ray.x)));
+			result.push_back(std::make_pair("", boost::lexical_cast<std::string>(ray.y)));
+			result.push_back(std::make_pair("", boost::lexical_cast<std::string>(ray.z)));
+			return result;
+		}
+		boost::property_tree::ptree Direction_to_ptree(const cv::Point2d& p, const cv::Point2d& v, const subjugator::ImageSource::Image &image) {
+		    cv::Point3d ray1 = image.camera_model.projectPixelTo3dRay(p); ray1 *= 1/ray1.z;
+		    cv::Point3d ray2 = image.camera_model.projectPixelTo3dRay(p + v*(1/cv::norm(v))); ray2 *= 1/ray2.z;
+		    cv::Point3d ray = ray2 - ray1; ray *= 1/cv::norm(ray);
 			boost::property_tree::ptree result;
 			result.push_back(std::make_pair("", boost::lexical_cast<std::string>(ray.x)));
 			result.push_back(std::make_pair("", boost::lexical_cast<std::string>(ray.y)));

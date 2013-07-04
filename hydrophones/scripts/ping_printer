@@ -1,0 +1,18 @@
+#!/usr/bin/env python
+
+import math
+
+import roslib
+roslib.load_manifest('hydrophones')
+import rospy
+
+from hydrophones.msg import ProcessedPing
+
+def print_heading(ping_processed):
+    print '%dhz heading %d declination %d' % (ping_processed.freq,
+                                              ping_processed.heading / math.pi * 180,
+                                              ping_processed.declination / math.pi * 180)
+
+rospy.init_node('print_heading')
+sub = rospy.Subscriber('hydrophones/processed', ProcessedPing, print_heading)
+rospy.spin()

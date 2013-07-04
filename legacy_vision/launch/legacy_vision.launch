@@ -52,5 +52,6 @@ shooter:
     circle_thres: 23
 
     </rosparam>
+    <param name="bins/imagePath" value="$(find legacy_vision)/data/bins"/>
   </node>
 </launch>

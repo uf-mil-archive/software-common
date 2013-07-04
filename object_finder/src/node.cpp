@@ -74,6 +74,13 @@ Vector3d ColorRGBA_to_vec(std_msgs::ColorRGBA c) {
     return Vector3d(c.r, c.g, c.b);
 }
 
+template<int N>
+Eigen::Matrix<double, N, N> cholesky(Eigen::Matrix<double, N, N> x) {
+  Eigen::LDLT<Eigen::Matrix<double, N, N> > ldlt = x.ldlt();
+  return ldlt.transpositionsP().transpose() * Eigen::Matrix<double, N, N>(ldlt.matrixL()) * Eigen::Matrix<double, N, 1>(ldlt.vectorD().array().sqrt()).asDiagonal();
+}
+
+
 struct Particle {
     TargetDesc goal;
     boost::shared_ptr<const Obj> obj;
@@ -92,7 +99,7 @@ struct Particle {
         obj(obj) {
         Matrix6d cov = Map<const Matrix6d>(
             goal.prior_distribution.covariance.data());
-        Matrix6d dist_from_iid = cov.llt().matrixL();
+        Matrix6d dist_from_iid = cholesky(cov);
         Vector6d iid; iid << gaussvec(), gaussvec();
         Vector6d dx = dist_from_iid * iid;
         
@@ -109,13 +116,6 @@ struct Particle {
         if(goal.check_180z_flip && uniform() >= .5)
             q = q * Quaterniond(0, 0, 1, 0);
         smoothed_last_P = 1;
-    }
-    Particle(const TargetDesc &goal,
-             boost::shared_ptr<const Obj> obj,
-             Vector3d pos, Quaterniond q) :
-        goal(goal), obj(obj),
-        pos(pos), q(q) {
-        assert(false);
     }
     Particle realpredict(double amount) const {
         Particle p(*this);

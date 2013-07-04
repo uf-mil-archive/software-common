@@ -97,6 +97,7 @@ private:
 	bool auto_exposure_;
 	bool auto_gain_;
 	int zoom_;
+	bool rotate180_;
 
 	// ROS topics
 	image_transport::ImageTransport it_;

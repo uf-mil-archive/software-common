@@ -23,14 +23,9 @@ def main():
     with sm:
         smach.Sequence.add('DEPTH', WaypointState(shared, lambda cur: cur.depth(.4)))
         smach.Sequence.add('APPROACH', VelocityState(shared, numpy.array([.2, 0, 0])))
-        smach.Sequence.add('WAIT_PIPE_PRE',
-                           legacy_vision_states.WaitForObjectsState(shared, 'find2_down_camera', 'pipe'))
-        smach.Sequence.add('SLOW', VelocityState(shared, numpy.array([.05, 0, 0])))
         smach.Sequence.add('WAIT_PIPE',
-                           legacy_vision_states.WaitForObjectsState(shared, 'find2_down_camera'),
-                           transitions={'timeout':'APPROACH'})
-
-
+            legacy_vision_states.WaitForObjectsState(shared, 'find2_down_camera', 'pipe'))
+        smach.Sequence.add('CENTER_PIPE', legacy_vision_states.CenterObjectState(shared, 'find2_down_camera'))#, left_orientation_selector))
         smach.Sequence.add('ALIGN_PIPE', legacy_vision_states.AlignObjectState(shared, 'find2_down_camera'))#, left_orientation_selector))
         smach.Sequence.add('FORWARD', WaypointState(shared, lambda cur: cur.forward(2)))
 
@@ -40,7 +35,7 @@ def main():
     # Execute SMACH plan
     outcome = sm.execute()
 
-    rospy.spin()
+    #rospy.spin()
     sis.stop()
 
 if __name__ == '__main__':

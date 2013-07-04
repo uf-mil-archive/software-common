@@ -23,7 +23,7 @@ static double DAngleDiff(double a, double b)
 
 
 Line::Line(int numberOfLinesToFind, property_tree::ptree config, const cv::Mat &img) {
-	double minAngleDiff = config.get<float>("minAngleDiff")*3.14159/180.0;
+	double minAngleDiff = config.get<float>("minAngleDiff")*boost::math::constants::pi<double>()/180;
 	Mat edgeImage = img.clone();
 	Canny(img, edgeImage, config.get_child("Canny").get<int>("thresh1"), config.get_child("Canny").get<int>("thresh2"), config.get_child("Canny").get<int>("apertureSize") );
 	std::vector<Vec4i> cvlines;HoughLinesP(edgeImage, cvlines, config.get_child("Hough").get<double>("rho"), config.get_child("Hough").get<double>("theta"), config.get_child("Hough").get<double>("thresh"), config.get_child("Hough").get<int>("minLineLength"), config.get_child("Hough").get<int>("minLineGap") );
@@ -31,7 +31,7 @@ Line::Line(int numberOfLinesToFind, property_tree::ptree config, const cv::Mat &
 	vector<vector<AvgLine::Line> > lines;
 	BOOST_FOREACH(const Vec4i &cvline, cvlines) {
 		AvgLine::Line line(Point2f(cvline[0], cvline[1]), Point2f(cvline[2], cvline[3]));
-		double angle = atan2(line.second.y-line.first.y, line.second.x-line.first.x);
+		double angle = AvgLine(vector<AvgLine::Line>(1, line)).angle;
 
 		if(numberOfLinesToFind == 1) { // case when looking for a single line (i.e. tube)
 			if(lines.size() == 0)

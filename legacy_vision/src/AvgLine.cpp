@@ -9,7 +9,7 @@ AvgLine::AvgLine(vector<Line> lines) {
 
 	centroid = Point2f(0, 0); // compute average centroid
 	length = 0; // and length
-	Point2f direction(0, 0); // and length-weighted direction
+	direction = Point2f(0, 0); // and length-weighted direction
 	BOOST_FOREACH(const Line &line, lines) {
 		centroid += (line.first + line.second)*(1./2/lines.size());
 		length += norm(line.second - line.first)*(1./lines.size());

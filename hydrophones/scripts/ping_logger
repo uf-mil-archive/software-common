@@ -8,6 +8,7 @@ roslib.load_manifest('hydrophones')
 import rospy
 
 from hydrophones.msg import Ping
+from hydrophones import util
 
 rospy.init_node('ping_logger')
 output_dir = rospy.get_param("~output_dir", "pings")
@@ -16,7 +17,7 @@ if not os.path.exists(output_dir):
 
 def save_ping(ping):
     path = os.path.join(output_dir, str(ping.header.seq) + ".csv")
-    samples = numpy.array(ping.data, dtype=numpy.float64).reshape((ping.samples, ping.channels)).transpose()
+    samples = util.ping_to_samples(ping)
     numpy.savetxt(path, samples.transpose(), fmt='%d', delimiter=',')
 
 sub = rospy.Subscriber('hydrophones/ping', Ping, save_ping)
