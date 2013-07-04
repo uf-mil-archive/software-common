@@ -236,6 +236,7 @@ void CameraNode::reconfig(monoConfig &config, uint32_t level)
 	}
 
 	msg_camera_info_.header.frame_id = config.frame_id;
+	rotate180_ = config.rotate180;
 	configured_ = true;
 }
 
@@ -336,7 +337,11 @@ sensor_msgs::ImagePtr CameraNode::processFrame(IplImage* frame, sensor_msgs::Cam
 
 	converter_.header = msg_camera_info_.header;
 	converter_.encoding = "bgr8";
-	converter_.image = frame;
+	if(rotate180_) {
+		cv::flip(cv::Mat(frame), converter_.image, -1);
+	} else {
+		converter_.image = frame;
+	}
 	return converter_.toImageMsg();
 }
 
