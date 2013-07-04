@@ -1,3 +1,5 @@
+from __future__ import division
+
 import json
 import math
 import threading
@@ -6,6 +8,8 @@ import numpy
 
 import rospy
 import smach
+import tf
+from tf import transformations
 
 from uf_common.orientation_helpers import PoseEditor
 from legacy_vision.msg import FindAction, FindGoal
@@ -56,7 +60,6 @@ class BaseManeuverObjectState(smach.State):
         self._selector = selector
         self._cond = threading.Condition()
         self._done = False
-        self._done2 = False
         self._failed = False
         self._fail_ctr = 0
 
@@ -85,41 +88,49 @@ class BaseManeuverObjectState(smach.State):
                 self._fail_ctr = 0
 
             result = self._selector(good_results, self._traj_start)
-            goal = self._get_goal(result, PoseEditor.from_PoseTwistStamped_topic('/trajectory'))
+            current = PoseEditor.from_PoseTwistStamped_topic('/trajectory')
+            try:
+                self._shared['tf_listener'].waitForTransform(current.frame_id, feedback.header.frame_id, feedback.header.stamp, rospy.Duration(1))
+                world_from_result_tf = self._shared['tf_listener'].lookupTransform(current.frame_id, feedback.header.frame_id, feedback.header.stamp)
+            except tf.Exception, e:
+                print 'tf exception:', type(e), e
+                return
+            
+            goal = self._get_goal(result, current, world_from_result_tf)
             if goal is None:
                 self._done = True
                 self._cond.notify_all()
                 return
-            self._done2 = False
-            self._shared['moveto'].send_goal(goal, done_cb=self._done_cb)
-    
-    def _done_cb(self, state, result):
-        with self._cond:
-            self._done2 = True
+            self._shared['moveto'].send_goal(goal)
+
+class CenterObjectState(BaseManeuverObjectState):
+    def _get_goal(self, result, current, (tf_p, tf_q)):
+        vec = numpy.array(map(float, result['center'])); vec /= numpy.linalg.norm(vec)
+        vec_world = transformations.quaternion_matrix(tf_q)[:3, :3].dot(vec)
+        camera_axis = transformations.quaternion_matrix(tf_q)[:3, :3].dot([0, 0, 1])
+        
+        if vec_world.dot(camera_axis) > math.cos(math.radians(2)):
+            # if it's within a 2 degree cone of camera axis, terminate
+            return None
+        
+        # get rid of component going along camera axis
+        vec_world2 = vec_world - camera_axis*camera_axis.dot(vec_world)
+        
+        vel_world = .5*vec_world2
+        return current.as_MoveToGoal(linear=current._rot.T.dot(vel_world))
 
 class AlignObjectState(BaseManeuverObjectState):
-    good_count = 0
-    def _get_goal(self, result, current):
-        vec = numpy.array(map(float, result['center']))
-        vec /= numpy.linalg.norm(vec)
-        angle = float(result['angle'])
-        angle_error = angle - math.radians(90)
-        angle_error = (angle_error + math.radians(90)) % math.radians(180) - math.radians(90)
+    def _get_goal(self, result, current, (tf_p, tf_q)):
+        direction = numpy.array(map(float, result['direction']))
+        direction_world = transformations.quaternion_matrix(tf_q)[:3, :3].dot(direction)
         
-        linear = [-.5*vec[1], -.5*vec[0], 0]
+        direction_symmetry = int(result.get('direction_symmetry', 1))
+        best_direction_world = max(
+            [transformations.rotation_matrix(i/direction_symmetry*2*math.pi, [0, 0, 1])[:3, :3].dot(direction_world) for i in xrange(direction_symmetry)],
+            key=lambda direction: direction.dot(current.forward_vector))
         
-        print vec.dot([0, 0, 1])
-        if vec.dot([0, 0, 1]) > math.cos(math.radians(5)):
-            print "yawing", angle_error
-            current = current.yaw_right(angle_error)
-            linear = [0, 0, 0]
-            if abs(angle_error) < math.radians(5):
-                self.good_count = self.good_count + 1
-                print 'good_count', self.good_count
-                if self.good_count >= 100:
-                    return None
+        if current.forward_vector.dot(best_direction_world) > \
+                math.cos(math.radians(2)):
+            return None
         
-        print angle, angle_error
-        #if numpy.linalg.norm(linear) < .01:
-        #    return None
-        return current.as_MoveToGoal(linear=linear)
+        return current.look_at_rel_without_pitching(best_direction_world)
