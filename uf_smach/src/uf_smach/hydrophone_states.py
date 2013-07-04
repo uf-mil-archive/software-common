@@ -43,29 +43,27 @@ class HydrophoneTravelState(smach.State):
             self._ping = None
             no_ping_ctr = 0
             
-            if ping.declination > 60/180*math.pi:
-                self._shared['moveto'].send_goal(
-                    PoseEditor.from_PoseTwistStamped_topic('/trajectory'))
-                return 'succeeded'
-            
             current = PoseEditor.from_PoseTwistStamped_topic('/trajectory')
             new = current.yaw_left(ping.heading)
 
             if abs(ping.heading) < 10/180*math.pi:
-                if ping.declination < 20/180*math.pi:
+                if ping.declination < 35/180*math.pi:
                     speed = .8
                 else:
-                    speed = .2
+                    speed = .3
+                    if ping.declination > 60/180*math.pi:
+                        self._shared['moveto'].send_goal(
+                            PoseEditor.from_PoseTwistStamped_topic('/trajectory'))
+                        return 'succeeded'
             else:
                 speed = 0
 
             print 'heading', ping.heading/math.pi*180, 'declination', ping.declination/math.pi*180, 'speed', speed
             self._shared['moveto'].send_goal(new.as_MoveToGoal(linear=[speed, 0, 0]))
-
-        if self.preempt_requested():
-            return 'preempted'
-        return 'succeeded'
+        return 'preempted'
 
     def _callback(self, processed_ping):
         if abs(processed_ping.freq - self._freq) < 1e3:
             self._ping = processed_ping
+        else:
+            print 'bad freq', processed_ping.freq, self._freq
