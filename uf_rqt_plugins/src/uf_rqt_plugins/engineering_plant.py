@@ -13,7 +13,7 @@ from qt_gui.plugin import Plugin
 from rawgps_common.gps import ecef_from_latlongheight,enu_from_ecef
 from python_qt_binding import loadUi
 from python_qt_binding.QtCore import SIGNAL,QTimer,QSettings
-from python_qt_binding.QtGui import QWidget, QPushButton,QCheckBox,QListWidget,QLineEdit,QProgressBar
+from python_qt_binding.QtGui import QWidget, QPushButton,QCheckBox,QListWidget,QLineEdit,QProgressBar, QLCDNumber
 from power_router.msg import prstatus
 from power_router.srv import SetKill
 
@@ -21,10 +21,10 @@ from power_router.srv import SetKill
 uipath = os.path.dirname(os.path.realpath(__file__))
 
 global computer_current, motor_current, temperature, battery
-computer_current = []
-motor_current = []
-temperature = []
-battery = []
+computer_current = 0
+motor_current = 0
+temperature = 0
+battery = 0
 
 def data_update(msg):
 	global computer_current, motor_current, temperature, battery
@@ -62,8 +62,8 @@ class Engineering_Plant(Plugin):
 	self._widget.findChild(QProgressBar, 'ComputerCurrent').setValue(compratio)	
 	motorratio = int(float(motor_current/10000.0)*100)
 	self._widget.findChild(QProgressBar, 'MotorCurrent').setValue(motorratio)
-	tempratio = int(float(temperature/150)*100)
-	self._widget.findChild(QProgressBar, 'Temperature').setValue(tempratio)
+	#tempratio = int(float(temperature/150)*100)
+	self._widget.findChild(QLCDNumber, 'tempLCD').display(temperature)
 	battratio = int(float(battery/100)*100)
 	self._widget.findChild(QProgressBar, 'Battery').setValue(battratio)
 	    
