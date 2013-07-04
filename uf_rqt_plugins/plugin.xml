@@ -60,7 +60,7 @@
         <icon type="file">uf.ico</icon>
         <label>UF</label>
       </group>
-      <label>Status</label>
+      <label>Engineering</label>
       <statustip>Plant Status</statustip>
     </qtgui>
   </class>
