@@ -105,10 +105,13 @@ Contours::Contours(const Mat &img, float minContour, float maxContour, float max
 
 		double length1 = norm(outerBox.corners[1] - outerBox.corners[0]);
 		double length2 = norm(outerBox.corners[3] - outerBox.corners[0]);
-		if(length1 > length2)
+		if(length1 > length2) {
+		    outerBox.direction = outerBox.corners[1] - outerBox.corners[0];
 			outerBox.orientation = 0.5*(outerBox.corners[0] + outerBox.corners[3]);
-		else
+		} else {
+		    outerBox.direction = outerBox.corners[3] - outerBox.corners[0];
 			outerBox.orientation = 0.5*(outerBox.corners[0] + outerBox.corners[1]);
+		}
 
 		Point dp = outerBox.orientation - outerBox.centroid;
 		outerBox.angle = atan2(dp.y, dp.x) + CV_PI/2;
@@ -192,4 +195,17 @@ float Contours::calcAngleOfAllBoxes() {
 	BOOST_FOREACH(const OuterBox &box, boxes)
 		sum += box.angle;
 	return sum/boxes.size();
+}
+
+Point2f Contours::calcDirectionOfAllBoxes() {
+	assert(boxes.size());
+	Point2f sum(0, 0);
+	BOOST_FOREACH(const OuterBox &box, boxes) {
+	    if(norm(sum + box.direction) > norm(sum - box.direction)) {
+    		sum += box.direction;
+		} else {
+    		sum -= box.direction;
+		}
+	}
+	return 1./boxes.size()*sum;
 }

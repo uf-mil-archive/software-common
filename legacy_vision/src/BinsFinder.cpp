@@ -27,15 +27,17 @@ IFinder::FinderResult BinsFinder::find(const subjugator::ImageSource::Image &img
     contours.drawResult(res, CV_RGB(255, 255, 255));
 
     if(objectPath[0] == "all") {
-        Point centroidOfBoxes = contours.calcCentroidOfAllBoxes();
-        circle(res,centroidOfBoxes, 5, CV_RGB(255,140,0), -1,8);
         if(contours.boxes.size() && !(contours.boxes.size() == 1 && contours.boxes[0].touches_edge)) {
+            Point centroidOfBoxes = contours.calcCentroidOfAllBoxes();
+            circle(res,centroidOfBoxes, 5, CV_RGB(255,140,0), -1,8);
             property_tree::ptree fResult;
             fResult.put_child("center", Point_to_ptree(centroidOfBoxes, img));
             fResult.put("number_of_boxes", contours.boxes.size());
             // Scale returns the number of boxes that are currently being found.
             // The idea is to align to centroid until 4 boxes are found.
             fResult.put("angle", contours.calcAngleOfAllBoxes());
+            fResult.put_child("direction", Direction_to_ptree(centroidOfBoxes, contours.calcDirectionOfAllBoxes(), img));
+            fResult.put("direction_symmetry", 2);
             resultVector.push_back(fResult);
         }
     } else { assert(objectPath[0] == "single" || objectPath[0] == "single_save");

@@ -179,6 +179,11 @@ class PoseEditor(object):
     def look_at_rel_without_pitching(self, rel_point): return self.set_orientation(look_at_without_pitching(rel_point))
     def look_at_without_pitching(self, point): return self.look_at_rel_without_pitching(point - self.position)
     
+    def point_vec_towards(self, body_vec, towards_point): return self.point_vec_towards_rel(body_vec, towards_point - self.pos)
+    def point_vec_towards_rel(self, body_vec, towards_rel_point): return self.set_orientation(triad((towards_rel_point, [0, 0, 1]), (body_vec, [0, 0, 1])))
+    def turn_vec_towards(self, body_vec, towards_point): return self.turn_vec_towards_rel(body_vec, towards_point - self.pos)
+    def turn_vec_towards_rel(self, body_vec, towards_rel_point): return self.set_orientation(triad(([0, 0, 1], towards_rel_point), ([0, 0, 1], body_vec)))
+    
     def yaw_left(self, angle):
         return self.set_orientation(transformations.quaternion_multiply(
             transformations.quaternion_about_axis(angle, [0, 0, 1]),

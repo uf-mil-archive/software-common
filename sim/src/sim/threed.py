@@ -548,6 +548,33 @@ class Capsules(object):
                     glRotate(-math.degrees(math.acos(a*b)), *(a%b).unit())
                     gluCylinder(q, self.radius, self.radius, (end - start).mag(), 10, 1)
 
+class Texture(object):
+    def __init__(self, img, mipmap=True):
+        import pygame
+        data = pygame.image.tostring(img, "RGBA", True)
+        print len(data), img.get_height(), img.get_width()
+        self.t = glGenTextures(1)
+        with self:
+            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST_MIPMAP_LINEAR if mipmap else GL_LINEAR)
+            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST)
+            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAX_LEVEL, 4)
+            #glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT)
+            #glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT)
+            if mipmap:
+                gluBuild2DMipmaps(GL_TEXTURE_2D, GL_RGBA, img.get_width(), img.get_height(), GL_RGBA, GL_UNSIGNED_BYTE, data)
+            else:
+                glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, img.get_width(), img.get_height(), 0, GL_RGBA, GL_UNSIGNED_BYTE, data)
+    
+    def __enter__(self):
+        glEnable(GL_TEXTURE_2D)
+        glBindTexture(GL_TEXTURE_2D, self.t)
+    
+    def __exit__(self, *args):
+        glDisable(GL_TEXTURE_2D)
+    
+    def __del__(self):
+        glDeleteTextures(self.t)
+    
 if __name__ == '__main__':
     w = World()
     i = Interface()

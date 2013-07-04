@@ -63,6 +63,11 @@ class VelocityState(smach.State):
         self._shared['moveto'].send_goal(current.as_MoveToGoal(linear=self._vel))
         return 'succeeded'
 
+
+class ServiceState(smach.State):
+    def __init__(self, ): pass
+
+
 class WaitForObjectsState(smach.State):
     def __init__(self, shared, action, targetdescs, P_within_10cm_thresh, timeout=60):
         smach.State.__init__(self, outcomes=['succeeded', 'timeout'])

@@ -21,6 +21,7 @@ class Contours
 		struct OuterBox {
 			float perimeter;
 			cv::Point centroid;
+			cv::Point2f direction;
 			float area;
 			float angle;
 			cv::Point orientation;
@@ -40,6 +41,7 @@ class Contours
 		InnerContour findSmallestShape();
 		cv::Point calcCentroidOfAllBoxes();
 		float calcAngleOfAllBoxes();
+		cv::Point2f calcDirectionOfAllBoxes();
 
 	private:
 		std::vector<std::vector<cv::Point> > contours;
