@@ -51,4 +51,17 @@
       <statustip>PropaGator Status</statustip>
     </qtgui>
   </class>
+  <class name="Engineering_Plant" type="uf_rqt_plugins.engineering_plant.Engineering_Plant" base_class_type="rqt_gui_py::Plugin">
+    <description>
+     Plant monitoring GUI with Kill/Un-kill buttons
+    </description>
+    <qtgui>
+      <group>
+        <icon type="file">uf.ico</icon>
+        <label>UF</label>
+      </group>
+      <label>Status</label>
+      <statustip>Plant Status</statustip>
+    </qtgui>
+  </class>
 </library>
