@@ -1,0 +1,37 @@
+#!/usr/bin/env python
+
+import roslib; roslib.load_manifest('uf_smach')
+from uf_smach.states import WaypointState
+from uf_smach.hydrophone_states import HydrophoneTravelState
+from uf_smach.util import StateSharedHandles
+
+import rospy
+import smach
+import smach_ros
+
+def main():
+    rospy.init_node('barrel_roll_state_machine')
+
+    # Create a SMACH state machine
+    sm = smach.Sequence(['succeeded', 'failed', 'preempted'], 'succeeded')
+
+    # Create all the stuff shared between states
+    shared = StateSharedHandles()
+
+    # Open the container
+    with sm:
+        # Add states to the container
+        smach.Sequence.add('DEPTH', WaypointState(shared, lambda cur: cur.depth(.5)))
+        smach.Sequence.add('HYDROPHONES', HydrophoneTravelState(shared, 27e3))
+
+    sis = smach_ros.IntrospectionServer('barrel_roll', sm, '/SM_ROOT')
+    sis.start()
+
+    # Execute SMACH plan
+    outcome = sm.execute()
+
+    rospy.spin()
+    sis.stop()
+
+if __name__ == '__main__':
+    main()
