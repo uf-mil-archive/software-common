@@ -52,7 +52,7 @@ class WaitForObjectsState(smach.State):
                 self._cond.notify_all()
 
 class BaseManeuverObjectState(smach.State):
-    def __init__(self, shared, action, selector=lambda targetreses, traj_start: targetreses[0]):
+    def __init__(self, shared, action, selector=lambda targetreses, traj_start, (tf_p, tf_q): targetreses[0]):
         smach.State.__init__(self, outcomes=['succeeded', 'failed', 'preempted'])
 
         self._shared = shared
@@ -87,16 +87,17 @@ class BaseManeuverObjectState(smach.State):
             else:
                 self._fail_ctr = 0
 
-            result = self._selector(good_results, self._traj_start)
             current = PoseEditor.from_PoseTwistStamped_topic('/trajectory')
             try:
-                print current.frame_id, feedback.header.frame_id, feedback.header.stamp, rospy.Duration(1)
+                print current.frame_id, feedback.header.frame_id, feedback.header.stamp-rospy.Time.now(), rospy.Duration(1)
                 self._shared['tf_listener'].waitForTransform(current.frame_id, feedback.header.frame_id, feedback.header.stamp, rospy.Duration(1))
                 world_from_result_tf = self._shared['tf_listener'].lookupTransform(current.frame_id, feedback.header.frame_id, feedback.header.stamp)
             except ValueError: #tf.Exception, e:
                 import traceback
                 traceback.print_exc()
                 return
+            
+            result = self._selector(good_results, self._traj_start, world_from_result_tf)
             
             goal = self._get_goal(result, current, world_from_result_tf)
             if goal is None:
@@ -143,3 +144,21 @@ class AlignObjectState(BaseManeuverObjectState):
         
         print current.turn_vec_towards_rel(self._body_vec_align, best_direction_world)
         return current.turn_vec_towards_rel(self._body_vec_align, best_direction_world)
+
+def select_by_angle(direction_name):
+    assert direction_name in ['left', 'right']
+    def _(results, traj_start, (tf_p, tf_q)):
+        def get_wantedness(result):
+            direction = numpy.array(map(float, result['direction']))
+            direction_world = transformations.quaternion_matrix(tf_q)[:3, :3].dot(direction)
+            
+            direction_symmetry = int(result.get('direction_symmetry', 1))
+            best_direction_world = max(
+                [transformations.rotation_matrix(i/direction_symmetry*2*math.pi, [0, 0, 1])[:3, :3].dot(direction_world) for i in xrange(direction_symmetry)],
+                key=lambda direction: direction.dot(traj_start.forward_vector))
+            print best_direction_world, traj_start.left_vector, best_direction_world.dot(traj_start.left_vector)*(1 if direction == 'left' else -1), 1 if direction == 'left' else -1
+            return best_direction_world.dot(traj_start.left_vector)*(1 if direction_name == 'left' else -1)
+        
+        return max(results, key=get_wantedness)
+    return _
+
