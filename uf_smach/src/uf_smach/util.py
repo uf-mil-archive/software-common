@@ -109,4 +109,3 @@ def left_position_selector(targetreses, traj_start):
                                             traj_start),
         reverse=True
         )[0]
-

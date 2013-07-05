@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 
 import roslib; roslib.load_manifest('uf_smach')
-from uf_smach.states import WaypointState
+from uf_smach.common_states import WaypointState
 from uf_smach.hydrophone_states import HydrophoneTravelState
 from uf_smach.util import StateSharedHandles
 

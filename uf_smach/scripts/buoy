@@ -1,7 +1,8 @@
 #!/usr/bin/env python
 
 import roslib; roslib.load_manifest('uf_smach')
-from uf_smach.states import WaypointState, VelocityState, WaitForObjectsState, ApproachObjectState
+from uf_smach.common_states import WaypointState, VelocityState
+from uf_smach.object_finder_states import WaitForObjectsState, ApproachObjectState
 from object_finder.msg import TargetDesc
 from uf_smach.util import StateSharedHandles, left_position_selector, right_position_selector
 
