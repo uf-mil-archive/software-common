@@ -23,30 +23,32 @@ class HydrophoneTravelState(smach.State):
         self._shared = shared
         self._freq = freq
         self._ping = None
-                                     
+        self._cond = threading.Condition()
+
     def execute(self, userdata):
         sub = rospy.Subscriber('/hydrophones/processed', ProcessedPing, self._callback)
         no_ping_ctr = 0
-        
-        while not self.preempt_requested():
-            rospy.sleep(1)
-            if self._ping is None:
-                no_ping_ctr += 1
-                if no_ping_ctr == 10:
-                    self._shared['moveto'].send_goal(
-                        PoseEditor.from_PoseTwistStamped_topic('/trajectory'))
-                if no_ping_ctr >= 20:
-                    return 'failed'
-                continue
 
-            ping = self._ping
-            self._ping = None
+        while not self.preempt_requested():
+            with self._cond:
+                self._cond.wait(1)
+                if self._ping is None:
+                    no_ping_ctr += 1
+                    if no_ping_ctr == 5:
+                        self._shared['moveto'].send_goal(
+                            PoseEditor.from_PoseTwistStamped_topic('/trajectory'))
+                    if no_ping_ctr >= 10:
+                        return 'failed'
+                    continue
+
+                ping = self._ping
+                self._ping = None
             no_ping_ctr = 0
-            
-            current = PoseEditor.from_PoseTwistStamped_topic('/trajectory')
+
+            current = PoseEditor.from_Odometry_topic()
             new = current.yaw_left(ping.heading)
 
-            if abs(ping.heading) < 10/180*math.pi:
+            if abs(ping.heading) < 15/180*math.pi:
                 if ping.declination < 35/180*math.pi:
                     speed = .8
                 else:
@@ -64,6 +66,6 @@ class HydrophoneTravelState(smach.State):
 
     def _callback(self, processed_ping):
         if abs(processed_ping.freq - self._freq) < 1e3:
-            self._ping = processed_ping
-        else:
-            print 'bad freq', processed_ping.freq, self._freq
+            with self._cond:
+                self._ping = processed_ping
+                self._cond.notify()
