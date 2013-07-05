@@ -19,7 +19,7 @@ from tf import transformations
 def process_ping(ping):
     samples = util.ping_to_samples(ping)
     sample_rate = ping.sample_rate
-    
+
     r = algorithms.run(samples, sample_rate, v_sound, dist_h, dist_h4)
 
     valid = False
@@ -34,11 +34,11 @@ def process_ping(ping):
             if len(r['errors']) == 0:
                 valid = True
     except tf.Exception, ex:
-        rospy.logerr('Cannot processing ping because of tf exception: ' + str(ex))
+        rospy.logerr('Cannot output processed ping because of tf exception: ' + str(ex))
 
     if len(r['errors']) > 0:
         rospy.logwarn('Errors processing ping: ' + ", ".join(r['errors']))
-        
+
     pub.publish(header=Header(stamp=ping.header.stamp,
                               frame_id=output_frame),
                 heading=heading,
