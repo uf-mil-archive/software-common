@@ -28,7 +28,7 @@ public:
   ExposureController()
     : it_(nh_)
   {
-    image_sub_ = it_.subscribe("/forward_camera/image", 1, &ExposureController::imageCb, this);
+    image_sub_ = it_.subscribe("test_image", 1, &ExposureController::imageCb, this);
     pub_ = nh_.advertise<exposure_controller::metered_exposure>("test_metered_exposure",600);
     outputFile_ << "exp_cntrl.log";
     exp_tm_ms_ = 10.0;
