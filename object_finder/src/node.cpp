@@ -77,7 +77,12 @@ Vector3d ColorRGBA_to_vec(std_msgs::ColorRGBA c) {
 template<int N>
 Eigen::Matrix<double, N, N> cholesky(Eigen::Matrix<double, N, N> x) {
   Eigen::LDLT<Eigen::Matrix<double, N, N> > ldlt = x.ldlt();
-  return ldlt.transpositionsP().transpose() * Eigen::Matrix<double, N, N>(ldlt.matrixL()) * Eigen::Matrix<double, N, 1>(ldlt.vectorD().array().sqrt()).asDiagonal();
+  Eigen::Array<double, N, 1> d(ldlt.vectorD().array());
+  for(int i = 0; i < N; i++) {
+    if(d[i] < 0) d[i] = 0;
+  }
+  Eigen::Matrix<double, N, 1> sqrtd(d.sqrt());
+  return ldlt.transpositionsP().transpose() * Eigen::Matrix<double, N, N>(ldlt.matrixL()) * sqrtd.asDiagonal();
 }
 
 

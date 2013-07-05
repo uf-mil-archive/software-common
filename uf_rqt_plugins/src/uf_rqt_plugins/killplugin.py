@@ -23,7 +23,7 @@ class KillPlugin(Plugin):
         self.setObjectName('KillPlugin')
 
         self._listener = KillListener()
-        self._broadcaster = KillBroadcaster(rospy.get_name(), rospy.Duration(.3), 'Software kill using KillPlugin')
+        self._broadcaster = KillBroadcaster(rospy.get_name(), rospy.Duration(1), 'Software kill using KillPlugin')
         self._kill_active = False
 
         self._widget = QWidget()
