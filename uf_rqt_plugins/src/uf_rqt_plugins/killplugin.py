@@ -87,7 +87,6 @@ class KillPlugin(Plugin):
         self._widget.findChild(QTableWidget, 'killTable').setItem(row, col, item)
 
     def _update_kill(self):
-        print 'send', self._kill_active
         self._broadcaster.send(self._kill_active)
 
         other_kill_count = len([kill for kill in self._listener.get_all_kills()
