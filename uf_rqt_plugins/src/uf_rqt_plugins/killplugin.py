@@ -23,7 +23,7 @@ class KillPlugin(Plugin):
         self.setObjectName('KillPlugin')
 
         self._listener = KillListener()
-        self._broadcaster = KillBroadcaster(rospy.get_name(), rospy.Duration(.3), 'Software kill using KillPlugin')
+        self._broadcaster = KillBroadcaster(rospy.get_name(), rospy.Duration(1), 'Software kill using KillPlugin')
         self._kill_active = False
 
         self._widget = QWidget()
@@ -87,6 +87,7 @@ class KillPlugin(Plugin):
         self._widget.findChild(QTableWidget, 'killTable').setItem(row, col, item)
 
     def _update_kill(self):
+        print 'send', self._kill_active
         self._broadcaster.send(self._kill_active)
 
         other_kill_count = len([kill for kill in self._listener.get_all_kills()
