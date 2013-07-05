@@ -58,9 +58,9 @@ class Engineering_Plant(Plugin):
 
     def _on_update(self):
 	global computer_current, motor_current, temperature, battery
-	compratio = int(float(computer_current/5000.0)*100)
+	compratio = int(float(computer_current/1000.0)*100)
 	self._widget.findChild(QProgressBar, 'ComputerCurrent').setValue(compratio)	
-	motorratio = int(float(motor_current/10000.0)*100)
+	motorratio = int(float(motor_current/9000.0)*100)
 	self._widget.findChild(QProgressBar, 'MotorCurrent').setValue(motorratio)
 	#tempratio = int(float(temperature/150)*100)
 	self._widget.findChild(QLCDNumber, 'tempLCD').display(temperature)
