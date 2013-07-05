@@ -94,6 +94,7 @@ def bandpass(samples, sample_rate):
     """Applies a 20-30khz bandpass FIR filter"""
     fir = scipy.signal.firwin(128,
                               [19e3/(sample_rate/2), 31e3/(sample_rate/2)],
+                              window='hann',
                               pass_zero=False)
     return scipy.signal.lfilter(fir, 1, samples)
 
@@ -105,7 +106,7 @@ def compute_deltas(samples, sample_rate, ping_freq, template_periods, plot=False
     period = int(round(sample_rate / ping_freq))
     template_width = period*template_periods+1
     template, template_pos = make_template(samples[0, :],
-                                           .1,
+                                           .2,
                                            template_width)
     if template_pos is None:
         return numpy.empty(0), numpy.empty(0), None, template_width

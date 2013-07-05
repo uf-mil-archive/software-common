@@ -6,6 +6,7 @@ import roslib; roslib.load_manifest('uf_smach')
 from uf_smach.states import WaypointState, VelocityState, ServiceState
 from uf_smach import legacy_vision_states
 from uf_smach.util import StateSharedHandles, left_orientation_selector, right_orientation_selector
+from actuator_driver.srv import PulseValve
 
 import numpy
 import rospy
@@ -60,10 +61,7 @@ def main():
             smach.Sequence.add(str(i)+'_CENTER_SINGLE3', legacy_vision_states.CenterObjectState(shared, 'find2_down_camera', selector=select_image_text_or_most_central(bin_string)))
             smach.Sequence.add(str(i)+'_DEPTH3', WaypointState(shared, lambda cur: cur.depth(3)))
             
-            #smach.Sequence.add(str(i)+'_DROP', ServiceState(aaa))
-            smach.Sequence.add(str(i)+'_WIGGLE1', WaypointState(shared, lambda cur: cur.roll_left_deg(10)))
-            smach.Sequence.add(str(i)+'_WIGGLE2', WaypointState(shared, lambda cur: cur.roll_right_deg(20)))
-            smach.Sequence.add(str(i)+'_WIGGLE3', WaypointState(shared, lambda cur: cur.zero_roll_and_pitch()))
+            smach.Sequence.add(str(i)+'_DROP', ServiceState('/actuator_driver/pulse_valve', PulseValve, 0, rospy.Duration(0.5)))
     
     sis = smach_ros.IntrospectionServer('bins', sm, '/SM_ROOT')
     sis.start()

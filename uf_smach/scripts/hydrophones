@@ -22,7 +22,7 @@ def main():
     with sm:
         # Add states to the container
         smach.Sequence.add('DEPTH', WaypointState(shared, lambda cur: cur.depth(.5)))
-        smach.Sequence.add('HYDROPHONES', HydrophoneTravelState(shared, 27e3))
+        smach.Sequence.add('HYDROPHONES', HydrophoneTravelState(shared, 25e3))
 
     sis = smach_ros.IntrospectionServer('barrel_roll', sm, '/SM_ROOT')
     sis.start()

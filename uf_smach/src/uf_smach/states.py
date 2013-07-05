@@ -65,7 +65,29 @@ class VelocityState(smach.State):
 
 
 class ServiceState(smach.State):
-    def __init__(self, ): pass
+    def __init__(self, name, service_class, *args, **kwargs):
+        smach.State.__init__(self, outcomes=['succeeded', 'failed'])
+        
+        while True:
+            try:
+                rospy.wait_for_service(name, timeout=3)
+            except:
+                import traceback; traceback.print_exc()
+                print 'Waiting for service %s...' % (name,)
+                import time; time.sleep(1) # rospy doesn't have WallDuration::sleep
+            else:
+                break
+        self._serviceproxy = rospy.ServiceProxy(name, service_class)
+        self.args = args
+        self.kwargs = kwargs
+    
+    def execute(self, userdata):
+        try:
+            res = self._serviceproxy.call(*self.args, **self.kwargs)
+        except rospy.ServiceException:
+            import traceback; traceback.print_exc()
+            return 'failed'
+        return 'succeeded'
 
 
 class WaitForObjectsState(smach.State):
