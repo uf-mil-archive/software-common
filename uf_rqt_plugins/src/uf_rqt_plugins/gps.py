@@ -26,20 +26,20 @@ with open(path,'r+') as task_loc:
         data = line.split(',')
 
         if data[0] == 'rings':
-            rings_latlong = [float(data[1]),float(data[2]),float(data[3])]
+            rings_ecef = [float(data[1]),float(data[2]),float(data[3])]
         elif data[0] == 'buoys':            
-            buoys_latlong = [float(data[1]),float(data[2]),float(data[3])]             
+            buoys_ecef = [float(data[1]),float(data[2]),float(data[3])]             
         elif data[0] == 'button':            
-            button_latlong = [float(data[1]),float(data[2]),float(data[3])]
+            button_ecef = [float(data[1]),float(data[2]),float(data[3])]
         elif data[0] == 'spock':            
-            spock_latlong = [float(data[1]),float(data[2]),float(data[3])]
+            spock_ecef = [float(data[1]),float(data[2]),float(data[3])]
 
 
 
-tasks = [['rings',ecef_from_latlongheight(rings_latlong[0],rings_latlong[1],rings_latlong[2])],
-         ['buoys',ecef_from_latlongheight(buoys_latlong[0],buoys_latlong[1],buoys_latlong[2])],
-         ['button',ecef_from_latlongheight(button_latlong[0],button_latlong[1],button_latlong[2])],
-         ['spock',ecef_from_latlongheight(spock_latlong[0],spock_latlong[1],spock_latlong[2])]]
+tasks = [['rings',[rings_ecef[0],rings_ecef[1],rings_ecef[2]]],
+         ['buoys',[buoys_ecef[0],buoys_ecef[1],buoys_ecef[2]]],
+         ['button',[button_ecef[0],button_ecef[1],button_ecef[2]]],
+         ['spock',[spock_ecef[0],spock_ecef[1],spock_ecef[2]]]]
 
 def pos_callback(msg):
         global position 
@@ -111,6 +111,15 @@ class GPSPlugin(Plugin):
                                 tasks.remove(i)
                 tasks.append([str(self.name),[float(position[0]),float(position[1]),float(position[2])]])
 
+        with open(path,'w') as task_loc:
+            for i in tasks:
+                task_loc.write(str(i[0])+','+str(i[1][0])+','+str(i[1][1])+','+str(i[1][2])+'\n')
+
+        self._widget.findChild(QListWidget, 'waypoint_list').clear()
+        for i in tasks:
+            self._widget.findChild(QListWidget, 'waypoint_list').addItem(str(i[0])+','+str(i[1][0])+','+str(i[1][1])+','+str(i[1][2]))
+              
+
     def _on_record_entered_clicked(self):
         self.lat = self._widget.findChild(QLineEdit, 'lat_in').displayText()
         self.long = self._widget.findChild(QLineEdit, 'long_in').displayText()
@@ -123,14 +132,21 @@ class GPSPlugin(Plugin):
 
         ecef = ecef_from_latlongheight(float(self.lat), float(self.long), float(self.alt))
         
-        self._widget.findChild(QListWidget, 'waypoint_list').addItem(str(self.name)+','+str(ecef[0])+','+str(ecef[1])+','+str(ecef[2]))
-
         global tasks
         if str(self.name) in ['rings','buoys','button','spock']:
                 for i in tasks:
                         if (i[0] == str(self.name)):
                                 tasks.remove(i)
                 tasks.append([str(self.name),[float(ecef[0]),float(ecef[1]),float(ecef[2])]])
+
+        with open(path,'w') as task_loc:
+            for i in tasks:
+                task_loc.write(str(i[0])+','+str(i[1][0])+','+str(i[1][1])+','+str(i[1][2])+'\n')
+
+        self._widget.findChild(QListWidget, 'waypoint_list').clear()
+        for i in tasks:
+            self._widget.findChild(QListWidget, 'waypoint_list').addItem(str(i[0])+','+str(i[1][0])+','+str(i[1][1])+','+str(i[1][2]))
+              
 
     def _on_delete_clicked(self):
         self.rec_waypoint = self._widget.findChild(QListWidget, 'waypoint_list').currentItem().text()
@@ -140,6 +156,10 @@ class GPSPlugin(Plugin):
         for i in tasks:
                         if (i[0] == str(self.name)):
                                 tasks.remove(i)
+        with open(path,'w') as task_loc:
+            for i in tasks:
+                task_loc.write(str(i[0])+','+str(i[1][0])+','+str(i[1][1])+','+str(i[1][2])+'\n')
+              
         for SelectedItem in self._widget.findChild(QListWidget, 'waypoint_list').selectedItems():
                self._widget.findChild(QListWidget, 'waypoint_list').takeItem(self._widget.findChild(QListWidget, 'waypoint_list').row(SelectedItem))
         
