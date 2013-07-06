@@ -16,29 +16,71 @@ from uf_common.msg import MoveToAction, MoveToGoal, PoseTwist, PoseTwistStamped
 from rise_6dof.srv import SendConstantWrench
 from indirect_kalman_6dof.srv import SetPosition
 
-class WaypointState(smach.State):
-    def __init__(self, shared, goal_func):
-        smach.State.__init__(self, outcomes=['succeeded', 'preempted'])
+class SleepState(smach.State):
+    def __init__(self, duration):
+        smach.State.__init__(self, outcomes=['succeeded', 'preempted'])        
+        self._duration = duration
 
+    def execute(self, userdata):
+        start = rospy.Time.now()
+        while True:
+            if self.preempt_requested():
+                return 'preempted'
+            if rospy.Time.now() - start >= rospy.Duration(self._duration):
+                return 'succeeded'
+            rospy.sleep(.1)
+
+class CounterState(smach.State):
+    def __init__(self, maxval):
+        self._maxval = maxval
+        self._ctr = 0
+        smach.State.__init__(self, outcomes=['succeeded', 'exceeded'])
+
+    def execute(self, userdata):
+        self._ctr += 1
+        if self._ctr <= self._maxval:
+            return 'succeeded'
+        else:
+            return 'exceeded'
+
+class SetUserDataState(smach.State):
+    def __init__(self, **vals):
+        smach.State.__init__(self, outcomes=['succeeded'], output_keys=vals.keys())
+        self._vals = vals
+
+    def execute(self, userdata):
+        for key, value in self._vals.iteritems():
+            setattr(userdata, key, value)
+        return 'succeeded'
+
+class WaypointSeriesState(smach.State):
+    def __init__(self, shared, goal_funcs, repeat=False):
+        smach.State.__init__(self, outcomes=['succeeded', 'preempted'])
         self._shared = shared
-        self._goal_func = goal_func
+        self._goal_funcs = goal_funcs
         self._cond = threading.Condition()
         self._done = False
 
-        # Make sure goal_func is valid
-        assert(isinstance(self._goal_func(PoseEditor('/test',
-                                                     numpy.array([0, 0, 0]),
-                                                     numpy.array([1, 0, 0, 0]))),
-                          PoseEditor))
+        # Make sure goal_funcs is valid
+        for goal_func in goal_funcs:
+            assert(isinstance(goal_func(PoseEditor('/test',
+                                                   numpy.array([0, 0, 0]),
+                                                   numpy.array([1, 0, 0, 0]))),
+                              PoseEditor))
 
     def execute(self, userdata):
-        current = PoseEditor.from_PoseTwistStamped_topic('/trajectory')
-        goal = self._goal_func(current)
-        self._shared['moveto'].send_goal(goal, done_cb=self._done_cb)
-
         with self._cond:
-            while not self._done and not self.preempt_requested():
-                self._cond.wait(0.1)
+            for goal_func in self._goal_funcs:
+                current = PoseEditor.from_PoseTwistStamped_topic('/trajectory')
+                goal = goal_func(current)
+                self._shared['moveto'].send_goal(goal, done_cb=self._done_cb)
+
+                while not self._done and not self.preempt_requested():
+                    self._cond.wait(0.1)
+
+                self._done = False
+                if self.preempt_requested():
+                    break
 
         self._shared.clear_callbacks()
         if self.preempt_requested():
@@ -48,12 +90,15 @@ class WaypointState(smach.State):
     def _done_cb(self, state, result):
         with self._cond:
             self._done = True
-            self._cond.notify_all()
+            self._cond.notify_all()    
 
+class WaypointState(WaypointSeriesState):
+    def __init__(self, shared, goal_func):
+        WaypointSeriesState.__init__(self, shared, [goal_func])
+            
 class VelocityState(smach.State):
     def __init__(self, shared, vel):
         smach.State.__init__(self, outcomes=['succeeded'])
-
         self._shared = shared
         self._vel = vel
 
@@ -87,6 +132,10 @@ class ServiceState(smach.State):
             return 'failed'
         return 'succeeded'
 
+class StopState(VelocityState):
+    def __init__(self, shared):
+        VelocityState.__init__(self, shared, [0, 0, 0])
+    
 class OpenLoopState(smach.State):
     def __init__(self, shared, torque, time):
         smach.State.__init__(self, outcomes=['succeeded'])
@@ -107,18 +156,3 @@ class OpenLoopState(smach.State):
                              rospy.Duration(self._time))
         set_position(initial_odom.pose.pose.position)
         return 'succeeded'
-
-class SleepState(smach.State):
-    def __init__(self, duration):
-        smach.State.__init__(self, outcomes=['succeeded', 'preempted'])
-        
-        self._duration = duration
-
-    def execute(self, userdata):
-        start = rospy.Time.now()
-        while True:
-            if self.preempt_requested():
-                return 'preempted'
-            if rospy.Time.now() - start >= self._duration:
-                return 'succeeded'
-            rospy.sleep(.1)
