@@ -14,6 +14,14 @@ using namespace boost;
 using namespace cv;
 using namespace std;
 
+static Vec3b red_ref(36,23,41);
+static Vec3b yellow_ref(61,196,70);
+static Vec3b blue_ref(242,157,17);
+//       R  G  B
+// red - 41,23,36
+// yel - 70,196,61
+// blu - 17,157,242
+
 IFinder::FinderResult GrapesFinder::find(const subjugator::ImageSource::Image &img) {
 	// call to normalizer here
 	const Mat normalized = img.image;
@@ -23,9 +31,9 @@ IFinder::FinderResult GrapesFinder::find(const subjugator::ImageSource::Image &i
 
 	Thresholder thresholder(normalized);
 
-	Mat yellow = thresholder.yellow();
+	Mat yellow = thresholder.forrest(blue_ref, yellow_ref);
 	dilate(yellow, yellow, cv::Mat::ones(5,5,CV_8UC1));
-	erode(yellow, yellow, cv::Mat::ones(9,9,CV_8UC1));
+	erode(yellow, yellow, cv::Mat::ones(5,5,CV_8UC1));
 
 	Contours contours(yellow, 1000, 7000000, 1500000);
 
@@ -53,6 +61,7 @@ IFinder::FinderResult GrapesFinder::find(const subjugator::ImageSource::Image &i
 		bitwise_and(red, tempMask, red); // use mask to only find red areas within holes in yellow
 		erode(red, red, cv::Mat::ones(5,5,CV_8UC1));
 		dilate(red, red, cv::Mat::ones(5,5,CV_8UC1));
+		red = thresholder.forrest(yellow_ref, red_ref);
 		//erode(red, red, cv::Mat::ones(5,5,CV_8UC1));
 		Blob blob(red, 15, 1000000, 1000000);
 
