@@ -1,20 +1,30 @@
 #!/usr/bin/env python
 
 import roslib; roslib.load_manifest('uf_smach')
-from uf_smach.states import WaypointState, VelocityState, WaitForObjectsState, ApproachObjectState
+from uf_smach.common_states import WaypointState, VelocityState, ServiceState
+from uf_smach.object_finder_states import WaitForObjectsState, ApproachObjectState
 from object_finder.msg import TargetDesc
 from uf_common.msg import PoseTwistStamped
 from uf_common.orientation_helpers import PoseEditor
 from geometry_msgs.msg import Quaternion
 from uf_smach.util import StateSharedHandles, left_position_selector, right_position_selector
+from actuator_driver.srv import PulseValve
 
 import numpy
 import rospy
 import smach
 import smach_ros
 
+DIST1 = 5 # box-centering distance
+DIST2 = 2 # hexagon-searching distance
+DIST3 = 0 # shooting distance
+
+HEXAGON = 'small'
+#HEXAGON = 'large'
+BOX = 'green'
+
 def main():
-    rospy.init_node('smach_example_state_machine')
+    rospy.init_node('shooter')
 
 
     
@@ -31,14 +41,14 @@ def main():
     
     target = TargetDesc()
     target.type = TargetDesc.TYPE_OBJECT
-    target.object_filename = roslib.packages.resource_file('auvsi_robosub', 'models', '2013/7in_hexagon.obj')
+    target.object_filename = roslib.packages.resource_file('auvsi_robosub', 'models', '2013/shooter_%sin_%s_hexagon.obj' % (7 if HEXAGON == 'small' else 12, BOX))
     target.prior_distribution.pose.orientation = Quaternion(*traj.turn_left_deg(180).orientation)
     cov = numpy.zeros((6, 6))
     a = numpy.array([traj.forward_vector]).T * 100
     cov[3:, 3:] += a.dot(a.T)
     target.prior_distribution.covariance = cov.flatten()
-    target.min_dist = 2*.9
-    target.max_dist = 2/.9
+    target.min_dist = DIST2*.9
+    target.max_dist = DIST2/.9
     target.allow_rolling = True
     target.disallow_yawing = True
 
@@ -58,16 +68,17 @@ def main():
                                                     [shooter_desc], .85))
         smach.Sequence.add('APPROACH_SHOOTER',
                            ApproachObjectState(shared, 'find_forward',
-                                               'forward_camera', 5, marker='red'))
+                                               'forward_camera', DIST1, marker=BOX))
         
-        smach.Sequence.add('OPEN_LOOP_FORWARD', WaypointState(shared, lambda cur: cur.forward(2)))
+        smach.Sequence.add('OPEN_LOOP_FORWARD', WaypointState(shared, lambda cur: cur.forward(DIST1-DIST2)))
         smach.Sequence.add('WAIT_HEXAGON',
                            WaitForObjectsState(shared, 'find_forward',
                                                     [target], .85))
         smach.Sequence.add('APPROACH_HEXAGON',
                            ApproachObjectState(shared, 'find_forward',
-                                               'forward_camera', 2))
-        smach.Sequence.add('OPEN_LOOP_FORWARD2', WaypointState(shared, lambda cur: cur.forward(1)))
+                                               'forward_camera', DIST2))
+        smach.Sequence.add('OPEN_LOOP_FORWARD2', WaypointState(shared, lambda cur: cur.forward(DIST2-DIST3).relative([0, -.06, .3]))
+        smach.Sequence.add('SHOOT', ServiceState('/actuator_driver/pulse_valve', PulseValve, 5, rospy.Duration(0.3)))
 
     sis = smach_ros.IntrospectionServer('shooter', sm, '/SM_ROOT')
     sis.start()
@@ -75,7 +86,7 @@ def main():
     # Execute SMACH plan
     outcome = sm.execute()
 
-    rospy.spin()
+    #rospy.spin()
     sis.stop()
 
 if __name__ == '__main__':

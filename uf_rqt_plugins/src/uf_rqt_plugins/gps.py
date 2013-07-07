@@ -57,7 +57,7 @@ class GPSPlugin(Plugin):
 
         self.waypoint_ecef = rospy.Publisher('/gps_ecef_waypoint',PointStamped)
         self.tasks = rospy.Publisher('/task_waypoints',PointStamped)
-        rospy.Subscriber('/gps2_parser/pos',PointStamped,pos_callback)
+        rospy.Subscriber('/gps_conv/pos',PointStamped,pos_callback)
 
         self._widget.findChild(QPushButton, 'record_entered_waypoint').clicked.connect(self._on_record_entered_clicked)
         self._widget.findChild(QPushButton, 'record_current_waypoint').clicked.connect(self._on_record_current_clicked)

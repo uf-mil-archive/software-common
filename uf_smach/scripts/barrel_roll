@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 
 import roslib; roslib.load_manifest('uf_smach')
-from uf_smach.states import WaypointState, OpenLoopState
+from uf_smach.common_states import WaypointState, OpenLoopState
 from uf_smach.util import StateSharedHandles
 
 import rospy

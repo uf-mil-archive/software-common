@@ -2,7 +2,7 @@
 
 using namespace cv;
 
-Thresholder::Thresholder(const Mat &img) {
+Thresholder::Thresholder(const Mat &img) : img(img) {
 	split(img, channelsRGB);
 
 	cv::Mat imgHSV; cvtColor(img, imgHSV, CV_BGR2HSV);
@@ -99,4 +99,45 @@ Mat Thresholder::black() {
 	dilate(dbg,dbg,cv::Mat::ones(5,5,CV_8UC1));
 	erode(dbg,dbg,cv::Mat::ones(3,3,CV_8UC1));
 	return dbg;
+}
+
+static Vec3f divide(Vec3f a, Vec3f b) {
+	return Vec3f(a[0]/b[0], a[1]/b[1], a[2]/b[2]);
+}
+static Vec3f multiply(Vec3f a, Vec3f b) {
+	return Vec3f(a[0]*b[0], a[1]*b[1], a[2]*b[2]);
+}
+Mat Thresholder::forrest(Vec3b bg, Vec3b fg) {
+
+	for(int i = 0; i < img.rows; i++) {
+		for(int j = 0; j < img.cols; j++) {
+			Vec3b rgb_vec = img.at<Vec3b>(i, j);
+			rgb_vec[0] /= 2;
+			img.at<Vec3b>(i, j) = rgb_vec;
+		}
+	}
+	
+	double sigma = 30;
+	Mat blurred; GaussianBlur(img, blurred, Size(0, 0), sigma, sigma);
+	
+	Mat result = channelsRGB[0].clone(); // XXX
+	for(int i = 0; i < img.rows; i++) {
+		for(int j = 0; j < img.cols; j++) {
+			Vec3f sample = blurred.at<Vec3b>(i, j);
+			
+			Vec3f light = divide(sample, .5*Vec3f(bg) + .5*Vec3f(fg)); // assuming near border of foreground and background
+			Vec3f predicted_sample_if_bg = multiply(light, bg);
+			Vec3f predicted_sample_if_fg = multiply(light, fg);
+			
+			Vec3f sample2 = img.at<Vec3b>(i, j);
+			if(norm(sample2 - predicted_sample_if_fg) <
+			   norm(sample2 - predicted_sample_if_bg)) {
+				result.at<uint8_t>(i, j) = 255;
+			} else {
+				result.at<uint8_t>(i, j) = 0;
+			}
+			//result.at<uint8_t>(i, j) = norm(sample - predicted_sample_if_bg)/(norm(sample - predicted_sample_if_bg) + norm(sample - predicted_sample_if_fg))*255+.5;
+		}
+	}
+	return result;
 }
