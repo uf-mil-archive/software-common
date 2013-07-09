@@ -138,7 +138,7 @@ void CameraNode::reconfig(monoConfig &config, uint32_t level)
 {
 	force_streaming_ = config.force_streaming;
 	handlePath(config.config_path);
-
+	
 	// Trigger
 	if (trigger_mode_ != config.trigger){
 		stopCamera();
@@ -234,7 +234,38 @@ void CameraNode::reconfig(monoConfig &config, uint32_t level)
 		zoom_ = config.zoom;
 		loadIntrinsics();
 	}
+	
+	// Color Space
+	if(color_space_ != config.color_space){
+	    uEyeColorSpace colspc;
+	    switch(config.color_space){
+	    case mono_SRGB_D50:
+	        colspc = SRGB_D50;
+	        break;
+	    case mono_SRGB_D65:
+	        colspc = SRGB_D65;
+	        break;
+	    case mono_CIE_RGB_E:
+	        colspc = CIE_RGB_E;
+	        break;
+	    case mono_ECI_RGB_D50:
+	        colspc = ECI_RGB_D50;
+	        break;
+	    case mono_ADOBE_RGB_D65:
+	        colspc = ADOBE_RGB_D65;
+	        break;
+	    }
+        cam_.setColorSpace(colspc);
+	}
+	color_space_ = config.color_space;
+	
+	// Color Temperature
+	color_temp_ = (unsigned int)config.color_temp;
+	if (cam_.getColorTemperature() != color_temp_){
+	    cam_.setColorTemperature(&color_temp_);
+	}
 
+    // Rotate 180
 	msg_camera_info_.header.frame_id = config.frame_id;
 	rotate180_ = config.rotate180;
 	configured_ = true;

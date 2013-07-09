@@ -59,6 +59,13 @@ namespace ueye{
 	    AWB_AUTO = IS_AUTOPARAMETER_ENABLE,
 	    AWB_ONE_SHOT = IS_AUTOPARAMETER_ENABLE_RUNONCE,
     };
+	enum uEyeColorSpace{
+		SRGB_D50	    = RGB_COLOR_MODEL_SRGB_D50,
+		SRGB_D65	    = RGB_COLOR_MODEL_SRGB_D65,
+		CIE_RGB_E	    = RGB_COLOR_MODEL_CIE_RGB_E,
+		ECI_RGB_D50	    = RGB_COLOR_MODEL_ECI_RGB_D50,
+		ADOBE_RGB_D65	= RGB_COLOR_MODEL_ADOBE_RGB_D65,
+	};
 	enum uEyeColor{
 		RGB		= IS_CM_BGR8_PACKED,
 		YCbYCr	= IS_CM_CBYCRY_PACKED,
@@ -110,10 +117,14 @@ namespace ueye{
 		bool getGainBoost();
 		bool getAutoGain();
 		unsigned int getHardwareGain();
+		unsigned int getColorTemperature();
+		unsigned int getSupportedColorSpaces();
 		TriggerMode getTriggerMode();
 		TriggerMode getSupportedTriggers();
 
 		// Set Properties
+		bool setColorSpace(uEyeColorSpace colspc);
+		void setColorTemperature(unsigned int *color_temp);
 		void setColorMode(uEyeColor mode);
 		void setAWBMode(AWBMode mode);
 		void setAutoExposure(bool *Enable);
@@ -152,6 +163,7 @@ namespace ueye{
 		void restartVideoCapture();
 
 		uEyeColor ColorMode_;
+		unsigned int ColorTemperature_;
 		AWBMode AWBMode_;
 		bool AutoExposure_;
 		double ExposureTime_;

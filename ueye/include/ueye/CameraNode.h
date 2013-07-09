@@ -94,6 +94,8 @@ private:
 	std::string config_path_;
 	int trigger_mode_;
 	int AWB_mode_;
+	int color_space_;
+	unsigned int color_temp_;
 	bool auto_exposure_;
 	bool auto_gain_;
 	int zoom_;

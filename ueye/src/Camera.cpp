@@ -87,7 +87,7 @@ void Camera::InitPrivateVariables()
 	HardwareGamma_ = true;
 	GainBoost_ = false;
 	Zoom_ = 1;
-	PixelClock_ = 20;
+	PixelClock_ = 35;
 	AutoGain_ = false;
 	HardwareGain_ = 100;
 	FrameRate_ = 5.0;
@@ -97,6 +97,7 @@ void Camera::InitPrivateVariables()
 	memset(&camInfo_, 0x00, sizeof(camInfo_));
 	NumBuffers_ = 0;
 	StreamCallback_ = NULL;
+	ColorTemperature_ = 5000;
 }
 
 Camera::Camera()
@@ -240,6 +241,10 @@ int Camera::getPixelClock()
 {
 	return PixelClock_;
 }
+unsigned int Camera::getColorTemperature()
+{
+	return ColorTemperature_;
+}
 bool Camera::getGainBoost()
 {
 	return GainBoost_;
@@ -261,7 +266,25 @@ TriggerMode Camera::getSupportedTriggers()
 {
 	return (TriggerMode)is_SetExternalTrigger(hCam_, IS_GET_SUPPORTED_TRIGGER_MODE);
 }
-
+unsigned int Camera::getSupportedColorSpaces()
+{
+    unsigned int bitmask;
+    if(IS_SUCCESS == is_ColorTemperature(hCam_,COLOR_TEMPERATURE_CMD_GET_SUPPORTED_RGB_COLOR_MODELS,
+                        (void*)&bitmask, sizeof(bitmask)))
+        return bitmask;
+    else
+        return 0;
+}
+bool Camera::setColorSpace(uEyeColorSpace colspc)
+{
+	if(colspc & getSupportedTriggers()){
+		if(is_ColorTemperature(hCam_, COLOR_TEMPERATURE_CMD_SET_RGB_COLOR_MODEL,
+		        (void*)&colspc, sizeof(colspc)) == IS_SUCCESS){
+			return true;
+		}
+	}
+	return false;
+}
 void Camera::setColorMode(uEyeColor mode)
 {
 	CHECK_ERR(is_SetColorMode(hCam_, mode));
@@ -290,6 +313,14 @@ void  Camera::setExposure(double *time_ms)
 	CHECK_ERR(is_Exposure (hCam_, IS_EXPOSURE_CMD_SET_EXPOSURE, time_ms, sizeof(double)));
 	flashUpdateGlobalParams();
 	ExposureTime_ = *time_ms;
+}
+void  Camera::setColorTemperature(unsigned int *color_temp)
+{
+	AWBMode mode = AWB_DISABLE;
+	setAWBMode(mode);
+	CHECK_ERR(is_ColorTemperature(hCam_, COLOR_TEMPERATURE_CMD_SET_TEMPERATURE, color_temp, sizeof(int)));
+	flashUpdateGlobalParams();
+	ColorTemperature_ = *color_temp;
 }
 void Camera::setHardwareGamma(bool *Enable)
 {
