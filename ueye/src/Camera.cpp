@@ -327,7 +327,6 @@ void Camera::setAWBMode(AWBMode mode)
         CHECK_ERR(is_AutoParameter(hCam_, IS_AWB_CMD_SET_TYPE, (void*)&nType, sizeof(nType)));
     }
     CHECK_ERR(is_AutoParameter(hCam_, IS_AWB_CMD_SET_ENABLE, (void*)&mode, sizeof(mode)));
-    flashUpdateGlobalParams();
     AWBMode_ = mode;
 }
 void Camera::setAWBOffset(double* redOffset, double* blueOffset)
@@ -335,7 +334,10 @@ void Camera::setAWBOffset(double* redOffset, double* blueOffset)
     if(IS_SUCCESS == is_SetAutoParameter(hCam_, IS_SET_AUTO_WB_OFFSET, redOffset, blueOffset)){
         RedOffset_ = *redOffset;
         BlueOffset_ = *blueOffset;
-        flashUpdateGlobalParams();
+        AWBMode mode = AWB_DISABLE;
+	    setAWBMode(mode);
+	    mode = AWB_ONE_SHOT;
+	    setAWBMode(mode);
     }
 }
 void  Camera::setExposure(double *time_ms)
@@ -351,7 +353,6 @@ void  Camera::setColorTemperature(unsigned int *color_temp)
 	AWBMode mode = AWB_DISABLE;
 	setAWBMode(mode);
 	CHECK_ERR(is_ColorTemperature(hCam_, COLOR_TEMPERATURE_CMD_SET_TEMPERATURE, color_temp, sizeof(int)));
-	flashUpdateGlobalParams();
 	ColorTemperature_ = *color_temp;
 }
 void Camera::setHardwareGamma(bool *Enable)
