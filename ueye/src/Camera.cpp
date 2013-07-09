@@ -335,6 +335,7 @@ void Camera::setAWBOffset(double* redOffset, double* blueOffset)
     if(IS_SUCCESS == is_SetAutoParameter(hCam_, IS_SET_AUTO_WB_OFFSET, redOffset, blueOffset)){
         RedOffset_ = *redOffset;
         BlueOffset_ = *blueOffset;
+        flashUpdateGlobalParams();
     }
 }
 void  Camera::setExposure(double *time_ms)
