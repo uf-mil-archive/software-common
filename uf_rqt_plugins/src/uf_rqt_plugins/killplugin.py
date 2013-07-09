@@ -23,7 +23,7 @@ class KillPlugin(Plugin):
         self.setObjectName('KillPlugin')
 
         self._listener = KillListener()
-        self._broadcaster = KillBroadcaster(rospy.get_name(), rospy.Duration(1), 'Software kill using KillPlugin')
+        self._broadcaster = KillBroadcaster(rospy.get_name(), 'Software kill using KillPlugin')
         self._kill_active = False
 
         self._widget = QWidget()
@@ -46,10 +46,12 @@ class KillPlugin(Plugin):
 
     def _on_kill_clicked(self):
         self._kill_active = True
+        self._broadcaster.send(True)
         self._update_kill()
 
     def _on_unkill_clicked(self):
         self._kill_active = False
+        self._broadcaster.send(False)
         self._update_kill()
 
     def _on_run_clicked(self):
@@ -87,8 +89,6 @@ class KillPlugin(Plugin):
         self._widget.findChild(QTableWidget, 'killTable').setItem(row, col, item)
 
     def _update_kill(self):
-        self._broadcaster.send(self._kill_active)
-
         other_kill_count = len([kill for kill in self._listener.get_all_kills()
                                 if kill.id != rospy.get_name() and kill.active])
         self._widget.findChild(QPushButton, 'runButton').setVisible(other_kill_count == 0)

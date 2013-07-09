@@ -15,7 +15,7 @@ rospy.init_node('kill', anonymous=True)
 
 cond = rospy.get_param('~cond')
 
-kill_br = KillBroadcaster(id=rospy.get_name(), lifetime=rospy.Duration(1), description=rospy.get_name())
+kill_br = KillBroadcaster(id=rospy.get_name(), description=rospy.get_name())
 kill_listener = KillListener()
 
 
@@ -23,13 +23,14 @@ triggered = False
 
 def got_msg(msg):
     global triggered
-    if eval(cond, globals(), dict((k, getattr(msg, k)) for k in dir(msg))):
+    if not triggered and eval(cond, globals(), dict((k, getattr(msg, k)) for k in dir(msg))):
         triggered = True
+        kill_br.send(True)
 rospy.Subscriber('topic', rostopic.get_topic_class(rospy.resolve_name('topic'), blocking=True)[0], got_msg)
 
 while not rospy.is_shutdown():
-    kill_br.send(triggered)
-    if set(kill_listener.get_kills()) - set([rospy.get_name()]):
+    if triggered and set(kill_listener.get_kills()) - set([rospy.get_name()]):
         # if there is another kill source
         triggered = False
+        kill_br.send(False)
     rospy.sleep(rospy.Duration(0.1))
