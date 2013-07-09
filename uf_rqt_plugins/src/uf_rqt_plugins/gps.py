@@ -33,12 +33,16 @@ with open(path,'r+') as task_loc:
             button_ecef = [float(data[1]),float(data[2]),float(data[3])]
         elif data[0] == 'spock':            
             spock_ecef = [float(data[1]),float(data[2]),float(data[3])]
+        elif data[0] == 'dock':            
+            dock_ecef = [float(data[1]),float(data[2]),float(data[3])]
+      
 
 
 
 tasks = [['rings',[rings_ecef[0],rings_ecef[1],rings_ecef[2]]],
          ['buoys',[buoys_ecef[0],buoys_ecef[1],buoys_ecef[2]]],
          ['button',[button_ecef[0],button_ecef[1],button_ecef[2]]],
+         ['dock',[dock_ecef[0],dock_ecef[1],dock_ecef[2]]],
          ['spock',[spock_ecef[0],spock_ecef[1],spock_ecef[2]]]]
 
 def pos_callback(msg):
@@ -57,7 +61,7 @@ class GPSPlugin(Plugin):
 
         self.waypoint_ecef = rospy.Publisher('/gps_ecef_waypoint',PointStamped)
         self.tasks = rospy.Publisher('/task_waypoints',PointStamped)
-        rospy.Subscriber('/gps2_parser/pos',PointStamped,pos_callback)
+        rospy.Subscriber('/gps_conv/pos',PointStamped,pos_callback)
 
         self._widget.findChild(QPushButton, 'record_entered_waypoint').clicked.connect(self._on_record_entered_clicked)
         self._widget.findChild(QPushButton, 'record_current_waypoint').clicked.connect(self._on_record_current_clicked)
@@ -105,7 +109,7 @@ class GPSPlugin(Plugin):
         self._widget.findChild(QLineEdit, 'waypoint_name').clear()
         self._widget.findChild(QListWidget, 'waypoint_list').addItem(str(self.name)+','+str(position[0])+','+str(position[1])+','+str(position[2]))
 
-        if str(self.name) in ['rings','buoys','button','spock']:
+        if str(self.name) in ['rings','buoys','button','spock','dock']:
                 for i in tasks:
                         if (i[0] == str(self.name)):
                                 tasks.remove(i)
@@ -133,7 +137,7 @@ class GPSPlugin(Plugin):
         ecef = ecef_from_latlongheight(float(self.lat), float(self.long), float(self.alt))
         
         global tasks
-        if str(self.name) in ['rings','buoys','button','spock']:
+        if str(self.name) in ['rings','buoys','button','spock','dock']:
                 for i in tasks:
                         if (i[0] == str(self.name)):
                                 tasks.remove(i)

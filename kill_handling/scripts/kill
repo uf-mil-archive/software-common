@@ -8,11 +8,13 @@ import rospy
 
 from kill_handling.broadcaster import KillBroadcaster
 
-
 rospy.init_node('kill', anonymous=True)
 
-kill_br = KillBroadcaster(id=rospy.get_name(), lifetime=rospy.Duration(1), description='Command-line kill')
-
-while not rospy.is_shutdown():
-    kill_br.send(True)
-    rospy.sleep(rospy.Duration(0.1))
+id = sys.argv[1] if len(sys.argv) > 1 else rospy.get_name()
+kill_br = KillBroadcaster(id=id, description='Command-line kill')
+kill_br.send(True)
+rospy.spin()
+try:
+    kill_br.clear()
+except rospy.service.ServiceException:
+    pass # This happens after rospy shutdown, but the server call goes through anyway

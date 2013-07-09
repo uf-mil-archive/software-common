@@ -19,7 +19,7 @@ def unit_vector(x):
     return x/numpy.linalg.norm(x)
 
 def select_image_text_or_most_central(image_text):
-    def _(results, traj_start):
+    def _(results, traj_start, (tf_p, tf_q)):
         if all('image_text' in result for result in results):
             matches = [result for result in results if result['image_text'] == image_text]
             assert len(matches) == 1 # guaranteed by BinsFinder
@@ -59,7 +59,7 @@ def main():
             
             smach.Sequence.add(str(i)+'_WAIT_SINGLE3', legacy_vision_states.WaitForObjectsState(shared, 'find2_down_camera', 'bins/single'))
             smach.Sequence.add(str(i)+'_CENTER_SINGLE3', legacy_vision_states.CenterObjectState(shared, 'find2_down_camera', selector=select_image_text_or_most_central(bin_string)))
-            smach.Sequence.add(str(i)+'_DEPTH3', WaypointState(shared, lambda cur: cur.depth(3)))
+            smach.Sequence.add(str(i)+'_DEPTH3', WaypointState(shared, lambda cur: cur.depth(2.25)))
             
             smach.Sequence.add(str(i)+'_DROP', ServiceState('/actuator_driver/pulse_valve', PulseValve, 0, rospy.Duration(0.5)))
     
