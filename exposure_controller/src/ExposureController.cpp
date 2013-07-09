@@ -61,7 +61,7 @@ public:
   }
   
  
-  float weighteds(cv::Mat &img)
+  float weightedL(cv::Mat &img)
   {
     int rows = img.rows;
     int cols = img.cols;
@@ -160,18 +160,33 @@ public:
     exposure_controller::metered_exposure expmsg;
     
     expmsg.header = cvimage->header;
-    expmsg.exp2l = weighteds(imgLab);
+    expmsg.exp2l = weightedL(imgLab);
     expmsg.exp_tms = exp_tm_ms_;    
     expmsg.lab_l = averageLab(imgLab);
     
-    exp_tm_ms_ = exp_tm_ms_ * 1.1;
-    if(exp_tm_ms_ > 40) exp_tm_ms_ = 1;
-    commandVar_.str("");
-    commandVar_ << "rosrun dynamic_reconfigure dynparam set /ueye_manager exposure_time " << exp_tm_ms_;
-    sysret_ += system(commandVar_.str().c_str());
+    if(expmsg.exp2l < 160)
+    {
+        exp_tm_ms_ = exp_tm_ms_ * 1.1;
+        if(exp_tm_ms_ > 40) exp_tm_ms_ = 40;
+        commandVar_.str("");
+        commandVar_ << "rosrun dynamic_reconfigure dynparam set /ueye_manager exposure_time " << exp_tm_ms_;
+        sysret_ += system(commandVar_.str().c_str());
+    }
+    else if(expmsg.exp2l > 175)
+    {
+        exp_tm_ms_ = exp_tm_ms_ * 0.9;
+        if(exp_tm_ms_ < 1) exp_tm_ms_ = 1;
+        commandVar_.str("");
+        commandVar_ << "rosrun dynamic_reconfigure dynparam set /ueye_manager exposure_time " << exp_tm_ms_;
+        sysret_ += system(commandVar_.str().c_str());
+    }
+    if(sysret_==0)
+        ROS_INFO("Exposure time successfully changed to %f", exp_tm_ms_);
+    else
+        ROS_INFO("ERROR! Could not change exposure time.");
     
     pub_.publish(expmsg);  
-    logdata(expmsg);
+    //logdata(expmsg);
   }
 };
 
