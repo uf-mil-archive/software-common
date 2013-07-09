@@ -112,6 +112,8 @@ namespace ueye{
 		int getZoom();
 		bool getAutoExposure();
 		double getExposure();
+		double getRedOffset();
+		double getBlueOffset();
 		bool getHardwareGamma();
 		int getPixelClock();
 		bool getGainBoost();
@@ -138,7 +140,7 @@ namespace ueye{
 		void setHardwareGain(int *gain);
 		bool setTriggerMode(TriggerMode mode);
 		void setFlashWithGlobalParams(FlashMode mode);
-
+        void setAWBOffset(double *redOffset, double *blueOffset);
 		bool forceTrigger();
 
 		typedef boost::function<void (IplImage *)> camCaptureCB;
@@ -167,6 +169,8 @@ namespace ueye{
 		AWBMode AWBMode_;
 		bool AutoExposure_;
 		double ExposureTime_;
+		double RedOffset_;
+		double BlueOffset_;
 		bool HardwareGamma_;
 		bool GainBoost_;
 		int Zoom_;

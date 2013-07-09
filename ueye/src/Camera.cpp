@@ -233,6 +233,14 @@ double Camera::getExposure()
 	CHECK_ERR(is_Exposure (hCam_, IS_EXPOSURE_CMD_GET_EXPOSURE, &time_ms, sizeof(double)));
 	return time_ms;
 }
+double Camera::getRedOffset()
+{
+	return RedOffset_;
+}
+double Camera::getBlueOffset()
+{
+	return BlueOffset_;
+}
 bool Camera::getHardwareGamma()
 {
 	return HardwareGamma_;
@@ -303,8 +311,31 @@ void Camera::setAutoExposure(bool *Enable)
 }
 void Camera::setAWBMode(AWBMode mode)
 {
+    unsigned int nType;
+    
+    double maxRange;
+    double minRange;
+    CHECK_ERR(is_SetAutoParameter(hCam_, IS_GET_AUTO_WB_GAIN_RANGE, &maxRange, &minRange));
+    CHECK_ERR(is_SetAutoParameter(hCam_, IS_SET_AUTO_WB_GAIN_RANGE, &maxRange, &minRange));
+    
+    if(mode != AWB_DISABLE){
+        nType = IS_AWB_GREYWORLD;
+        CHECK_ERR(is_AutoParameter(hCam_, IS_AWB_CMD_SET_TYPE, (void*)&nType, sizeof(nType)));
+    }
+    else{
+        nType = IS_AWB_COLOR_TEMPERATURE;
+        CHECK_ERR(is_AutoParameter(hCam_, IS_AWB_CMD_SET_TYPE, (void*)&nType, sizeof(nType)));
+    }
     CHECK_ERR(is_AutoParameter(hCam_, IS_AWB_CMD_SET_ENABLE, (void*)&mode, sizeof(mode)));
+    flashUpdateGlobalParams();
     AWBMode_ = mode;
+}
+void Camera::setAWBOffset(double* redOffset, double* blueOffset)
+{
+    if(IS_SUCCESS == is_SetAutoParameter(hCam_, IS_SET_AUTO_WB_OFFSET, redOffset, blueOffset)){
+        RedOffset_ = *redOffset;
+        BlueOffset_ = *blueOffset;
+    }
 }
 void  Camera::setExposure(double *time_ms)
 {

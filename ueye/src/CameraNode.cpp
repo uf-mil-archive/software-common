@@ -228,7 +228,17 @@ void CameraNode::reconfig(monoConfig &config, uint32_t level)
 	if (!config.auto_exposure){
 		cam_.setExposure(&config.exposure_time);
 	}
-
+	
+	// Red Offset
+	if (cam_.getRedOffset() != config.red_offset){
+		cam_.setAWBOffset(&config.red_offset, &config.blue_offset);
+	}
+	
+	// Blue Offset
+    if (cam_.getBlueOffset() != config.blue_offset){
+		cam_.setAWBOffset(&config.red_offset, &config.blue_offset);
+	}
+	
 	// Zoom
 	if(zoom_ != config.zoom){
 		zoom_ = config.zoom;
