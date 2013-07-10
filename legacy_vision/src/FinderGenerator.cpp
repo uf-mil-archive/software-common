@@ -14,6 +14,7 @@
 #include "ShooterFinder.h"
 #include "BinsFinder.h"
 #include "WreathFinder.h"
+#include "ButtonFinder.h"
 
 using namespace std;
 using namespace boost;
@@ -35,6 +36,7 @@ vector<pair<string, shared_ptr<IFinder> > > FinderGenerator::buildFinders(const 
 			objectPath[0] == "shooter" ? make_shared<ShooterFinder>(rest, fconfig) :
 			objectPath[0] == "bins" ? make_shared<BinsFinder>(rest, fconfig) :
 			objectPath[0] == "wreath" ? make_shared<WreathFinder>(rest, fconfig) :
+			objectPath[0] == "button" ? make_shared<ButtonFinder>(rest, fconfig) :
 			shared_ptr<IFinder>();
 		if(!finder)
 			throw runtime_error("unknown objectName: " + objectPath[0]);

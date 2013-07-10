@@ -9,7 +9,11 @@
 using namespace cv;
 using namespace std;
 
-Blob::Blob(const Mat &img, float minContour, float maxContour, float maxPerimeter) {
+bool radius_comparator(const Blob::BlobData &blob1, const Blob::BlobData &blob2) {
+    return blob1.radius < blob2.radius;
+}
+
+Blob::Blob(const Mat &img, float minContour, float maxContour, float maxPerimeter, bool sortByRadius) {
 	Mat dbg_temp = img.clone();
 	std::vector<std::vector<cv::Point> > contours;
 	std::vector<cv::Vec4i> hierarchy;
@@ -66,6 +70,9 @@ Blob::Blob(const Mat &img, float minContour, float maxContour, float maxPerimete
 
 	// sort largest area to smallest
 	sort(data.begin(), data.end());
+	if(sortByRadius) {
+	    sort(data.begin(), data.end(), radius_comparator);
+    }
 	reverse(data.begin(),data.end());
 }
 
@@ -74,7 +81,7 @@ void Blob::drawResult(Mat &img, const Scalar &color) {
 		circle(img, item.centroid, (int)item.radius,color, 2, 8, 0);
 		line(img, item.centroid, item.centroid + Point(item.radius*cos(item.angle), item.radius*-sin(item.angle)), CV_RGB(255,0,0),2,8);
 
-		std::ostringstream os; os << "Area: " << (int)item.area << " " << (int)(item.angle*180/boost::math::constants::pi<double>()) << " " << item.aspect_ratio;
+		std::ostringstream os; os << "C: " << item.circularity;
 		putText(img, os.str().c_str(), Point(item.centroid.x-30,item.centroid.y-10), FONT_HERSHEY_DUPLEX, 1, CV_RGB(0,0,0), 1.5);
 	}
 
