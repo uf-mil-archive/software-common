@@ -63,8 +63,8 @@ void Component::draw(RenderBuffer &renderbuffer, int region, Vector3d pos, Quate
                 double x1 = (y - c0[1])*(c2[0] - c0[0])/(c2[1] - c0[1]) + c0[0];
                 double x2 = (y - ca[1])*(cb[0] - ca[0])/(cb[1] - ca[1]) + ca[0];
                 if(x2 < x1) swap(x2, x1); // sort x's
-                int X1 = max(0, min((int)renderbuffer.img->cam_info.width-1, (int)ceil(x1 - 0.5)));
-                int X2 = max(0, min((int)renderbuffer.img->cam_info.width-1, (int)ceil(x2 - 0.5)));
+                int X1 = max(renderbuffer.img->left[Y], min(renderbuffer.img->right[Y]-1, (int)ceil(x1 - 0.5)));
+                int X2 = max(renderbuffer.img->left[Y], min(renderbuffer.img->right[Y]-1, (int)ceil(x2 - 0.5)));
                 
                 double z_0 = 0; // XXX
                 double z_slope = 0; // XXX

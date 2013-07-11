@@ -70,6 +70,8 @@ struct TaggedImage {
     Eigen::Affine3d transform;
     Eigen::Affine3d transform_inverse;
     Eigen::Matrix<double, 3, 4> proj;
+    std::vector<int> left;
+    std::vector<int> right;
     std::vector<Eigen::Vector3d> sumimage;
     std::vector<Eigen::Vector3d> sumimage2;
     Result total_result;
@@ -84,6 +86,9 @@ struct TaggedImage {
         this->transform_inverse = transform.inverse();
         
         proj = Eigen::Map<const Eigen::Matrix<double, 3, 4, Eigen::RowMajor> >(cam_info.P.data());
+        
+        left = std::vector<int>(image.height, 0);
+        right = std::vector<int>(image.height, image.width);
         
         int step;
         if(image.encoding == "rgba8" || image.encoding == "bgra8") step = 4;

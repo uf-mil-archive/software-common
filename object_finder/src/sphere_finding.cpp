@@ -106,8 +106,8 @@ bool _accumulate_sphere_scanline(RenderBuffer &renderbuffer, RenderBuffer::Regio
     double minx = min(point1_screen(0), point2_screen(0));
     double maxx = max(point1_screen(0), point2_screen(0));
     
-    int xstart = max(0, min((int)image.cam_info.width, (int)ceil(minx)));
-    int xend   = max(0, min((int)image.cam_info.width, (int)ceil(maxx))); // not inclusive
+    int xstart = max(renderbuffer.img->left[yy], min(renderbuffer.img->right[yy], (int)ceil(minx)));
+    int xend   = max(renderbuffer.img->left[yy], min(renderbuffer.img->right[yy], (int)ceil(maxx))); // not inclusive
     double z_0 = 0; // XXX
     double z_slope = 0; // XXX
     renderbuffer.scanlines[yy].add_segment(Segment(xstart, xend, z_0, z_slope, region));

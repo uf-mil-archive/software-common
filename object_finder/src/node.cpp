@@ -545,6 +545,13 @@ struct GoalExecutor {
         ROS_INFO("good");
         
         img.reset(*image, *cam_info, eigen_from_tf(transform));
+        int corner_cut = 0; camera_nh.getParam("corner_cut", corner_cut);
+        for(unsigned int i = 0; i < img.cam_info.height; i++) {
+            int dist_from_edge = min(i, img.cam_info.height-1-i);
+            int amt = max(0, corner_cut - dist_from_edge);
+            img.left[i] = amt;
+            img.right[i] = img.cam_info.width - amt;
+        }
         
         if(particle_filters.size() == 0) {
             ROS_INFO("got first frame; initializing");
@@ -603,7 +610,7 @@ struct GoalExecutor {
             particles_pub.publish(msg);
         }
         
-        { // send pose message for result visualization
+        if(max_ps.size()) { // send pose message for result visualization
             PoseStamped msg;
             msg.header.frame_id = goal.header.frame_id;
             msg.header.stamp = image->header.stamp;
@@ -675,7 +682,7 @@ struct GoalExecutor {
             msg.step = image->width*3;
             msg.data.resize(image->width*image->height*3);
             for(unsigned int y = 0; y < image->height; y++) {
-                for(unsigned int x = 0; x < image->width; x++) {
+                for(int x = img.left[y]; x < img.right[y]; x++) {
                     Vector3d orig_color = img.get_pixel(y, x);
                     msg.data[msg.step*y + 3*x + 0] =
                         255.*dbg_image[image->width*y + x]/(rb.areas.size() + 10);
