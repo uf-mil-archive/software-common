@@ -1,0 +1,8 @@
+uint8 INSERT=0
+uint8 REMOVE=1
+
+string plan
+uint8 operation
+int32 pos
+PlanEntry entry
+---

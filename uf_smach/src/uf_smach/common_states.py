@@ -1,5 +1,6 @@
 import threading
 import numpy
+import random
 
 import rospy
 import smach
@@ -43,6 +44,17 @@ class CounterState(smach.State):
         else:
             return 'exceeded'
 
+class UnreliableState(smach.State):
+    def __init__(self, success_rate):
+        self._success_rate = success_rate
+        smach.State.__init__(self, outcomes=['succeeded', 'failed'])
+
+    def execute(self, userdata):
+        if random.random() < self._success_rate:
+            return 'succeeded'
+        else:
+            return 'failed'
+        
 class SetUserDataState(smach.State):
     def __init__(self, **vals):
         smach.State.__init__(self, outcomes=['succeeded'], output_keys=vals.keys())

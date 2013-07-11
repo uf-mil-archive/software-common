@@ -1,66 +1,139 @@
 import smach
 import smach_ros
+import rospy
+import actionlib
 from uf_smach import common_states
+from uf_smach.msg import Plan, PlansStamped, RunMissionsAction, RunMissionsResult
+from uf_smach.srv import ModifyPlan, ModifyPlanRequest
+import uf_smach
+from std_msgs.msg import Header
+from collections import namedtuple
 
 _mission_factories = dict()
 
 def register_factory(name, factory):
     _mission_factories[name] = factory
 
-def make_mission(shared, name, config):
-    return _mission_factories[name](shared, config)
+def get_missions():
+    return _mission_factories.keys()
 
-_mission_configs = dict()
+PlanEntry = namedtuple('PlanEntry', 'mission timeout contigency_plan path')
 
-def register_config(name, config):
-    _mission_configs[name] = config
+class PlanSet(object):
+    def __init__(self, names):
+        self._plans = dict((name, []) for name in names)
 
-def make_mission_state_machine(shared, name):
-    config = _mission_configs[name]
-    sm = smach.StateMachine(outcomes=['succeeded', 'contigency_plan', 'preempted'],
-                            output_keys=['contigency_plan'])
-    with sm:
-        sm_con = smach.Concurrence(outcomes=['succeeded', 'failed'],
-                                   default_outcome='failed',
-                                   outcome_map={'succeeded': { 'MISSION': 'succeeded'}},
-                                   child_termination_cb=lambda so: True)
-        with sm_con:
-            smach.Concurrence.add('MISSION', make_mission(shared, config['factory'], config))
-            smach.Concurrence.add('TIMEOUT', common_states.SleepState(config['timeout']))
+    def get_plan(self, plan):
+        return self._plans[plan]
 
-        smach.StateMachine.add('MISSION_AND_TIMEOUT', 
-                               sm_con,
-                               transitions={'succeeded': 'succeeded',
-                                                'failed': 'CONTIGENCY_PLAN'})
-        smach.StateMachine.add('CONTIGENCY_PLAN',
-                               common_states.SetUserDataState(contigency_plan=config.get('contigency_plan')),
-                               transitions={'succeeded': 'contigency_plan'})
-    return sm
+    def get_plans(self):
+        return self._plans.keys()
+    
+    def make_sm(self, shared, allow_nonexistent_contigencies=False):
+        sm = smach.StateMachine(outcomes=['succeeded', 'failed', 'preempted'])
+        with sm:
+            for plan in _iterate_main_first(self._plans):
+                plan_sm, contigency_outcomes = self._make_plan_sm(shared, plan)
+                transitions = self._make_plan_transitions(plan, contigency_outcomes,
+                                                          allow_nonexistent_contigencies)
+                smach.StateMachine.add('PLAN_' + plan.upper(), plan_sm, transitions=transitions)
+        return sm
 
-def make_plan_state_machine(shared, names):
-    sm = smach.Sequence(['succeeded', 'contigency_plan', 'preempted'], 'succeeded')
-    with sm:
-        for name in names:
-            smach.Sequence.add(name.upper(),
-                               make_mission_state_machine(shared, name))
-    return sm
+    def _make_plan_transitions(self, plan, contigency_outcomes, allow_nonexistent_contigencies):
+        transitions = {'succeeded': 'succeeded', 'preempted': 'preempted'}
+        for outcome in contigency_outcomes:
+            if outcome in self._plans:
+                transitions[outcome] = 'PLAN_' + outcome.upper()
+            elif outcome == 'no_contigency' or allow_nonexistent_contigencies:
+                transitions[outcome] = 'failed'
+            else:
+                raise RuntimeError('Plan %s requires an unknown contigency plan %s' %
+                                   (plan, outcome))
+        return transitions
 
-def run_plans(plans):
-    sis_list = [smach_ros.IntrospectionServer(name, sm, '/'+name.upper())
-                for name, sm in plans.iteritems()]
-    apply(smach_ros.IntrospectionServer.start, sis_list)
-
-    current_plan = 'main'
-    while current_plan is not None:
-        sm = plans[current_plan]
-        sm.userdata.contigency_plan = None
-        outcome = sm.execute()
-        if outcome == 'succeeded':
-            break
-        elif outcome == 'contigency_plan':
-            current_plan = sm.userdata.contigency_plan
+    def _make_plan_sm(self, shared, plan):
+        entries = self._plans[plan]
+        if len(entries) > 0:
+            entry_sms, contigency_outcomes = zip(*(
+                    self._make_mission_sm(shared, entry) for entry in entries))
         else:
-            assert False, 'Unknown plan outcome'
-            
-    apply(smach_ros.IntrospectionServer.stop, sis_list)
-    return outcome == 'succeeded'
+            entry_sms = []
+            contigency_outcomes = []    
+        contigency_outcomes = set(contigency_outcomes)
+        sm = smach.Sequence(['succeeded'] + list(contigency_outcomes) + ['preempted'], 'succeeded')
+        with sm:
+            for entry, entry_sm in zip(entries, entry_sms):
+                smach.Sequence.add(entry.mission.upper(), entry_sm)
+        return sm, contigency_outcomes
+
+    def _make_mission_sm(self, shared, entry):
+        mission_factory = _mission_factories[entry.mission]
+        contigency_outcome = entry.contigency_plan
+        if contigency_outcome is None:
+            contigency_outcome = 'no_contigency'
+        sm = smach.Concurrence(outcomes=['succeeded', 'preempted', contigency_outcome],
+                               default_outcome=contigency_outcome,
+                               outcome_map={'succeeded': { 'MISSION': 'succeeded' },
+                                            'preempted': { 'MISSION': 'preempted',
+                                                           'TIMEOUT': 'preempted'}},
+                               child_termination_cb=lambda so: True)
+        with sm:
+            smach.Concurrence.add('MISSION', mission_factory(shared))
+            smach.Concurrence.add('TIMEOUT', common_states.SleepState(entry.timeout))
+        return sm, contigency_outcome
+
+def _iterate_main_first(items):
+    if 'main' in items:
+        yield 'main'
+    for item in items:
+        if item != 'main':
+            yield item
+    
+class MissionServer(object):
+    def __init__(self, plan_names):
+        self._plans = PlanSet(plan_names)
+        self._pub = rospy.Publisher('mission/plans', PlansStamped)
+        self._srv = rospy.Service('mission/modify_plan', ModifyPlan, self._modify_plan)
+        self._run_srv = actionlib.SimpleActionServer('mission/run', RunMissionsAction,
+                                                     self.execute, False)
+        self._run_srv.start()
+        self._tim = rospy.Timer(rospy.Duration(.1), lambda _: self._publish_plans())
+
+    def get_plan(self, plan):
+        return self._plans.get_plan(plan)
+
+    def execute(self, goal):
+        shared = uf_smach.util.StateSharedHandles()
+        sm = self._plans.make_sm(shared)
+        outcome = sm.execute()
+        self._run_srv.set_succeeded(RunMissionsResult(outcome))
+    
+    def _publish_plans(self):
+        self._pub.publish(PlansStamped(
+                header=Header(stamp=rospy.Time.now()),
+                plans=[Plan(name=name,
+                            entries=[uf_smach.msg.PlanEntry(entry.mission, rospy.Duration(entry.timeout),
+                                                            entry.contigency_plan, entry.path)
+                                     for entry in self._plans.get_plan(name)])
+                       for name in self._plans.get_plans()],
+                available_missions=get_missions()))
+
+    def _modify_plan(self, req):
+        if req.plan not in self._plans.get_plans():
+            return None
+        plan = self._plans.get_plan(req.plan)
+        entry = PlanEntry(req.entry.mission,
+                          req.entry.timeout.to_sec(),
+                          req.entry.contigency_plan if len(req.entry.contigency_plan) > 0 else None,
+                          req.entry.path)
+        if req.operation == ModifyPlanRequest.INSERT:
+            if req.pos > len(plan):
+                return None
+            plan.insert(req.pos, entry)
+        elif req.operation == ModifyPlanRequest.REMOVE:
+            if req.pos >= len(plan):
+                return None
+            del plan[req.pos]
+        else:
+            return None
+        return ()

@@ -18,7 +18,8 @@
   <depend package="skytraq_driver"/>
   <depend package="rawgps_common"/>
   <!--<depend package="power_router"/>-->
-
+  <depend package="uf_smach"/>
+  
   <export>
     <rqt_gui plugin="${prefix}/plugin.xml"/>
   </export>
