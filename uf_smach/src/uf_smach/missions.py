@@ -54,8 +54,8 @@ class PlanSet(object):
     def _make_plan_sm(self, shared, plan):
         entries = self._plans[plan]
         if len(entries) > 0:
-            entry_sms, contigency_outcomes = zip(*(
-                    self._make_mission_sm(shared, entry) for entry in entries))
+            entry_sms, contigency_outcomes = zip(*[
+                    self._make_mission_sm(shared, entry) for entry in entries])
         else:
             entry_sms = []
             contigency_outcomes = []    
@@ -105,8 +105,12 @@ class MissionServer(object):
     def execute(self, goal):
         shared = uf_smach.util.StateSharedHandles()
         sm = self._plans.make_sm(shared)
+        sis = smach_ros.IntrospectionServer('mission_planner', sm, '/SM_ROOT')
+        sis.start()
         outcome = sm.execute()
+        sis.stop()
         self._run_srv.set_succeeded(RunMissionsResult(outcome))
+        
     
     def _publish_plans(self):
         self._pub.publish(PlansStamped(

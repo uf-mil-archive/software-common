@@ -49,7 +49,7 @@ class HydrophoneTravelState(smach.State):
             new = current.yaw_left(ping.heading)
 
             if abs(ping.heading) < 15/180*math.pi:
-                if ping.declination < 35/180*math.pi:
+                if ping.declination < 30/180*math.pi:
                     speed = .8
                 else:
                     speed = .3
