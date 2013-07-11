@@ -30,7 +30,7 @@ IFinder::FinderResult HedgeFinder::find(const subjugator::ImageSource::Image &im
 	// send average centroid of blobs, but with tiny scale so we servo until we can recognize the structure
 	// if it only sees a reflection or some object other than the hedge, this could cause problems
 	// another strategy succeeding will override this result
-	Point sum(0, 0);
+	Point2f sum(0, 0);
 	float denom = 0;
 	BOOST_FOREACH(const Blob::BlobData &data, blob.data) {
 		sum += data.centroid*data.area;

@@ -22,7 +22,7 @@ IFinder::FinderResult WreathFinder::find(const subjugator::ImageSource::Image &i
 	erode(dbg, dbg, cv::Mat::ones(3,3,CV_8UC1));
 	dilate(dbg, dbg, cv::Mat::ones(7,7,CV_8UC1));
 
-	Blob blob(dbg, 3000, 100000, 100000);
+	Blob blob(dbg, 0, 1000000, 1000000);
 
 	Mat res = img.image.clone();
 	blob.drawResult(res, CV_RGB(255, 0, 0));
@@ -32,11 +32,8 @@ IFinder::FinderResult WreathFinder::find(const subjugator::ImageSource::Image &i
 			property_tree::ptree fResult;
 			fResult.put_child("center", Point_to_ptree(data.centroid, img));
 			fResult.put("scale", data.radius);
-			double angle = data.angle-boost::math::constants::pi<double>()/2;
-			// wrap it to within [+pi, -pi]
-			while(angle > boost::math::constants::pi<double>()) angle -= 2*boost::math::constants::pi<double>();
-			while(angle < -boost::math::constants::pi<double>()) angle += 2*boost::math::constants::pi<double>();
-			fResult.put("angle", -angle);
+			fResult.put_child("direction", Direction_to_ptree(data.centroid, data.direction, img));
+                        fResult.put("direction_symmetry", 4);
 			resultVector.push_back(fResult);
 //			}
 		break; // we only care about the largest blob

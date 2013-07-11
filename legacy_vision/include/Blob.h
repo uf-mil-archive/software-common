@@ -12,9 +12,9 @@ class Blob
 		struct BlobData {
 			float area;
 			float perimeter;
-			cv::Point centroid;
+			cv::Point2f centroid;
 			float radius;
-			float angle; // angle of longest axis, in radians. 0 = horizontal. more counterclockwise is more positive
+			cv::Point2f direction;
 			float aspect_ratio;  // ratio of length along angle to length perpendicular to angle. guaranteed to be >= 1
 			bool is_vertical; // long axis is within 45deg of vertical
 			float circularity; // [0, 1]

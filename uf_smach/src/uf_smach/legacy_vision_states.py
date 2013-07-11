@@ -124,6 +124,34 @@ class CenterObjectState(BaseManeuverObjectState):
             vel_world = .2 * vel_world/numpy.linalg.norm(vel_world)
         return current.as_MoveToGoal(linear=current._rot.T.dot(vel_world))
 
+class CenterApproachObjectState(BaseManeuverObjectState):
+    def __init__(self, *args, **kwargs):
+        self._desired_scale = kwargs.pop('desired_scale')
+        BaseManeuverObjectState.__init__(self, *args, **kwargs)
+
+    def _get_goal(self, result, current, (tf_p, tf_q)):
+        approach_vel = (self._desired_scale - float(result['scale']))/200
+        approach_vel = max(min(approach_vel, .2), -.2)
+        print float(result['scale']), approach_vel
+        
+        vec = numpy.array(map(float, result['center'])); vec /= numpy.linalg.norm(vec)
+        vec_world = transformations.quaternion_matrix(tf_q)[:3, :3].dot(vec)
+        camera_axis = transformations.quaternion_matrix(tf_q)[:3, :3].dot([0, 0, 1])
+        
+        if vec_world.dot(camera_axis) > math.cos(math.radians(1)) and abs(approach_vel) < .01:
+            # if it's within a 2 degree cone of camera axis, terminate
+            return None
+        
+        # get rid of component going along camera axis
+        vec_world2 = vec_world - camera_axis*camera_axis.dot(vec_world)
+        
+        vel_world = 2*vec_world2
+        if numpy.linalg.norm(vel_world) > .2:
+            vel_world = .2 * vel_world/numpy.linalg.norm(vel_world)
+        else:
+            vel_world += approach_vel*camera_axis
+        return current.as_MoveToGoal(linear=current._rot.T.dot(vel_world))
+
 class AlignObjectState(BaseManeuverObjectState):
     def __init__(self, *args, **kwargs):
         self._body_vec_align = kwargs.pop('body_vec_align', [1, 0, 0])

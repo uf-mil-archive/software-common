@@ -9,6 +9,8 @@
 using namespace cv;
 using namespace std;
 
+using boost::math::constants::pi;
+
 Blob::Blob(const Mat &img, float minContour, float maxContour, float maxPerimeter) {
 	Mat dbg_temp = img.clone();
 	std::vector<std::vector<cv::Point> > contours;
@@ -32,6 +34,9 @@ Blob::Blob(const Mat &img, float minContour, float maxContour, float maxPerimete
 		if(center_holder.x == 0 || center_holder.y == 0)
 			continue; // ???
 
+		RotatedRect rr = minAreaRect(Mat(contour));
+                double rr_angle_rad = rr.angle / 180 * pi<double>();
+                
 		//circle(ioimages->res,center_holder,2,CV_RGB(0,255,255),-1,8,0);
 		BlobData bdata;
 		bdata.perimeter = (float)perimeter_holder;
@@ -39,27 +44,12 @@ Blob::Blob(const Mat &img, float minContour, float maxContour, float maxPerimete
 		bdata.centroid.x = (int)center_holder.x;
 		bdata.centroid.y = (int)center_holder.y;
 		bdata.radius = radius_holder;
-		bdata.circularity = convex_area_holder/(boost::math::constants::pi<double>()*pow(radius_holder, 2));
+                bdata.direction = cv::Point2f(cos(rr_angle_rad), sin(rr_angle_rad));
+		bdata.circularity = convex_area_holder/(pi<double>()*pow(radius_holder, 2));
 		bdata.contour = contour;
 
-		RotatedRect rr = minAreaRect(Mat(contour));
-		rr.angle -= 90; // so 0 degress = pointing right
-		if(rr.size.width < rr.size.height) { // force width > height
-			rr.angle += 90;
-			std::swap(rr.size.width, rr.size.height);
-		}
-		double pi = boost::math::constants::pi<double>();
-		double angle_rad = rr.angle * pi / 180;
-		if(
-			pointPolygonTest(Mat(contour), Point2f(rr.center) + Point2f(cos(angle_rad+pi), -sin(angle_rad+pi))*(rr.size.width/2), true) >
-			pointPolygonTest(Mat(contour), Point2f(rr.center) + Point2f(cos(angle_rad   ), -sin(angle_rad   ))*(rr.size.width/2), true)
-		)
-			rr.angle += 180;
-		angle_rad = rr.angle * pi / 180;
-		//circle(ioimages->res, Point2f(rr.center) + Point2f(cos(angle_rad), -sin(angle_rad))*(rr.size.width/2),5,CV_RGB(255,255,255),2,8,0);
-		bdata.angle = rr.angle * boost::math::constants::pi<double>() / 180;
 		bdata.aspect_ratio = rr.size.width/rr.size.height;
-		bdata.is_vertical = pow(sin(bdata.angle), 2) > pow(cos(bdata.angle), 2);
+                bdata.is_vertical = pow(sin(rr_angle_rad), 2) > pow(cos(rr_angle_rad), 2);
 
 		data.push_back(bdata);
 	}
@@ -72,9 +62,14 @@ Blob::Blob(const Mat &img, float minContour, float maxContour, float maxPerimete
 void Blob::drawResult(Mat &img, const Scalar &color) {
 	BOOST_FOREACH(const BlobData &item, data) {
 		circle(img, item.centroid, (int)item.radius,color, 2, 8, 0);
-		line(img, item.centroid, item.centroid + Point(item.radius*cos(item.angle), item.radius*-sin(item.angle)), CV_RGB(255,0,0),2,8);
+		line(img, item.centroid,
+		     item.centroid + item.direction*item.radius, CV_RGB(255,0,0),2,8);
 
-		std::ostringstream os; os << "Area: " << (int)item.area << " " << (int)(item.angle*180/boost::math::constants::pi<double>()) << " " << item.aspect_ratio;
+		double dir = atan2(-item.direction.y, item.direction.x);
+		std::ostringstream os;
+		os << "A " << (int)item.area << " "
+		   << "D " << (int)(dir*180/pi<double>()) << " "
+		   << "R " << item.aspect_ratio;
 		putText(img, os.str().c_str(), Point(item.centroid.x-30,item.centroid.y-10), FONT_HERSHEY_DUPLEX, 1, CV_RGB(0,0,0), 1.5);
 	}
 
