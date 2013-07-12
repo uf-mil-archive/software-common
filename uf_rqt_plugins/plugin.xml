@@ -25,7 +25,7 @@
       <statustip>Provides kill status information.</statustip>
     </qtgui>
   </class>
-  <class name="Kill" type="uf_rqt_plugins.missionplugin.MissionPlugin" base_class_type="rqt_gui_py::Plugin">
+  <class name="Mission" type="uf_rqt_plugins.missionplugin.MissionPlugin" base_class_type="rqt_gui_py::Plugin">
     <description>
       Manage mission plans through uf_smach
     </description>
