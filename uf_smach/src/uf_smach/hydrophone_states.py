@@ -45,12 +45,12 @@ class HydrophoneTravelState(smach.State):
                 self._ping = None
             no_ping_ctr = 0
 
-            current = PoseEditor.from_Odometry_topic()
+            current = PoseEditor.from_PoseTwistStamped_topic('/trajectory')
             new = current.yaw_left(ping.heading)
 
             if abs(ping.heading) < 15/180*math.pi:
                 if ping.declination < 30/180*math.pi:
-                    speed = .8
+                    speed = .7
                 else:
                     speed = .3
                     if ping.declination > 60/180*math.pi:

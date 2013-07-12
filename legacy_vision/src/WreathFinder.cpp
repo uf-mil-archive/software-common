@@ -19,10 +19,10 @@ IFinder::FinderResult WreathFinder::find(const subjugator::ImageSource::Image &i
 	vector<property_tree::ptree> resultVector;
 	Mat dbg;
 	dbg = Thresholder(normalized).orange();
-	erode(dbg, dbg, cv::Mat::ones(3,3,CV_8UC1));
+	erode(dbg, dbg, cv::Mat::ones(5,5,CV_8UC1));
 	dilate(dbg, dbg, cv::Mat::ones(7,7,CV_8UC1));
 
-	Blob blob(dbg, 0, 1000000, 1000000);
+	Blob blob(dbg, 1000, 1000000, 1000000);
 
 	Mat res = img.image.clone();
 	blob.drawResult(res, CV_RGB(255, 0, 0));

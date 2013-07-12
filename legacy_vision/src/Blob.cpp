@@ -69,7 +69,7 @@ void Blob::drawResult(Mat &img, const Scalar &color) {
 		std::ostringstream os;
 		os << "A " << (int)item.area << " "
 		   << "D " << (int)(dir*180/pi<double>()) << " "
-		   << "R " << item.aspect_ratio;
+		   << "R " << item.radius;
 		putText(img, os.str().c_str(), Point(item.centroid.x-30,item.centroid.y-10), FONT_HERSHEY_DUPLEX, 1, CV_RGB(0,0,0), 1.5);
 	}
 
