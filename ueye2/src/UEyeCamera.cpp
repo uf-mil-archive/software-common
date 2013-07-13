@@ -4,6 +4,7 @@
 #include <sstream>
 #include <cstring>
 #include <cassert>
+#include <cmath>
 
 #define CHECK_ERROR(func, ...) _check_error(func(__VA_ARGS__), #func)
 
@@ -33,16 +34,18 @@ static const INT vert_masks[] = {
     IS_BINNING_6X_VERTICAL
 };
 
-#include <iostream>
-
-UEyeCamera::UEyeCamera(unsigned int id, unsigned int hbins, unsigned int vbins, unsigned int images) :
+UEyeCamera::UEyeCamera(unsigned int id,
+                       unsigned int hbins, unsigned int vbins,
+                       unsigned int images) :
     hbins(hbins),
     vbins(vbins),
     started(false),
+    opened(false),
     cam(id)
 {
     // Initialize camera
     CHECK_ERROR(is_InitCamera, &cam, 0);
+    opened = true;
     CHECK_ERROR(is_GetSensorInfo, cam, &info);
 
     // Allocate memory for images, add to ring buffer
@@ -59,17 +62,20 @@ UEyeCamera::UEyeCamera(unsigned int id, unsigned int hbins, unsigned int vbins, 
     assert(0 < hbins && hbins < 7 && 0 < vbins && vbins < 7);
     CHECK_ERROR(is_SetBinning, cam, horiz_masks[hbins-1] | vert_masks[vbins-1]);
     CHECK_ERROR(is_SetColorMode, cam, IS_CM_SENSOR_RAW8);
+    setAutoParameter(IS_SET_AUTO_WB_GAIN_RANGE, IS_MIN_AUTO_WB_OFFSET, IS_MAX_AUTO_WB_OFFSET);
 }
 
 UEyeCamera::~UEyeCamera() {
-    if (started) {
-        is_StopLiveVideo(cam, IS_FORCE_VIDEO_STOP);
+    if (opened) {
+        if (started) {
+            is_StopLiveVideo(cam, IS_FORCE_VIDEO_STOP);
+        }
+        is_ClearSequence(cam);
+        for (unsigned int i = 0; i < imagemems.size(); i++) {
+            is_FreeImageMem(cam, imagemems[i].mem, imagemems[i].id);
+        }
+        is_ExitCamera(cam);
     }
-    is_ClearSequence(cam);
-    for (unsigned int i = 0; i < imagemems.size(); i++) {
-        is_FreeImageMem(cam, imagemems[i].mem, imagemems[i].id);
-    }
-    is_ExitCamera(cam);
 }
 
 void UEyeCamera::start() {
@@ -88,15 +94,38 @@ void UEyeCamera::stop() {
     CHECK_ERROR(is_StopLiveVideo, cam, IS_FORCE_VIDEO_STOP);
     started = false;
 }
+
+void UEyeCamera::setAutoFunction(AutoFunction func, bool enabled) {
+    if (func == AUTO_WHITEBALANCE) {
+        // is_AutoParameter is replacing setAutoParameter, but atm it looks like
+        // it only works for white balance.
+        UINT enable = enabled ? IS_AUTOPARAMETER_ENABLE : IS_AUTOPARAMETER_DISABLE;
+        is_AutoParameter(cam, IS_AWB_CMD_SET_ENABLE,
+                         reinterpret_cast<void *>(&enable), sizeof(enable));
+    } else {
+        INT funcs[] = { // corresponds to AutoFunction
+            0,
+            IS_SET_ENABLE_AUTO_SHUTTER,
+            IS_SET_ENABLE_AUTO_GAIN,
+            IS_SET_ENABLE_AUTO_FRAMERATE
+        };
     
-bool UEyeCamera::getBayeredImage(uint8_t *buf, size_t len) {
+        setAutoParameter(funcs[func], enabled ? 1.0 : 0.0);
+    }
+}
+
+void UEyeCamera::setAutoBrightReference(double ref) {
+    setAutoParameter(IS_SET_AUTO_REFERENCE, floor(ref*255.0));
+}
+
+bool UEyeCamera::getBayeredImage(uint8_t *buf, size_t len, unsigned int timeout_ms) {
     char *mem;
     char *mem_last;
     INT id;
     CHECK_ERROR(is_GetActSeqBuf, cam, &id, &mem, &mem_last);
 
-    INT status = is_WaitEvent(cam, IS_SET_EVENT_FRAME, 1000);
-    if (status == IS_WAIT_TIMEOUT) {
+    INT status = is_WaitEvent(cam, IS_SET_EVENT_FRAME, timeout_ms);
+    if (status == IS_TIMED_OUT) {
         return false;
     }
     _check_error(status, "is_WaitEvent");
@@ -105,4 +134,14 @@ bool UEyeCamera::getBayeredImage(uint8_t *buf, size_t len) {
     memcpy(buf, mem, len);
     CHECK_ERROR(is_UnlockSeqBuf, cam, id, mem);
     return true;
+}
+
+void UEyeCamera::setAutoParameter(INT setting, double val) {
+    CHECK_ERROR(is_SetAutoParameter, cam,
+                setting, &val, NULL);
+}
+
+void UEyeCamera::setAutoParameter(INT setting, double val1, double val2) {
+    CHECK_ERROR(is_SetAutoParameter, cam,
+                setting, &val1, &val2);
 }
