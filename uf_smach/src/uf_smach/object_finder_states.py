@@ -16,11 +16,11 @@ from uf_common.msg import MoveToAction, MoveToGoal, PoseTwist, PoseTwistStamped
 from object_finder.msg import FindAction, FindGoal, TargetDesc
 
 class WaitForObjectsState(smach.State):
-    def __init__(self, shared, action, targetdescs, P_within_10cm_thresh, timeout=60):
+    def __init__(self, shared, action, targetdescs_cb=None, P_within_10cm_thresh=.85, timeout=60):
         smach.State.__init__(self, outcomes=['succeeded', 'timeout'])
 
         self._shared = shared
-        self._targetdescs = targetdescs
+        self._targetdescs_cb = targetdescs_cb
         self._P_within_10cm_thresh = P_within_10cm_thresh
         self._timeout = rospy.Duration(timeout)
         self._cond = threading.Condition()
@@ -28,10 +28,10 @@ class WaitForObjectsState(smach.State):
         self._action = action
 
     def execute(self, userdata):
-        if len(self._targetdescs) > 0:
+        if self._targetdescs_cb is not None:
             goal = FindGoal()
             goal.header.frame_id = "/map"
-            goal.targetdescs = self._targetdescs
+            goal.targetdescs = self._targetdescs_cb()
             self._shared[self._action].send_goal(goal, feedback_cb=self._feedback_cb)
         else:
             self._shared[self._action].set_callbacks(feedback_cb=self._feedback_cb)

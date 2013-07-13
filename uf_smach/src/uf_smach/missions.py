@@ -2,7 +2,7 @@ import smach
 import smach_ros
 import rospy
 import actionlib
-from uf_smach import common_states
+from uf_smach import common_states, legacy_vision_states
 from uf_smach.msg import Plan, PlansStamped, RunMissionsAction, RunMissionsResult
 from uf_smach.srv import ModifyPlan, ModifyPlanRequest
 import uf_smach
@@ -58,11 +58,15 @@ class PlanSet(object):
                     self._make_mission_sm(shared, entry) for entry in entries])
         else:
             entry_sms = []
-            contigency_outcomes = []    
-        contigency_outcomes = set(contigency_outcomes)
-        sm = smach.Sequence(['succeeded'] + list(contigency_outcomes) + ['preempted'], 'succeeded')
+            contigency_outcomes = []
+        contigency_outcomes_set = set(contigency_outcomes)
+        sm = smach.Sequence(['succeeded'] + list(contigency_outcomes_set) + ['preempted'], 'succeeded')
         with sm:
-            for entry, entry_sm in zip(entries, entry_sms):
+            for entry, entry_sm, contigency_outcome in zip(entries, entry_sms, contigency_outcomes):
+                if entry.path is not None:
+                    smach.Sequence.add('PIPE_' + entry.mission.upper(),
+                                       self._make_path_sm(shared, entry.path),
+                                       transitions={'failed': contigency_outcome})
                 smach.Sequence.add(entry.mission.upper(), entry_sm)
         return sm, contigency_outcomes
 
@@ -81,6 +85,24 @@ class PlanSet(object):
             smach.Concurrence.add('MISSION', mission_factory(shared))
             smach.Concurrence.add('TIMEOUT', common_states.SleepState(entry.timeout))
         return sm, contigency_outcome
+
+    def _make_path_sm(self, shared, path):
+        if path in ('left' or 'right'):
+            selector = legacy_vision_states.select_by_angle(path)
+        else:
+            selector = legacy_vision_states.select_first
+
+        sm = smach.Sequence(['succeeded', 'failed', 'preempted'], 'succeeded')
+        with sm:
+            smach.Sequence.add('CENTER_PIPE',
+                               legacy_vision_states.CenterObjectState(shared,
+                                                                      'find2_down_camera',
+                                                                      selector))
+            smach.Sequence.add('ALIGN_PIPE',
+                               legacy_vision_states.AlignObjectState(shared,
+                                                                     'find2_down_camera',
+                                                                     selector))
+        return sm
 
 def _iterate_main_first(items):
     if 'main' in items:
@@ -109,6 +131,7 @@ class MissionServer(object):
         sis.start()
         outcome = sm.execute()
         sis.stop()
+        shared['moveto'].cancel_goal()
         self._run_srv.set_succeeded(RunMissionsResult(outcome))
         
     
@@ -129,7 +152,7 @@ class MissionServer(object):
         entry = PlanEntry(req.entry.mission,
                           req.entry.timeout.to_sec(),
                           req.entry.contigency_plan if len(req.entry.contigency_plan) > 0 else None,
-                          req.entry.path)
+                          req.entry.path if req.entry.path != 'none' else None)
         if req.operation == ModifyPlanRequest.INSERT:
             if req.pos > len(plan):
                 return None

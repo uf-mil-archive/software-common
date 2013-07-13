@@ -130,7 +130,7 @@ class CenterApproachObjectState(BaseManeuverObjectState):
         BaseManeuverObjectState.__init__(self, *args, **kwargs)
 
     def _get_goal(self, result, current, (tf_p, tf_q)):
-        approach_vel = (self._desired_scale - float(result['scale']))/200
+        approach_vel = (self._desired_scale - float(result['scale']))/self._desired_scale
         approach_vel = max(min(approach_vel, .2), -.2)
         print float(result['scale']), approach_vel
         
@@ -173,6 +173,9 @@ class AlignObjectState(BaseManeuverObjectState):
         print current.turn_vec_towards_rel(self._body_vec_align, best_direction_world)
         return current.turn_vec_towards_rel(self._body_vec_align, best_direction_world)
 
+def select_first(targetreses, traj_start, tf):
+    return targetreses[0]
+    
 def select_by_angle(direction_name):
     assert direction_name in ['left', 'right']
     def _(results, traj_start, (tf_p, tf_q)):

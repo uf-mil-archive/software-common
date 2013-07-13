@@ -39,7 +39,7 @@ class CounterState(smach.State):
 
     def execute(self, userdata):
         self._ctr += 1
-        if self._ctr <= self._maxval:
+        if self._ctr < self._maxval:
             return 'succeeded'
         else:
             return 'exceeded'
@@ -94,7 +94,7 @@ class WaypointSeriesState(smach.State):
                 if self.preempt_requested():
                     break
 
-        self._shared.clear_callbacks()
+        self._shared['moveto'].clear_callbacks()
         if self.preempt_requested():
             return 'preempted'
         return 'succeeded'
@@ -107,7 +107,11 @@ class WaypointSeriesState(smach.State):
 class WaypointState(WaypointSeriesState):
     def __init__(self, shared, goal_func):
         WaypointSeriesState.__init__(self, shared, [goal_func])
-            
+
+class StopState(WaypointState):
+    def __init__(self, shared):
+        WaypointSeriesState.__init__(self, shared, lambda cur: cur)
+        
 class VelocityState(smach.State):
     def __init__(self, shared, vel):
         smach.State.__init__(self, outcomes=['succeeded'])
