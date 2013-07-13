@@ -28,6 +28,7 @@ class WaitForObjectsState(smach.State):
         self._action = action
 
     def execute(self, userdata):
+        self._found = False
         if self._targetdescs_cb is not None:
             goal = FindGoal()
             goal.header.frame_id = "/map"
@@ -65,6 +66,9 @@ class BaseManeuverObjectState(smach.State):
         self._fail_ctr = 0
 
     def execute(self, userdata):
+        self._done = False
+        self._failed = False
+        self._failed_ctr = 0
         self._traj_start = PoseEditor.from_PoseTwistStamped_topic('/trajectory')
         self._shared[self._action].set_callbacks(
             feedback_cb=lambda feedback: self._feedback_cb(feedback, self._shared))
@@ -80,7 +84,7 @@ class BaseManeuverObjectState(smach.State):
         with self._cond:
             print [result.P_within_10cm for result in feedback.targetreses]
             good_results = [result for result in feedback.targetreses
-                            if result.P_within_10cm_xy > .75]
+                            if result.P_within_10cm_xy > .85]
             if len(good_results) == 0:
                 self._fail_ctr += 1
                 if self._fail_ctr > 10:

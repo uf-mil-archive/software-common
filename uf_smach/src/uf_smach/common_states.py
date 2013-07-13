@@ -66,10 +66,11 @@ class SetUserDataState(smach.State):
         return 'succeeded'
 
 class WaypointSeriesState(smach.State):
-    def __init__(self, shared, goal_funcs, repeat=False):
+    def __init__(self, shared, goal_funcs, speed=0):
         smach.State.__init__(self, outcomes=['succeeded', 'preempted'])
         self._shared = shared
         self._goal_funcs = goal_funcs
+        self._speed = speed
         self._cond = threading.Condition()
         self._done = False
 
@@ -84,7 +85,7 @@ class WaypointSeriesState(smach.State):
         with self._cond:
             for goal_func in self._goal_funcs:
                 current = PoseEditor.from_PoseTwistStamped_topic('/trajectory')
-                goal = goal_func(current)
+                goal = goal_func(current).as_MoveToGoal(speed=self._speed)
                 self._shared['moveto'].send_goal(goal, done_cb=self._done_cb)
 
                 while not self._done and not self.preempt_requested():

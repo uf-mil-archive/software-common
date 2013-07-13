@@ -26,6 +26,7 @@ class WaitForObjectsState(smach.State):
         self._action = action
 
     def execute(self, userdata):
+        self._found = False
         if self._object_name is not None:
             goal = FindGoal()
             goal.object_names = [self._object_name]
@@ -64,6 +65,9 @@ class BaseManeuverObjectState(smach.State):
         self._fail_ctr = 0
 
     def execute(self, userdata):
+        self._done = False
+        self._failed = False
+        self._fail_ctr = 0
         self._traj_start = PoseEditor.from_PoseTwistStamped_topic('/trajectory')
         self._shared[self._action].set_callbacks(feedback_cb=self._feedback_cb)
 
@@ -145,7 +149,7 @@ class CenterApproachObjectState(BaseManeuverObjectState):
         # get rid of component going along camera axis
         vec_world2 = vec_world - camera_axis*camera_axis.dot(vec_world)
         
-        vel_world = 2*vec_world2
+        vel_world = 1.5*vec_world2 # TODO make customizable
         if numpy.linalg.norm(vel_world) > .2:
             vel_world = .2 * vel_world/numpy.linalg.norm(vel_world)
         else:
