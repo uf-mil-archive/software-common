@@ -28,3 +28,8 @@ rosbuild_add_boost_directories()
 rosbuild_add_executable(${PROJECT_NAME} src/main.cpp src/UEyeCamera.cpp)
 rosbuild_link_boost(${PROJECT_NAME} thread)
 target_link_libraries(${PROJECT_NAME} ueye_api)
+
+#add dynamic reconfigure api
+rosbuild_find_ros_package(dynamic_reconfigure)
+include(${dynamic_reconfigure_PACKAGE_PATH}/cmake/cfgbuild.cmake)
+gencfg()

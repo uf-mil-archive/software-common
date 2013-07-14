@@ -1,5 +1,5 @@
-#ifndef UEYE_CAMERA_H
-#define UEYE_CAMERA_H
+#ifndef UEYECAMERA_H
+#define UEYECAMERA_H
 
 #include <uEye.h>
 
@@ -34,6 +34,9 @@ public:
     };
     void setAutoFunction(AutoFunction func, bool enabled);
     void setAutoBrightReference(double ref);
+    
+    void setGains(double r, double g, double b);
+    void setFrameRate(double fps);
     
     bool getBayeredImage(uint8_t *buf, size_t len, unsigned int timeout_ms);
     

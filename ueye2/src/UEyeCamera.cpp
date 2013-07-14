@@ -39,8 +39,8 @@ UEyeCamera::UEyeCamera(unsigned int id,
                        unsigned int images) :
     hbins(hbins),
     vbins(vbins),
-    started(false),
     opened(false),
+    started(false),
     cam(id)
 {
     // Initialize camera
@@ -103,7 +103,7 @@ void UEyeCamera::setAutoFunction(AutoFunction func, bool enabled) {
         is_AutoParameter(cam, IS_AWB_CMD_SET_ENABLE,
                          reinterpret_cast<void *>(&enable), sizeof(enable));
     } else {
-        INT funcs[] = { // corresponds to AutoFunction
+        INT funcs[] = { // indexes corresponds to AutoFunction
             0,
             IS_SET_ENABLE_AUTO_SHUTTER,
             IS_SET_ENABLE_AUTO_GAIN,
@@ -116,6 +116,16 @@ void UEyeCamera::setAutoFunction(AutoFunction func, bool enabled) {
 
 void UEyeCamera::setAutoBrightReference(double ref) {
     setAutoParameter(IS_SET_AUTO_REFERENCE, floor(ref*255.0));
+}
+
+void UEyeCamera::setGains(double r, double g, double b) {
+    is_SetHWGainFactor(cam, IS_SET_RED_GAIN_FACTOR, static_cast<int>(r*100));
+    is_SetHWGainFactor(cam, IS_SET_GREEN_GAIN_FACTOR, static_cast<int>(g*100));
+    is_SetHWGainFactor(cam, IS_SET_BLUE_GAIN_FACTOR, static_cast<int>(b*100));
+}
+
+void UEyeCamera::setFrameRate(double fps) {
+    CHECK_ERROR(is_SetFrameRate, cam, fps, &fps);
 }
 
 bool UEyeCamera::getBayeredImage(uint8_t *buf, size_t len, unsigned int timeout_ms) {

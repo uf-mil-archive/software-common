@@ -10,6 +10,7 @@
   <url>http://ros.org/wiki/ueye2</url>
   <depend package="roscpp"/>
   <depend package="image_transport"/>
+  <depend package="dynamic_reconfigure"/>
 </package>
 
 
