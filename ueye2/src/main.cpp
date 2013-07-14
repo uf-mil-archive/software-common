@@ -39,7 +39,7 @@ struct Node {
         cam->setAutoFunction(UEyeCamera::AUTO_WHITEBALANCE, true);
         cam->setAutoFunction(UEyeCamera::AUTO_SHUTTER, true);
         cam->setAutoFunction(UEyeCamera::AUTO_FRAMERATE, true);
-        cam->setAutoBrightReference(0.25);
+        cam->setAutoBrightReference(0.5);
         image_pub = it.advertise("image_raw", 1);
     }
 
