@@ -25,7 +25,11 @@ set(LIBRARY_OUTPUT_PATH ${PROJECT_SOURCE_DIR}/lib)
 #rosbuild_add_library(${PROJECT_NAME} src/example.cpp)
 #target_link_libraries(${PROJECT_NAME} another_library)
 rosbuild_add_boost_directories()
-rosbuild_add_executable(${PROJECT_NAME} src/main.cpp src/UEyeCamera.cpp)
+rosbuild_add_executable(${PROJECT_NAME} src/node.cpp src/UEyeCamera.cpp src/UEyeNode.cpp)
+rosbuild_link_boost(${PROJECT_NAME} thread)
+target_link_libraries(${PROJECT_NAME} ueye_api)
+
+rosbuild_add_library(${PROJECT_NAME} src/nodelet.cpp src/UEyeCamera.cpp src/UEyeNode.cpp)
 rosbuild_link_boost(${PROJECT_NAME} thread)
 target_link_libraries(${PROJECT_NAME} ueye_api)
 

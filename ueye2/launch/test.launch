@@ -1,10 +1,17 @@
 <launch>
-  <node pkg="ueye2" type="ueye2" name="ueye2" output="screen">
-    <param name="id" value="2"/>
+  <arg name="id" default="0"/>
+  
+  <node pkg="nodelet" type="nodelet" name="ueye2_nodelets" args="manager" output="screen"/>
+
+  <node pkg="nodelet" type="nodelet" name="ueye2"
+        args="load ueye2/UEyeNodelet ueye2_nodelets">
+    <param name="id" value="$(arg id)"/>
     <param name="hbins" value="2"/>
     <param name="vbins" value="2"/>
-    <param name="framerate" value="0"/>
+    <param name="framerate" value="10"/>
   </node>
-  <node pkg="image_proc" type="image_proc" name="image_proc"/>
+  <include file="$(find image_proc)/launch/image_proc.launch">
+    <arg name="manager" value="ueye2_nodelets"/>
+  </include>
 </launch>
-  
+
