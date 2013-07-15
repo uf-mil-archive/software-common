@@ -12,6 +12,7 @@
   <depend package="image_transport"/>
   <depend package="dynamic_reconfigure"/>
   <depend package="nodelet"/>
+  <depend package="camera_calibration_parsers"/>
   <export>
     <nodelet plugin="${prefix}/nodelet_plugin.xml" />
   </export>
