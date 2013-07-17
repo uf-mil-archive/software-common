@@ -6,6 +6,7 @@ from uf_smach import common_states, legacy_vision_states
 from uf_smach.msg import Plan, PlansStamped, RunMissionsAction, RunMissionsResult
 from uf_smach.srv import ModifyPlan, ModifyPlanRequest
 import uf_smach
+from kill_handling.listener import KillListener
 from std_msgs.msg import Header
 from collections import namedtuple
 
@@ -114,26 +115,35 @@ def _iterate_main_first(items):
 class MissionServer(object):
     def __init__(self, plan_names):
         self._plans = PlanSet(plan_names)
+        self._sm = None
         self._pub = rospy.Publisher('mission/plans', PlansStamped)
         self._srv = rospy.Service('mission/modify_plan', ModifyPlan, self._modify_plan)
         self._run_srv = actionlib.SimpleActionServer('mission/run', RunMissionsAction,
                                                      self.execute, False)
+        self._run_srv.register_preempt_callback(self._on_preempt)
         self._run_srv.start()
         self._tim = rospy.Timer(rospy.Duration(.1), lambda _: self._publish_plans())
+        self._kill_listener = KillListener(self._on_preempt)
+        self._shared = uf_smach.util.StateSharedHandles()
 
     def get_plan(self, plan):
         return self._plans.get_plan(plan)
 
     def execute(self, goal):
-        shared = uf_smach.util.StateSharedHandles()
-        sm = self._plans.make_sm(shared)
-        sis = smach_ros.IntrospectionServer('mission_planner', sm, '/SM_ROOT')
+        self._sm = self._plans.make_sm(self._shared)
+        sis = smach_ros.IntrospectionServer('mission_planner', self._sm, '/SM_ROOT')
         sis.start()
-        outcome = sm.execute()
+        outcome = self._sm.execute()
         sis.stop()
-        shared['moveto'].cancel_goal()
-        self._run_srv.set_succeeded(RunMissionsResult(outcome))
-        
+        self._shared['moveto'].cancel_goal()
+        if outcome == 'succeeded':
+            self._run_srv.set_succeeded(RunMissionsResult(outcome))
+        else:
+            self._run_srv.set_preempted()
+
+    def _on_preempt(self):
+        if self._sm is not None:
+            self._sm.request_preempt()
     
     def _publish_plans(self):
         self._pub.publish(PlansStamped(

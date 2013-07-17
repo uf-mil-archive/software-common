@@ -141,3 +141,26 @@ Mat Thresholder::forrest(Vec3b bg, Vec3b fg) {
 	}
 	return result;
 }
+
+Mat Thresholder::simpleHSV(uchar hue, uchar range, uchar sat_C) {
+	int left = static_cast<int>(hue) - range;
+	if (left < 0) {
+		left += 180;
+	}
+	int right = static_cast<int>(hue) + range;
+	if (right >= 180) {
+		right -= 180;
+	}
+
+	Mat result;
+	if (left < right) {
+		result = (left < channelsHSV[0]) & (channelsHSV[0] < right);
+	} else {
+		result = (channelsHSV[0] < right) | (left < channelsHSV[0]);
+	}
+
+	Mat sat_adapt;
+	adaptiveThreshold(channelsHSV[1], sat_adapt, 255, 0, THRESH_BINARY, 51, sat_C-128);
+	result &= sat_adapt;
+	return result;
+}

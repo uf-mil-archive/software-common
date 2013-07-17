@@ -14,6 +14,7 @@ class Thresholder {
 		cv::Mat blue();
 		cv::Mat black();
 		cv::Mat forrest(cv::Vec3b bg, cv::Vec3b fg);
+		cv::Mat simpleHSV(uchar hue, uchar range, uchar sat_C);
 	private:
 	    cv::Mat img;
 		std::vector<cv::Mat> channelsRGB;
