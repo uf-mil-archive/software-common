@@ -57,7 +57,6 @@ UEyeNode::UEyeNode(const ros::NodeHandle &nh, const ros::NodeHandle &private_nh)
 
 void UEyeNode::reconfigureCallback(ueye2::UEyeConfig &config, uint32_t level) {
     cam->setGains(config.red_gain, config.green_gain, config.blue_gain);
-    cam->setAutoFunction(UEyeCamera::AUTO_WHITEBALANCE, true);
     cam->setAutoBrightReference(config.auto_reference);
 }
 
