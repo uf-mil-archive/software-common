@@ -137,7 +137,7 @@ class CenterApproachObjectState(BaseManeuverObjectState):
 
     def _get_goal(self, result, current, (tf_p, tf_q)):
         approach_vel = (self._desired_scale - float(result['scale']))/self._desired_scale
-        approach_vel = max(min(approach_vel, .2), -.2)
+        approach_vel = max(min(approach_vel, .2), 0)
         print float(result['scale']), approach_vel
         
         vec = numpy.array(map(float, result['center'])); vec /= numpy.linalg.norm(vec)
