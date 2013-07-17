@@ -18,7 +18,7 @@ Mat Thresholder::orange() {
 	add(b,channelsRGB[2],dbg); // combine with red channel
 	Mat v; inRange(channelsHSV[2],Scalar(0,0,0,0),Scalar(90,0,0,0),v); // filter out blacks
 	subtract(dbg,v,dbg); // filter out blacks
-	Mat s; inRange(channelsHSV[1],Scalar(0,0,0,0),Scalar(65,0,0,0),s);
+	Mat s; inRange(channelsHSV[1],Scalar(0,0,0,0),Scalar(170,0,0,0),s);
 	subtract(dbg,s,dbg); // filter whites
 	threshold(dbg,dbg,175,255,THRESH_BINARY);
 	return dbg;
