@@ -39,8 +39,12 @@ Blob::Blob(const Mat &img, float minContour, float maxContour, float maxPerimete
 			continue; // ???
 
 		RotatedRect rr = minAreaRect(Mat(contour));
-                double rr_angle_rad = rr.angle / 180 * pi<double>();
-                
+        if(rr.size.width < rr.size.height) { // force width > height
+            rr.angle += 90;
+            std::swap(rr.size.width, rr.size.height);
+        }
+        double rr_angle_rad = rr.angle / 180 * pi<double>();
+        
 		//circle(ioimages->res,center_holder,2,CV_RGB(0,255,255),-1,8,0);
 		BlobData bdata;
 		bdata.perimeter = (float)perimeter_holder;
