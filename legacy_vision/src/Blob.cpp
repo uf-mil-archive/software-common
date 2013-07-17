@@ -58,6 +58,8 @@ Blob::Blob(const Mat &img, float minContour, float maxContour, float maxPerimete
 
 		bdata.aspect_ratio = rr.size.width/rr.size.height;
                 bdata.is_vertical = pow(sin(rr_angle_rad), 2) > pow(cos(rr_angle_rad), 2);
+        bdata.short_length = rr.size.height;
+        bdata.long_length = rr.size.width;
 
 		data.push_back(bdata);
 	}

@@ -108,15 +108,6 @@ static Vec3f multiply(Vec3f a, Vec3f b) {
 	return Vec3f(a[0]*b[0], a[1]*b[1], a[2]*b[2]);
 }
 Mat Thresholder::forrest(Vec3b bg, Vec3b fg, double radius, double inclusion) {
-
-	for(int i = 0; i < img.rows; i++) {
-		for(int j = 0; j < img.cols; j++) {
-			Vec3b rgb_vec = img.at<Vec3b>(i, j);
-			rgb_vec[0] /= 2;
-			img.at<Vec3b>(i, j) = rgb_vec;
-		}
-	}
-	
 	Mat blurred; GaussianBlur(img, blurred, Size(0, 0), radius, radius);
 	
 	Mat result = channelsRGB[0].clone(); // XXX
