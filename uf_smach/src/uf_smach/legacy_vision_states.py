@@ -37,7 +37,7 @@ class WaitForObjectsState(smach.State):
         end_time = rospy.Time.now() + self._timeout
         with self._cond:
             while not self._found and rospy.Time.now() < end_time and not self.preempt_requested():
-                self._cond.wait(1)
+                self._cond.wait(.1)
 
         self._shared.clear_callbacks()
         
@@ -72,10 +72,12 @@ class BaseManeuverObjectState(smach.State):
         self._shared[self._action].set_callbacks(feedback_cb=self._feedback_cb)
 
         with self._cond:
-            while not (self._done) and not self._failed:
-                self._cond.wait()
+            while not (self._done) and not self._failed and not self.preempt_requested():
+                self._cond.wait(.1)
         self._shared.clear_callbacks()
 
+        if self.preempt_requested():
+            return 'preempted'
         return 'succeeded' if self._done else 'failed'
 
     def _feedback_cb(self, feedback):
