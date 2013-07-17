@@ -54,6 +54,7 @@ public:
         info_sub(camera_nh, "camera_info", 1),
         sync(image_sub, info_sub, 10),
         feedback_callback(feedback_callback) {
+        corner_cut = 0; camera_nh.getParam("corner_cut", corner_cut);
         XmlRpc::XmlRpcValue config; private_nh.getParam("", config);
         finders = FinderGenerator::buildFinders(goal.object_names,
             config.getType() == XmlRpc::XmlRpcValue::TypeInvalid ? boost::property_tree::ptree() :
@@ -76,6 +77,7 @@ private:
     message_filters::Subscriber<sensor_msgs::CameraInfo> info_sub;
     message_filters::TimeSynchronizer<sensor_msgs::Image, sensor_msgs::CameraInfo> sync;
     boost::function1<void, const legacy_vision::FindFeedback&> feedback_callback;
+    int corner_cut;
     vector<ros::Publisher> res_pubs;
     vector<ros::Publisher> dbg_pubs;
     void callback(const sensor_msgs::ImageConstPtr& image,
@@ -83,7 +85,26 @@ private:
         assert(image->header.stamp == cam_info->header.stamp);
         assert(image->header.frame_id == cam_info->header.frame_id);
         
-        cv_bridge::CvImageConstPtr cvimage = cv_bridge::toCvShare(image, sensor_msgs::image_encodings::BGR8);
+        cv_bridge::CvImagePtr cvimage = cv_bridge::toCvCopy(image, sensor_msgs::image_encodings::BGR8);
+        for(int dx = -1; dx <= 1; dx += 2) {
+            for(int dy = -1; dy <= 1; dy += 2) {
+                for(unsigned int y = 0; y < cam_info->height; y++) {
+                    int x = corner_cut - (dy > 0 ? cam_info->height-1 - y : y);
+                    if(dx > 0) x = cam_info->width-1 - x;
+                    for(int c = 1; c++; ) {
+                        int i = y + dy*c, j = x + dx*c;
+                        if(i < 0 || j < 0 || i >= cam_info->height || j >= cam_info->width) break;
+                        cvimage->image.at<cv::Vec3b>(i, j) = cvimage->image.at<cv::Vec3b>(y, x);
+                    }
+                    x += dx;
+                    for(int c = 1; c++; ) {
+                        int i = y + dy*c, j = x + dx*c;
+                        if(i < 0 || j < 0 || i >= cam_info->height || j >= cam_info->width) break;
+                        cvimage->image.at<cv::Vec3b>(i, j) = cvimage->image.at<cv::Vec3b>(y, x);
+                    }
+                }
+            }
+        }
         subjugator::ImageSource::Image img(cvimage->image, *cam_info);
         
         FindFeedback feedback;
