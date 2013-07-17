@@ -160,7 +160,7 @@ Mat Thresholder::simpleHSV(uchar hue, uchar range, uchar sat_C) {
 	}
 
 	Mat sat_adapt;
-	adaptiveThreshold(channelsHSV[1], sat_adapt, 255, 0, THRESH_BINARY, 51, sat_C);
-//	result &= sat_adapt;
+	adaptiveThreshold(channelsHSV[1], sat_adapt, 255, 0, THRESH_BINARY, 51, sat_C-128);
+	result &= sat_adapt;
 	return result;
 }
