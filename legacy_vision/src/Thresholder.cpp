@@ -107,7 +107,7 @@ static Vec3f divide(Vec3f a, Vec3f b) {
 static Vec3f multiply(Vec3f a, Vec3f b) {
 	return Vec3f(a[0]*b[0], a[1]*b[1], a[2]*b[2]);
 }
-Mat Thresholder::forrest(Vec3b bg, Vec3b fg) {
+Mat Thresholder::forrest(Vec3b bg, Vec3b fg, double radius, double inclusion) {
 
 	for(int i = 0; i < img.rows; i++) {
 		for(int j = 0; j < img.cols; j++) {
@@ -117,8 +117,7 @@ Mat Thresholder::forrest(Vec3b bg, Vec3b fg) {
 		}
 	}
 	
-	double sigma = 30;
-	Mat blurred; GaussianBlur(img, blurred, Size(0, 0), sigma, sigma);
+	Mat blurred; GaussianBlur(img, blurred, Size(0, 0), radius, radius);
 	
 	Mat result = channelsRGB[0].clone(); // XXX
 	for(int i = 0; i < img.rows; i++) {
@@ -126,12 +125,19 @@ Mat Thresholder::forrest(Vec3b bg, Vec3b fg) {
 			Vec3f sample = blurred.at<Vec3b>(i, j);
 			
 			Vec3f light = divide(sample, .5*Vec3f(bg) + .5*Vec3f(fg)); // assuming near border of foreground and background
+			//if(norm(1/norm(light)*light - 1/norm(Vec3f(1,1,1))*Vec3f(1,1,1)) > .3) {
+			//	result.at<uint8_t>(i, j) = 0;
+			//	continue;
+			//}
+			//light = divide(sample, Vec3f(bg));
 			Vec3f predicted_sample_if_bg = multiply(light, bg);
 			Vec3f predicted_sample_if_fg = multiply(light, fg);
 			
 			Vec3f sample2 = img.at<Vec3b>(i, j);
-			if(norm(sample2 - predicted_sample_if_fg) <
-			   norm(sample2 - predicted_sample_if_bg)) {
+			Vec3f vec = (predicted_sample_if_fg - predicted_sample_if_bg);
+			vec /= pow(norm(vec), 2);
+			double score = (sample2 - predicted_sample_if_bg).dot(vec);
+			if(score >= inclusion) {
 				result.at<uint8_t>(i, j) = 255;
 			} else {
 				result.at<uint8_t>(i, j) = 0;

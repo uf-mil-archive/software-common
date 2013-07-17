@@ -13,7 +13,7 @@ class Thresholder {
 		cv::Mat yellow();
 		cv::Mat blue();
 		cv::Mat black();
-		cv::Mat forrest(cv::Vec3b bg, cv::Vec3b fg);
+		cv::Mat forrest(cv::Vec3b bg, cv::Vec3b fg, double radius=30, double inclusion=0.5);
 	private:
 	    cv::Mat img;
 		std::vector<cv::Mat> channelsRGB;

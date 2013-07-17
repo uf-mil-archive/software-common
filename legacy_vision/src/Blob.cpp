@@ -11,7 +11,11 @@ using namespace std;
 
 using boost::math::constants::pi;
 
-Blob::Blob(const Mat &img, float minContour, float maxContour, float maxPerimeter) {
+bool radius_comparator(const Blob::BlobData &blob1, const Blob::BlobData &blob2) {
+    return blob1.radius < blob2.radius;
+}
+
+Blob::Blob(const Mat &img, float minContour, float maxContour, float maxPerimeter, bool sortByRadius) {
 	Mat dbg_temp = img.clone();
 	std::vector<std::vector<cv::Point> > contours;
 	std::vector<cv::Vec4i> hierarchy;
@@ -56,6 +60,9 @@ Blob::Blob(const Mat &img, float minContour, float maxContour, float maxPerimete
 
 	// sort largest area to smallest
 	sort(data.begin(), data.end());
+	if(sortByRadius) {
+	    sort(data.begin(), data.end(), radius_comparator);
+    }
 	reverse(data.begin(),data.end());
 }
 
