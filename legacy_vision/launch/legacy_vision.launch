@@ -57,7 +57,11 @@ shooter:
     green_sat_C: 110
     blue_hue: 140
     blue_hue_range: 40
-    blue_sat_C: 130
+    blue_sat_C: 30
+grapes:
+    blue_ref: {b: 111, g: 96, r: 38}
+    yellow_ref: {b: 55, g: 110, r: 78}
+    red_ref: {b: 18, g: 29, r: 86}
     </rosparam>
     <param name="bins/imagePath" value="$(find legacy_vision)/data/bins"/>
   </node>

@@ -284,7 +284,7 @@ struct Particle {
                 for(int i = 0; i < 3; i++) {
                     var += p1_result.total_color2[i]/p1_result.count - pow(p1_result.total_color[i]/p1_result.count, 2);
                 }
-                P *= exp(-1e4*var);
+                P *= exp(-1e3*var);
                 if(print_debug_info) {
                     cout << "var " << var << " " << p1_result.total_color2.transpose() << " / " << p1_result.total_color.transpose() << " count " << p1_result.count << endl;
                 }

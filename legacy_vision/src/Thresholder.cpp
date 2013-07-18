@@ -139,6 +139,33 @@ Mat Thresholder::forrest(Vec3b bg, Vec3b fg, double radius, double inclusion) {
 	return result;
 }
 
+Mat Thresholder::simpleRGB(Vec3b bg, Vec3b fg, double radius, double inclusion) {
+	Mat blurred; GaussianBlur(img, blurred, Size(0, 0), radius, radius);
+	
+	Mat result = channelsRGB[0].clone(); // XXX
+	for(int i = 0; i < img.rows; i++) {
+		for(int j = 0; j < img.cols; j++) {
+			Vec3f sample = blurred.at<Vec3b>(i, j);
+			
+			Vec3f offset = sample - (.5*Vec3f(bg) + .5*Vec3f(fg)); // assuming near border of foreground and background
+			Vec3f predicted_sample_if_bg = offset + Vec3f(bg);
+			Vec3f predicted_sample_if_fg = offset + Vec3f(fg);
+			
+			Vec3f sample2 = img.at<Vec3b>(i, j);
+			Vec3f vec = (predicted_sample_if_fg - predicted_sample_if_bg);
+			vec /= pow(norm(vec), 2);
+			double score = (sample2 - predicted_sample_if_bg).dot(vec);
+			if(score >= inclusion) {
+				result.at<uint8_t>(i, j) = 255;
+			} else {
+				result.at<uint8_t>(i, j) = 0;
+			}
+			//result.at<uint8_t>(i, j) = norm(sample - predicted_sample_if_bg)/(norm(sample - predicted_sample_if_bg) + norm(sample - predicted_sample_if_fg))*255+.5;
+		}
+	}
+	return result;
+}
+
 Mat Thresholder::simpleHSV(uchar hue, uchar range, uchar sat_C) {
 	int left = static_cast<int>(hue) - range;
 	if (left < 0) {

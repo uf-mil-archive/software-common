@@ -10,7 +10,8 @@
 UEyeNode::UEyeNode(const ros::NodeHandle &nh, const ros::NodeHandle &private_nh) :
     nh(nh),
     private_nh(private_nh),
-    it(nh)
+    it(nh),
+    dyn_srv(private_nh)
 {
     int id = 0;
     private_nh.getParam("id", id);
