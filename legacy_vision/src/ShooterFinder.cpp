@@ -24,15 +24,27 @@ IFinder::FinderResult ShooterFinder::find(const subjugator::ImageSource::Image &
 
 	boost::optional<QuadPointResults> quad_point = trackQuadPoint(hsv_split);
 	if (quad_point) {
-		// call to thresholder here
+		int range = config.get<int>(objectPath[0] + "_range");
+		Point pt;
+		if (objectPath[0] == "red")
+			pt = Point(-1, -1);
+		else if (objectPath[0] == "green")
+			pt = Point(1, -1);
+		else if (objectPath[0] == "blue")
+			pt = Point(-1, 1);
+		else
+			pt = Point(1, 1);
+            
 		Mat h_no_border = hsv_split[0](Rect(1, 1, hsv_split[0].cols-2, hsv_split[0].rows-2));
-		floodFill(h_no_border, dbg, quad_point->point+Point(4, -4), Scalar(),
-			  NULL, Scalar(1), Scalar(1), FLOODFILL_MASK_ONLY | 8);
+		rectangle(dbg, quad_point->point, quad_point->point+600*pt, Scalar(255));
+		floodFill(h_no_border, dbg, quad_point->point+4*pt, Scalar(),
+			  NULL, Scalar(range), Scalar(range), FLOODFILL_FIXED_RANGE | FLOODFILL_MASK_ONLY | 4);
 		dbg = (dbg != 0);
 	}
-		
+
+	erode(dbg,dbg,Mat::ones(3,3,CV_8UC1));		
 	dilate(dbg,dbg,Mat::ones(5,5,CV_8UC1));
-	erode(dbg,dbg,Mat::ones(5,5,CV_8UC1));
+	erode(dbg,dbg,Mat::ones(3,3,CV_8UC1));
 
 	// call to specific member function here
 	Contours contours(dbg, 50, 7000000,1500000);
