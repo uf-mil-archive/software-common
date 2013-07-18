@@ -56,8 +56,11 @@ UEyeNode::UEyeNode(const ros::NodeHandle &nh, const ros::NodeHandle &private_nh)
 }
 
 void UEyeNode::reconfigureCallback(ueye2::UEyeConfig &config, uint32_t level) {
-    cam->setGains(config.red_gain, config.green_gain, config.blue_gain);
-    cam->setAutoBrightReference(config.auto_reference);
+    if (cam->isStarted()) {
+        applyConfig(config);
+    } else {
+        next_config = config;
+    }
 }
 
 bool UEyeNode::setCameraInfoCallback(sensor_msgs::SetCameraInfo::Request& req,
@@ -68,14 +71,25 @@ bool UEyeNode::setCameraInfoCallback(sensor_msgs::SetCameraInfo::Request& req,
     rsp.success = camera_calibration_parsers::writeCalibrationIni(out, "ueye", req.camera_info);
     return true;
 }
-    
+
+void UEyeNode::applyConfig(const ueye2::UEyeConfig &config) {
+    cam->setGains(config.red_gain, config.green_gain, config.blue_gain);
+    cam->setAutoBrightReference(config.auto_reference);
+}
+
 void UEyeNode::runOnce() {
     if (image_pub.getNumSubscribers() == 0) {
         cam->stop();
         ros::Duration(.1).sleep();
         return;
     }
-    cam->start();
+
+    if (!cam->isStarted()) {
+        cam->start();
+        if (next_config) {
+            applyConfig(*next_config);
+        }
+    }
 
     boost::shared_ptr<sensor_msgs::Image> image
         = boost::make_shared<sensor_msgs::Image>();
