@@ -52,9 +52,9 @@ shooter:
     yellow_hue: 25
     yellow_hue_range: 20
     yellow_sat_C: 100
-    green_hue: 70
-    green_hue_range: 25
-    green_sat_C: 130
+    green_hue: 60
+    green_hue_range: 20
+    green_sat_C: 140
     blue_hue: 130
     blue_hue_range: 40
     blue_sat_C: 30
