@@ -69,11 +69,11 @@ class HydrophoneTravelState(BaseHydrophoneState):
         if abs(ping.heading) < 15/180*math.pi:
             if ping.declination < 30/180*math.pi:
                 speed = .7
-            elif ping.declination < 50/180*math.pi:
+            elif ping.declination < 45/180*math.pi:
                 speed = .3
             else:
                 speed = .1
-                if ping.declination > 60/180*math.pi:
+                if ping.declination > 55/180*math.pi:
                     return 'succeeded'
         else:
             speed = 0

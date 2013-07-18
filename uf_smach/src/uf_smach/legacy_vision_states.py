@@ -37,7 +37,7 @@ class WaitForObjectsState(smach.State):
         end_time = rospy.Time.now() + self._timeout
         with self._cond:
             while not self._found and rospy.Time.now() < end_time and not self.preempt_requested():
-                self._cond.wait(1)
+                self._cond.wait(.1)
 
         self._shared.clear_callbacks()
         
@@ -72,10 +72,12 @@ class BaseManeuverObjectState(smach.State):
         self._shared[self._action].set_callbacks(feedback_cb=self._feedback_cb)
 
         with self._cond:
-            while not (self._done) and not self._failed:
-                self._cond.wait()
+            while not (self._done) and not self._failed and not self.preempt_requested():
+                self._cond.wait(.1)
         self._shared.clear_callbacks()
 
+        if self.preempt_requested():
+            return 'preempted'
         return 'succeeded' if self._done else 'failed'
 
     def _feedback_cb(self, feedback):
@@ -111,6 +113,11 @@ class BaseManeuverObjectState(smach.State):
             self._shared['moveto'].send_goal(goal)
 
 class CenterObjectState(BaseManeuverObjectState):
+    def __init__(self, *args, **kwargs):
+        self._gain = kwargs.pop('gain', 2)
+        BaseManeuverObjectState.__init__(self, *args, **kwargs)
+
+
     def _get_goal(self, result, current, (tf_p, tf_q)):
         vec = numpy.array(map(float, result['center'])); vec /= numpy.linalg.norm(vec)
         vec_world = transformations.quaternion_matrix(tf_q)[:3, :3].dot(vec)
@@ -123,19 +130,20 @@ class CenterObjectState(BaseManeuverObjectState):
         # get rid of component going along camera axis
         vec_world2 = vec_world - camera_axis*camera_axis.dot(vec_world)
         
-        vel_world = 2*vec_world2
+        vel_world = self._gain*vec_world2
         if numpy.linalg.norm(vel_world) > .2:
             vel_world = .2 * vel_world/numpy.linalg.norm(vel_world)
         return current.as_MoveToGoal(linear=current._rot.T.dot(vel_world))
 
 class CenterApproachObjectState(BaseManeuverObjectState):
     def __init__(self, *args, **kwargs):
+        self._gain = kwargs.pop('gain', 1.5)
         self._desired_scale = kwargs.pop('desired_scale')
         BaseManeuverObjectState.__init__(self, *args, **kwargs)
 
     def _get_goal(self, result, current, (tf_p, tf_q)):
         approach_vel = (self._desired_scale - float(result['scale']))/self._desired_scale
-        approach_vel = max(min(approach_vel, .2), -.2)
+        approach_vel = max(min(approach_vel, .2), 0)
         print float(result['scale']), approach_vel
         
         vec = numpy.array(map(float, result['center'])); vec /= numpy.linalg.norm(vec)
@@ -149,7 +157,7 @@ class CenterApproachObjectState(BaseManeuverObjectState):
         # get rid of component going along camera axis
         vec_world2 = vec_world - camera_axis*camera_axis.dot(vec_world)
         
-        vel_world = 1.5*vec_world2 # TODO make customizable
+        vel_world = self._gain*vec_world2 # TODO make customizable
         if numpy.linalg.norm(vel_world) > .2:
             vel_world = .2 * vel_world/numpy.linalg.norm(vel_world)
         else:

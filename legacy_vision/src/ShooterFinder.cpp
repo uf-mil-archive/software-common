@@ -14,24 +14,15 @@ using namespace cv;
 using namespace std;
 
 IFinder::FinderResult ShooterFinder::find(const subjugator::ImageSource::Image &img) {
-	// blur the image to remove noise
-	Mat blurred; GaussianBlur(img.image, blurred, Size(5,5), 10, 15, BORDER_DEFAULT);
-
-	Mat normalized = Normalizer::normRGB(blurred);
-
-	Thresholder thresholder(normalized);
+	Thresholder thresholder(img.image);
 
 	// call to thresholder here
-	Mat dbg;
-	if(objectPath[0] == "red")
-		dbg = thresholder.shooterRed();
-	else if(objectPath[0] == "blue")
-		dbg = thresholder.blue();
-	else
-		throw runtime_error("invalid shooter color");
+	Mat dbg = thresholder.simpleHSV(config.get<uchar>(objectPath[0] + "_hue"),
+					config.get<uchar>(objectPath[0] + "_hue_range"),
+					config.get<uchar>(objectPath[0] + "_sat_C"));
 
-	//dilate(ioimages->dbg,ioimages->dbg,cv::Mat::ones(7,7,CV_8UC1));
-	//erode(ioimages->dbg,ioimages->dbg,cv::Mat::ones(1,1,CV_8UC1));
+	erode(dbg,dbg,cv::Mat::ones(5,5,CV_8UC1));
+	dilate(dbg,dbg,cv::Mat::ones(5,5,CV_8UC1));
 
 	// call to specific member function here
 	Contours contours(dbg, 50, 7000000,1500000);
@@ -54,7 +45,7 @@ IFinder::FinderResult ShooterFinder::find(const subjugator::ImageSource::Image &
 		Contours::InnerContour bestShape;
 		bool foundSomething = false;
 		BOOST_FOREACH(const Contours::InnerContour &shape, contours.shapes)
-			if(shape.circularity > 0.7 && shape.area < shape.outer_area*2/3 && (!foundSomething || shape.area > bestShape.area)) {
+			if(shape.circularity > 0.5 && shape.area < shape.outer_area*2/3 && (!foundSomething || shape.area > bestShape.area)) {
 				foundSomething = true;
 				bestShape = shape;
 			}
@@ -63,7 +54,7 @@ IFinder::FinderResult ShooterFinder::find(const subjugator::ImageSource::Image &
 			{
 				bool foundSomething2 = false;
 				BOOST_FOREACH(const Contours::InnerContour &shape, contours.shapes)
-					if(shape.circularity > 0.7 && shape.area < shape.outer_area*2/3 && (!foundSomething2 || shape.area > bestShape2.area) && shape.area < bestShape.area) {
+					if(shape.circularity > 0.5 && shape.area < shape.outer_area*2/3 && (!foundSomething2 || shape.area > bestShape2.area) && shape.area < bestShape.area) {
 						foundSomething2 = true;
 						bestShape2 = shape;
 					}

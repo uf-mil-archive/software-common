@@ -9,6 +9,8 @@ class ShooterFinder : public IFinder
 		ShooterFinder(std::vector<std::string> objectPath, boost::property_tree::ptree config) : IFinder(objectPath, config) {
 			if(objectPath.size() != 2 || !(
 					objectPath[0] == "red" ||
+                                        objectPath[0] == "yellow" ||
+                                        objectPath[0] == "green" ||                                        
 					objectPath[0] == "blue" ||
 			false) || !(
 					objectPath[1] == "box" ||

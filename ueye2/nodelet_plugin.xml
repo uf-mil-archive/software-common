@@ -1,0 +1,7 @@
+<library path="lib/libueye2">
+  <class name="ueye2/UEyeNodelet" type="ueye2::UEyeNodelet" base_class_type="nodelet::Nodelet">
+  <description>
+    ueye2 nodelet plugin.
+  </description>
+  </class>
+</library>

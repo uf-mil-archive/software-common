@@ -46,11 +46,18 @@ hedge:
         minLineGap: 50
     minAngleDiff: 20
 shooter:
-    dp: 1
-    min_dist: 50
-    canny_thres: 50
-    circle_thres: 23
-
+    red_hue: 0
+    red_hue_range: 20
+    red_sat_C: 50
+    yellow_hue: 25
+    yellow_hue_range: 20
+    yellow_sat_C: 100
+    green_hue: 60
+    green_hue_range: 20
+    green_sat_C: 140
+    blue_hue: 130
+    blue_hue_range: 40
+    blue_sat_C: 30
     </rosparam>
     <param name="bins/imagePath" value="$(find legacy_vision)/data/bins"/>
   </node>

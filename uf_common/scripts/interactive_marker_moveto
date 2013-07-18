@@ -9,10 +9,13 @@ from tf import transformations
 from interactive_markers.interactive_marker_server import *
 from geometry_msgs.msg import Quaternion, Twist, Pose, Point
 from uf_common.msg import MoveToAction, MoveToGoal, PoseTwist
+from kill_handling.listener import KillListener
 
 CENTER_TO_VEHICLE = 1
 SET_DEPTH = 9
-SET_DEPTH_ZERO = 10
+SET_DEPTH_VAL = 10
+
+depth_vals = [0.3, 0.5, 1, 1.5, 2, 3, 4]
 
 class Node(object):
     def __init__(self):
@@ -20,6 +23,7 @@ class Node(object):
         self._server = InteractiveMarkerServer("moveto_marker")
         self._move_client = actionlib.SimpleActionClient('moveto', MoveToAction)
         self._move_client.wait_for_server()
+        self._kill_listener = KillListener(self.on_killed)
         self._marker_pose = None
         self._marker_pose_time = None
         self._marker_pose_sent = False
@@ -70,11 +74,11 @@ class Node(object):
         depth_menu.title = 'Set depth'
         int_marker.menu_entries.append(depth_menu)
 
-        for d in xrange(6):
+        for i, depth in enumerate(depth_vals):
             menu = MenuEntry()
-            menu.id = SET_DEPTH_ZERO + d
+            menu.id = SET_DEPTH_VAL + i
             menu.parent_id = SET_DEPTH
-            menu.title = '%d m' % d
+            menu.title = '%.1f m' % depth
             int_marker.menu_entries.append(menu)
 
         self._server.insert(int_marker, self.on_feedback)
@@ -89,14 +93,15 @@ class Node(object):
             yaw = transformations.euler_from_quaternion(rot)[2]
             self._marker_pose = Pose(position=Point(*trans),
                                      orientation=Quaternion(*transformations.quaternion_from_euler(0, 0, yaw)))
-        elif feedback.menu_entry_id >= SET_DEPTH_ZERO:
-            self._marker_pose.position.z = -(feedback.menu_entry_id - SET_DEPTH_ZERO)
+        elif feedback.menu_entry_id >= SET_DEPTH_VAL:
+            self._marker_pose.position.z = -depth_vals[feedback.menu_entry_id - SET_DEPTH_VAL]
         else:
             self._marker_pose = feedback.pose
             applyChanges = False # Don't need to apply feedback back to rviz
 
-        self._marker_pose_time = rospy.Time.now()
-        self._marker_pose_sent = False
+        if not self._kill_listener.get_killed():
+            self._marker_pose_time = rospy.Time.now()
+            self._marker_pose_sent = False
         if applyChanges:
             self._server.setPose('moveto', self._marker_pose)
             self._server.applyChanges()
@@ -110,6 +115,9 @@ class Node(object):
                 continue
             if rospy.Time.now() - self._marker_pose_time > rospy.Duration(.5):
                 self.send_goal()
+
+    def on_killed(self):
+        self._move_client.cancel_goal()
 
     def send_goal(self):
         self._move_client.send_goal(MoveToGoal(

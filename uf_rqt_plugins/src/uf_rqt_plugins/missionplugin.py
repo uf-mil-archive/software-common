@@ -34,11 +34,13 @@ class MissionPlugin(Plugin):
         self._widget.findChild(QPushButton, 'addButton').clicked.connect(self._on_add)
         self._widget.findChild(QPushButton, 'removeButton').clicked.connect(self._on_remove)
         self._widget.findChild(QPushButton, 'startButton').clicked.connect(self._on_start)
+        self._widget.findChild(QPushButton, 'stopButton').clicked.connect(self._on_stop)
         
         self.on_plans_changed.connect(self._on_plans)
         self._plans_sub = rospy.Subscriber('mission/plans', PlansStamped,
                                            lambda msg: self.on_plans_changed.emit(msg))
         self._modify_srv = rospy.ServiceProxy('mission/modify_plan', ModifyPlan)
+        self._run_action = None
 
     def shutdown_plugin(self):
         self._plans_sub.unregister()
@@ -78,9 +80,14 @@ class MissionPlugin(Plugin):
         self._modify_srv(plan, ModifyPlanRequest.REMOVE, pos, PlanEntry()) 
 
     def _on_start(self, event):
-        self._run_action = actionlib.SimpleActionClient('mission/run', RunMissionsAction)
-        self._run_action.wait_for_server()
+        if self._run_action is None:
+            self._run_action = actionlib.SimpleActionClient('mission/run', RunMissionsAction)
+            self._run_action.wait_for_server()
         self._run_action.send_goal(RunMissionsGoal())
+
+    def _on_stop(self, event):
+        if self._run_action is not None:
+            self._run_action.cancel_goal()
         
     def _on_plans(self, msg):
         if self._plans == msg.plans:
