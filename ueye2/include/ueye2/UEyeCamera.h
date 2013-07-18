@@ -25,6 +25,7 @@ public:
     
     void start();
     void stop();
+    bool isStarted() const { return started; }
 
     enum AutoFunction {
         AUTO_WHITEBALANCE,

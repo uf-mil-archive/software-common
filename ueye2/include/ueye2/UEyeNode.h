@@ -21,6 +21,7 @@ private:
     void reconfigureCallback(ueye2::UEyeConfig &config, uint32_t level);
     bool setCameraInfoCallback(sensor_msgs::SetCameraInfo::Request& req,
                                sensor_msgs::SetCameraInfo::Response& rsp);
+    void applyConfig(const ueye2::UEyeConfig &config);
 
     std::string frame_id;
     std::string calibration_file;
@@ -33,6 +34,7 @@ private:
     image_transport::Publisher image_pub;
     ros::Publisher info_pub;
     dynamic_reconfigure::Server<ueye2::UEyeConfig> dyn_srv;
+    boost::optional<ueye2::UEyeConfig> next_config;
     ros::ServiceServer info_srv;
 };
 
