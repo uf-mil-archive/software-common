@@ -26,14 +26,14 @@ struct Result {
     Result operator-(const Result &other) const {
         Result res;
         res.total_color = total_color - other.total_color;
-        res.total_color2 = total_color - other.total_color2;
+        res.total_color2 = total_color2 - other.total_color2;
         res.count = count - other.count;
         return res;
     }
     Result operator+(const Result &other) const {
         Result res;
         res.total_color = total_color + other.total_color;
-        res.total_color2 = total_color + other.total_color2;
+        res.total_color2 = total_color2 + other.total_color2;
         res.count = count + other.count;
         return res;
     }
@@ -110,6 +110,12 @@ struct TaggedImage {
                 const uint8_t *pixel = image.data.data() + image.step * row + step * col;
                 Eigen::Vector3d color = Eigen::Vector3d(pixel[0] / 255., pixel[1] / 255., pixel[2] / 255.);
                 if(reversed) std::swap(color[0], color[2]);
+                double sum = color[0] + color[1] + color[2];
+                if(sum == 0) {
+                    color = Eigen::Vector3d(1/3., 1/3., 1/3.);
+                } else {
+                    color /= sum;
+                }
                 
                 row_cumulative_sum += color;
                 sumimage[(image.width+1) * row + col+1] = row_cumulative_sum;

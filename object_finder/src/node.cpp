@@ -270,6 +270,26 @@ struct Particle {
                 P *= exp(30*(p2_result.avg_color_assuming_unseen_is(p1_result.avg_color()) - p1_result.avg_color_assuming_unseen_is(p2_result.avg_color())).dot(dir));
             }
         }
+        BOOST_FOREACH(const Pair &p1, regions) {
+            const ResultWithArea &p1_result = results[p1.second];
+            istringstream p1_ss(p1.first->name);
+            string p1_prefix; p1_ss >> p1_prefix;
+            string p1_op; p1_ss >> p1_op;
+            if(p1_op == "colornovar") {
+                if(p1_result.count == 0) {
+                    P *= 1e-3;
+                    continue;
+                }
+                double var = 0;
+                for(int i = 0; i < 3; i++) {
+                    var += p1_result.total_color2[i]/p1_result.count - pow(p1_result.total_color[i]/p1_result.count, 2);
+                }
+                P *= exp(-1e4*var);
+                if(print_debug_info) {
+                    cout << "var " << var << " " << p1_result.total_color2.transpose() << " / " << p1_result.total_color.transpose() << " count " << p1_result.count << endl;
+                }
+            }
+        }
         if(print_debug_info) {
             cout << "P " << P << endl;
         }
@@ -474,6 +494,7 @@ struct GoalExecutor {
     ros::Publisher particles_pub;
     ros::Publisher pose_pub;
     ros::Publisher image_pub;
+    ros::Publisher image_pub2;
     std::vector<ros::Publisher> extracted_image_pubs;
     boost::function1<void, const object_finder::FindFeedback&> feedback_callback;
     
@@ -509,6 +530,8 @@ struct GoalExecutor {
         pose_pub = private_nh.advertise<PoseStamped>("pose", 1);
         image_pub = private_nh.advertise<sensor_msgs::Image>(
             "debug_image", 1);
+        image_pub2 = private_nh.advertise<sensor_msgs::Image>(
+            "debug_image2", 1);
         
         sync.registerCallback(boost::bind(&GoalExecutor::callback, this, _1, _2));
     }
@@ -691,6 +714,25 @@ struct GoalExecutor {
                 }
             }
             image_pub.publish(msg);
+        }
+        if(image_pub2.getNumSubscribers()) { // send debug image
+            Image msg;
+            msg.header = image->header;
+            msg.height = image->height;
+            msg.width = image->width;
+            msg.encoding = "rgb8";
+            msg.is_bigendian = 0;
+            msg.step = image->width*3;
+            msg.data.resize(image->width*image->height*3);
+            for(unsigned int y = 0; y < image->height; y++) {
+                for(int x = img.left[y]; x < img.right[y]; x++) {
+                    Vector3d orig_color = img.get_pixel(y, x);
+                    msg.data[msg.step*y + 3*x + 0] = 255*orig_color[0];
+                    msg.data[msg.step*y + 3*x + 1] = 255*orig_color[1];
+                    msg.data[msg.step*y + 3*x + 2] = 255*orig_color[2];
+                }
+            }
+            image_pub2.publish(msg);
         }
         BOOST_FOREACH(const Particle &max_p, max_ps) { // send contained images
             ros::Publisher pub = extracted_image_pubs[&max_p - max_ps.data()];
