@@ -38,9 +38,9 @@ IFinder::FinderResult GrapesFinder::find(const subjugator::ImageSource::Image &i
 
 	Thresholder thresholder(normalized);
 
-	Mat yellow = thresholder.forrest(
+	Mat yellow = thresholder.simpleRGB(
 	    vec3b_from_ptree(config.get_child("blue_ref")),
-	    vec3b_from_ptree(config.get_child("yellow_ref")), 50, 0.8);
+	    vec3b_from_ptree(config.get_child("yellow_ref")), 50, 0.75);
     dilate(yellow, yellow, cv::Mat::ones(11,11,CV_8UC1));
 	erode(yellow, yellow, cv::Mat::ones(11,11,CV_8UC1));
 
