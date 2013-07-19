@@ -58,7 +58,11 @@ class KillPlugin(Plugin):
         self._on_unkill_clicked()
 
     def _update_kills(self):
-        new_kills = {kill.id: kill for kill in self._listener.get_all_kills()}
+        all_kills = self._listener.get_all_kills()
+        if all_kills is not None:
+            new_kills = {kill.id: kill for kill in self._listener.get_all_kills()}
+        else:
+            new_kills = {}
 
         table = self._widget.findChild(QTableWidget, 'killTable')
 
@@ -89,14 +93,21 @@ class KillPlugin(Plugin):
         self._widget.findChild(QTableWidget, 'killTable').setItem(row, col, item)
 
     def _update_kill(self):
-        other_kill_count = len([kill for kill in self._listener.get_all_kills()
-                                if kill.id != rospy.get_name() and kill.active])
-        self._widget.findChild(QPushButton, 'runButton').setVisible(other_kill_count == 0)
-        self._widget.findChild(QPushButton, 'unkillButton').setVisible(other_kill_count > 0)
+        kills = self._listener.get_all_kills()
+        if kills is not None:
+            other_kill_count = len([kill for kill in kills
+                                    if kill.id != rospy.get_name() and kill.active])
+            self._widget.findChild(QPushButton, 'runButton').setVisible(other_kill_count == 0)
+            self._widget.findChild(QPushButton, 'unkillButton').setVisible(other_kill_count > 0)
 
-        status = 'Sub status: '
-        if not self._listener.get_killed():
-            status += '<span style="color:green">Running</span>'
+            status = 'Sub status: '
+            if not self._listener.get_killed():
+                status += '<span style="color:green">Running</span>'
+            else:
+                status += '<span style="color:red">Killed</span>'
+            self._widget.findChild(QLabel, 'killStatusLabel').setText(status)
         else:
-            status += '<span style="color:red">Killed</span>'
-        self._widget.findChild(QLabel, 'killStatusLabel').setText(status)
+            self._widget.findChild(QPushButton, 'runButton').setVisible(False)
+            self._widget.findChild(QPushButton, 'unkillButton').setVisible(False)
+            self._widget.findChild(QLabel, 'killStatusLabel').setText('<span style="color:red">No kill information</span>')
+            

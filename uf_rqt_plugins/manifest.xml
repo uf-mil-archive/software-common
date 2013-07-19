@@ -17,7 +17,8 @@
   <depend package="thruster_handling"/>
   <depend package="skytraq_driver"/>
   <depend package="rawgps_common"/>
-  <!--<depend package="power_router"/>-->
+  <!--<depend package="power_router"/>--> <!-- sorry! we need to fix things! -->
+  <depend package="actuator_driver"/> <!-- just as bad! -->
   <depend package="uf_smach"/>
   
   <export>

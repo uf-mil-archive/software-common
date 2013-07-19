@@ -77,4 +77,17 @@
       <statustip>Plant Status</statustip>
     </qtgui>
   </class>
+  <class name="Actuators" type="uf_rqt_plugins.actuatorplugin.ActuatorPlugin" base_class_type="rqt_gui_py::Plugin">
+    <description>
+      Plugin for controlling SubjuGator's actuators.
+    </description>
+    <qtgui>
+      <group>
+        <icon type="file">uf.ico</icon>
+        <label>UF</label>
+      </group>
+      <label>Actuators</label>
+      <statustip>SubjuGator Actuators</statustip>
+    </qtgui>
+  </class>
 </library>
