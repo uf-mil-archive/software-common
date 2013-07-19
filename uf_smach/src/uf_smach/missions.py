@@ -88,18 +88,18 @@ class PlanSet(object):
         return sm, contigency_outcome
 
     def _make_path_sm(self, shared, path):
-        if path in ('left' or 'right'):
+        if path in ('left', 'right'):
             selector = legacy_vision_states.select_by_angle(path)
         else:
             selector = legacy_vision_states.select_first
 
         sm = smach.Sequence(['succeeded', 'failed', 'preempted'], 'succeeded')
         with sm:
-            smach.Sequence.add('CENTER_PIPE',
+            smach.Sequence.add('CENTER_PIPE_'+path.upper(),
                                legacy_vision_states.CenterObjectState(shared,
                                                                       'find2_down_camera',
                                                                       selector))
-            smach.Sequence.add('ALIGN_PIPE',
+            smach.Sequence.add('ALIGN_PIPE_'+path.upper(),
                                legacy_vision_states.AlignObjectState(shared,
                                                                      'find2_down_camera',
                                                                      selector))
