@@ -109,9 +109,62 @@ class WaypointState(WaypointSeriesState):
     def __init__(self, shared, goal_func):
         WaypointSeriesState.__init__(self, shared, [goal_func])
 
-class StopState(WaypointState):
-    def __init__(self, shared):
-        WaypointSeriesState.__init__(self, shared, lambda cur: cur)
+# Smach's userdata system is really, really difficult to use for something like this.
+# Next year, if we want to switch to userdata we should put this entire dict in it, then
+# have all the plumbing be able to pass around an arbitrary list of input and output keys
+saved_waypoints = dict()
+        
+class SaveWaypointState(smach.State):
+    def __init__(self, name):
+        smach.State.__init__(self, outcomes=['succeeded'], output_keys=['waypoint'])
+        self._name = name
+
+    def execute(self, userdata):
+        saved_waypoints[self._name] = PoseEditor.from_PoseTwistStamped_topic('/trajectory')
+        return 'succeeded'
+
+class ReturnToWaypointState(smach.State):
+    def __init__(self, shared, name, speed=0):
+        smach.State.__init__(self, outcomes=['succeeded', 'preempted', 'failed'], input_keys=['waypoint'])
+        self._shared = shared
+        self._name = name
+        self._done = False
+        self._cond = threading.Condition()
+        self._speed = speed
+
+    def execute(self, userdata):
+        if not self._name in saved_waypoints:
+            print 'No saved waypoint ' + self._name
+            return 'failed'
+        current = PoseEditor.from_PoseTwistStamped_topic('/trajectory')
+        goal = saved_waypoints[self._name]
+        current = current.look_at(goal.position)
+        if not self._go(current):
+            self._shared['moveto'].clear_callbacks()
+            return 'preempted'
+        current = current.set_position(goal.position)
+        if not self._go(current):
+            self._shared['moveto'].clear_callbacks()
+            return 'preempted'
+        current = current.set_orientation(goal.orientation)
+        if not self._go(current):
+            self._shared['moveto'].clear_callbacks()
+            return 'preempted'
+        self._shared['moveto'].clear_callbacks()
+        return 'succeeded'
+
+    def _go(self, goal):
+        self._shared['moveto'].send_goal(goal, done_cb=self._done_cb)
+        with self._cond:
+            self._done = False
+            while not self._done and not self.preempt_requested():
+                self._cond.wait(0.1)
+        return not self.preempt_requested()
+
+    def _done_cb(self, state, result):
+        with self._cond:
+            self._done = True
+            self._cond.notify_all()    
         
 class VelocityState(smach.State):
     def __init__(self, shared, vel):

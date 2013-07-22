@@ -95,6 +95,12 @@ class PlanSet(object):
 
         sm = smach.Sequence(['succeeded', 'failed', 'preempted'], 'succeeded')
         with sm:
+            smach.Sequence.add('WAIT_PIPE_'+path.upper(),
+                               legacy_vision_states.WaitForObjectsState(shared,
+                                                                        'find2_down_camera',
+                                                                        'pipe',
+                                                                        timeout=5),
+                               transitions={'timeout': 'failed'})
             smach.Sequence.add('CENTER_PIPE_'+path.upper(),
                                legacy_vision_states.CenterObjectState(shared,
                                                                       'find2_down_camera',
@@ -103,6 +109,8 @@ class PlanSet(object):
                                legacy_vision_states.AlignObjectState(shared,
                                                                      'find2_down_camera',
                                                                      selector))
+            smach.Sequence.add('SAVE_POS_'+path.upper(),
+                               common_states.SaveWaypointState('last_path'))
         return sm
 
 def _iterate_main_first(items):
