@@ -47,8 +47,8 @@ hedge:
     minAngleDiff: 20
 shooter:
     red_range: 20
-    yellow_range: 20
-    green_range: 10
+    yellow_range: 10
+    green_range: 12
     blue_range: 20
     </rosparam>
     <param name="bins/imagePath" value="$(find legacy_vision)/data/bins"/>

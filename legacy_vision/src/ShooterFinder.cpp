@@ -37,8 +37,9 @@ IFinder::FinderResult ShooterFinder::find(const subjugator::ImageSource::Image &
             
 		Mat h_no_border = hsv_split[0](Rect(1, 1, hsv_split[0].cols-2, hsv_split[0].rows-2));
 		rectangle(dbg, quad_point->point, quad_point->point+600*pt, Scalar(255));
-		floodFill(h_no_border, dbg, quad_point->point+4*pt, Scalar(),
-			  NULL, Scalar(range), Scalar(range), FLOODFILL_FIXED_RANGE | FLOODFILL_MASK_ONLY | 4);
+		floodFill(h_no_border, dbg, quad_point->point + 4*pt, Scalar(), NULL,
+                          Scalar(range), Scalar(range),
+                          FLOODFILL_FIXED_RANGE | FLOODFILL_MASK_ONLY | 4);
 		dbg = (dbg != 0);
 	}
 
@@ -115,7 +116,7 @@ IFinder::FinderResult ShooterFinder::find(const subjugator::ImageSource::Image &
 boost::optional<ShooterFinder::QuadPointResults> ShooterFinder::trackQuadPoint(
 	const cv::Mat (&hsv_split)[3]) 
 {
-	static const int OFFSET=4;
+	static const int OFFSET=6;
 
 	Mat scores = Mat::zeros(hsv_split[0].rows, hsv_split[0].cols, CV_8UC1);
 	for (int r=OFFSET; r < scores.rows-OFFSET; r++) {
@@ -152,7 +153,7 @@ boost::optional<ShooterFinder::QuadPointResults> ShooterFinder::trackQuadPoint(
 	double maxscore;
 	minMaxLoc(scores, NULL, &maxscore, NULL, &maxpoint);
 
-	if (maxscore > 25) {
+	if (maxscore > 15) {
 		QuadPointResults results;
 		results.point = maxpoint;
 		results.score = maxscore;
