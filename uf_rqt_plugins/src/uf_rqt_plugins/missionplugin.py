@@ -99,7 +99,7 @@ class MissionPlugin(Plugin):
         contigency_combo = self._widget.findChild(QComboBox, 'contigencyCombo')
         contigency_combo.clear()
 
-        for plan in self._plans:
+        for plan in sorted(self._plans, key=lambda plan: plan.name):
             item = QTreeWidgetItem([plan.name])
             for entry in plan.entries:
                 contigency = entry.contigency_plan
@@ -114,4 +114,4 @@ class MissionPlugin(Plugin):
         
         mission_combo = self._widget.findChild(QComboBox, 'missionCombo')
         mission_combo.clear()
-        mission_combo.addItems(msg.available_missions)
+        mission_combo.addItems(sorted(msg.available_missions))
