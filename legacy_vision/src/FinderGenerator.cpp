@@ -12,6 +12,7 @@
 #include "PipeFinder.h"
 #include "HedgeFinder.h"
 #include "ShooterFinder.h"
+#include "ShooterFloodFinder.h"
 #include "BinsFinder.h"
 #include "WreathFinder.h"
 #include "ButtonFinder.h"
@@ -33,7 +34,8 @@ vector<pair<string, shared_ptr<IFinder> > > FinderGenerator::buildFinders(const 
 			objectPath[0] == "grapes" ? make_shared<GrapesFinder>(rest, fconfig) :
 			objectPath[0] == "pipe" ? make_shared<PipeFinder>(rest, fconfig) :
 			objectPath[0] == "hedge" ? make_shared<HedgeFinder>(rest, fconfig) :
-			objectPath[0] == "shooter" ? make_shared<ShooterFinder>(rest, fconfig) :
+                        objectPath[0] == "shooter" ? make_shared<ShooterFinder>(rest, fconfig) :
+			objectPath[0] == "shooter_flood" ? make_shared<ShooterFloodFinder>(rest, fconfig) :
 			objectPath[0] == "bins" ? make_shared<BinsFinder>(rest, fconfig) :
 			objectPath[0] == "wreath" ? make_shared<WreathFinder>(rest, fconfig) :
 			objectPath[0] == "button" ? make_shared<ButtonFinder>(rest, fconfig) :
