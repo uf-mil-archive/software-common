@@ -122,13 +122,13 @@ IFinder::FinderResult BinsFinder::find(const subjugator::ImageSource::Image &img
         } else if(objectPath[0] == "single" && resultVector.size() == 4) {
             double distances[4][4][2]; // bin_index, template_index, flipped
             for(int template_index = 0; template_index < 4; template_index++) {
-                Mat b = templates[template_index];
+                Mat b = Normalizer::normRGB(templates[template_index]);
                 for(int flipped = 0; flipped < 2; flipped++) {
                     if(flipped) {
                         flip(b, b, -1);
                     }
                     for(int bin_index = 0; bin_index < 4; bin_index++) {
-                        Mat &a = bins[bin_index];
+                        Mat a = Normalizer::normRGB(bins[bin_index]);
                         
                         double distance = 0;
                         assert(a.rows == b.rows && a.cols == b.cols);
