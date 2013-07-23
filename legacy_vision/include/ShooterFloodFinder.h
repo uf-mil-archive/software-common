@@ -28,6 +28,7 @@ class ShooterFloodFinder : public IFinder
                     int score;
 		    cv::Vec<uchar, 4> hues;
 		    cv::Vec<uchar, 4> sats;
+                    cv::Mat scores;
 		};
 		boost::optional<QuadPointResults> trackQuadPoint(
 			const cv::Mat (&hsv_split)[3]);

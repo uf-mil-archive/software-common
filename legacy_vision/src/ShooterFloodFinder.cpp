@@ -13,6 +13,8 @@ using namespace boost;
 using namespace cv;
 using namespace std;
 
+static const int OFFSET=16;
+
 IFinder::FinderResult ShooterFloodFinder::find(const subjugator::ImageSource::Image &img) {
 	Mat hsv;
 	cvtColor(img.image, hsv, CV_BGR2HSV);
@@ -29,15 +31,15 @@ IFinder::FinderResult ShooterFloodFinder::find(const subjugator::ImageSource::Im
 		if (objectPath[0] == "red")
 			pt = Point(-1, -1);
 		else if (objectPath[0] == "green")
-			pt = Point(1, -1);
-		else if (objectPath[0] == "blue")
 			pt = Point(-1, 1);
+		else if (objectPath[0] == "blue")
+			pt = Point(1, -1);
 		else
 			pt = Point(1, 1);
             
 		Mat h_no_border = hsv_split[0](Rect(1, 1, hsv_split[0].cols-2, hsv_split[0].rows-2));
 		rectangle(dbg, quad_point->point, quad_point->point+600*pt, Scalar(255));
-		floodFill(h_no_border, dbg, quad_point->point + 4*pt, Scalar(), NULL,
+		floodFill(h_no_border, dbg, quad_point->point + OFFSET*pt, Scalar(), NULL,
                           Scalar(range), Scalar(range),
                           FLOODFILL_FIXED_RANGE | FLOODFILL_MASK_ONLY | 4);
 		dbg = (dbg != 0);
@@ -108,16 +110,17 @@ IFinder::FinderResult ShooterFloodFinder::find(const subjugator::ImageSource::Im
 
 	if (quad_point) {
 		circle(res, quad_point->point, 10, Scalar(255, 255, 0), 3);
+		circle(res, quad_point->point + Point(OFFSET, OFFSET), 2, Scalar(0, 255, 0), 3);
+		circle(res, quad_point->point + Point(-OFFSET, -OFFSET), 2, Scalar(0, 255, 0), 3);
+                //dbg = quad_point->scores;
 	}
-	
+
 	return FinderResult(resultVector, res, dbg);
 }
 
 boost::optional<ShooterFloodFinder::QuadPointResults> ShooterFloodFinder::trackQuadPoint(
 	const cv::Mat (&hsv_split)[3]) 
 {
-	static const int OFFSET=6;
-
 	Mat scores = Mat::zeros(hsv_split[0].rows, hsv_split[0].cols, CV_8UC1);
 	for (int r=OFFSET; r < scores.rows-OFFSET; r++) {
 		for (int c=OFFSET; c < scores.cols-OFFSET; c++) {
@@ -153,7 +156,7 @@ boost::optional<ShooterFloodFinder::QuadPointResults> ShooterFloodFinder::trackQ
 	double maxscore;
 	minMaxLoc(scores, NULL, &maxscore, NULL, &maxpoint);
 
-	if (maxscore > 15) {
+	if (maxscore > 5) {
 		QuadPointResults results;
 		results.point = maxpoint;
 		results.score = maxscore;
@@ -162,6 +165,7 @@ boost::optional<ShooterFloodFinder::QuadPointResults> ShooterFloodFinder::trackQ
 									    OFFSET);
 		results.hues = tmp.first;
 		results.sats = tmp.second;
+                results.scores = scores;
 		return results;
 	} else {
 		return boost::none;
