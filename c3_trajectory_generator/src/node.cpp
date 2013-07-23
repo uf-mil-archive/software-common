@@ -11,12 +11,14 @@
 #include <kill_handling/listener.h>
 
 #include "uf_common/MoveToAction.h"
+#include "c3_trajectory_generator/SetDisabled.h"
 #include "C3Trajectory.h"
 
 using namespace std;
 using namespace geometry_msgs;
 using namespace nav_msgs;
 using namespace uf_common;
+using namespace c3_trajectory_generator;
 
 
 subjugator::C3Trajectory::Point Point_from_PoseTwist(const Pose &pose, const Twist &twist) {
@@ -88,9 +90,11 @@ struct Node {
     actionlib::SimpleActionServer<uf_common::MoveToAction> actionserver;
     ros::Publisher trajectory_pub;
     ros::Publisher waypoint_pose_pub;
+    ros::ServiceServer set_disabled_service;
 
     ros::Timer update_timer;
 
+    bool disabled;
     boost::scoped_ptr<subjugator::C3Trajectory> c3trajectory;
     ros::Time c3trajectory_t;
 
@@ -102,11 +106,20 @@ struct Node {
     void killed_callback() {
         c3trajectory.reset();
     }
+    
+    bool set_disabled(SetDisabledRequest & request, SetDisabledResponse& response) {
+        disabled = request.disabled;
+        if(disabled) {
+            c3trajectory.reset();
+        }
+        return true;
+    }
 
     Node() :
         private_nh("~"),
         kill_listener(boost::bind(&Node::killed_callback, this)),
-        actionserver(nh, "moveto", false) {
+        actionserver(nh, "moveto", false),
+        disabled(false) {
 
         ROS_ASSERT(private_nh.getParam("fixed_frame", fixed_frame));
         ROS_ASSERT(private_nh.getParam("body_frame", body_frame));
@@ -128,12 +141,16 @@ struct Node {
         update_timer = nh.createTimer(ros::Duration(1./50), boost::bind(&Node::timer_callback, this, _1));
 
         actionserver.start();
+        
+        set_disabled_service = private_nh.advertiseService
+            <SetDisabledRequest, SetDisabledResponse>(
+            "set_disabled", boost::bind(&Node::set_disabled, this, _1, _2));
     }
 
     void odom_callback(const OdometryConstPtr& odom) {
         if(c3trajectory)
             return; // already initialized
-        if(kill_listener.get_killed())
+        if(kill_listener.get_killed() || disabled)
             return; // only initialize when unkilled
 
         subjugator::C3Trajectory::Point current = Point_from_PoseTwist(odom->pose.pose, odom->twist.twist);

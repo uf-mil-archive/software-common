@@ -14,80 +14,47 @@ from nav_msgs.msg import Odometry
 from tf import transformations
 
 from uf_common.msg import PoseTwist, PoseTwistStamped
-from uf_common.orientation_helpers import xyz_array, xyzw_array, rotvec_to_quat
+from uf_common.orientation_helpers import xyz_array, xyzw_array, PoseEditor
+roslib.load_manifest('c3_trajectory_generator')
+from c3_trajectory_generator.srv import SetDisabled
 
 
 rospy.init_node('joy_to_posetwist')
 
 
-def integrate(pose, twist, dt, vel_frame):
-    old_orientation = xyzw_array(pose.orientation)
-    orientation = transformations.quaternion_multiply(old_orientation, rotvec_to_quat(dt * xyz_array(twist.angular)))
-    return Pose(
-        position=Point(*xyz_array(pose.position) + transformations.quaternion_matrix(old_orientation if vel_frame == 'left' else orientation)[:3, :3].dot(dt * xyz_array(twist.linear))),
-        orientation=Quaternion(*orientation),
-    )
-
 current = rospy.wait_for_message('/odom', Odometry)
+def update_current(odom):
+    global current
+    current = odom
+rospy.Subscriber('/odom', Odometry, update_current)
 
-out = PoseTwistStamped(
-    header=Header(
-        stamp=current.header.stamp,
-        frame_id=current.header.frame_id,
-    ),
-    posetwist=PoseTwist(
-        pose=current.pose.pose,
-        twist=Twist(
-            linear=Vector3(0, 0, 0),
-            angular=Vector3(0, 0, 0),
-        ),
-    ),
-)
-last_msg = None
-pub = rospy.Publisher('/desired', PoseTwistStamped)
-pub_rviz = rospy.Publisher('/desired_rviz', PoseStamped)
-def joy_callback(msg):
-    global out, last_msg
-    
-    last_msg = msg
-    
-    msg.header.stamp = rospy.Time.now()
-    dt = (msg.header.stamp - out.header.stamp).to_sec()
-    twist = Twist(
-        linear=Vector3(
-            x=msg.axes[1],
-            y=msg.axes[0],
-            z=msg.axes[3],
-        ),
-        angular=Vector3(
-            x=-msg.axes[4],
-            y=-msg.axes[5],
-            z=msg.axes[2],
-        ),
-    )
-    
-    midpose = integrate(out.posetwist.pose, out.posetwist.twist, dt/2, vel_frame='left')
-    endpose = integrate(midpose, twist, dt/2, vel_frame='right')
-    
-    out = PoseTwistStamped(
+pub = rospy.Publisher('/trajectory', PoseTwistStamped)
+
+set_trajgen_disabled = rospy.ServiceProxy('/c3_trajectory_generator/set_disabled', SetDisabled)
+
+joy_max = 0.68359375
+max_vel = 1
+max_angvel = 1
+
+def cb(msg):
+    enabled = msg.buttons[0] or msg.buttons[1]
+    set_trajgen_disabled(enabled)
+    if not enabled:
+        return
+    pub.publish(PoseTwistStamped(
         header=Header(
             stamp=msg.header.stamp,
-            frame_id=out.header.frame_id,
+            frame_id=current.header.frame_id,
         ),
         posetwist=PoseTwist(
-            pose=endpose,
-            twist=twist,
+            pose=PoseEditor.from_Odometry(current).zero_roll_and_pitch().as_Pose(),
+            twist=Twist(
+                linear=Vector3(*numpy.array(msg.axes[:3])/joy_max*[1,1,1 if msg.buttons[1] else 0]),
+                angular=Vector3(*numpy.array(msg.axes[3:])/joy_max*[0,0,1]),
+            ),
         ),
-    )
-    pub.publish(out)
-    pub_rviz.publish(PoseStamped(
-        header=Header(
-            stamp=msg.header.stamp,
-            frame_id=out.header.frame_id,
-        ),
-        pose=endpose,
     ))
-rospy.Subscriber('joy', Joy, joy_callback)
-rospy.Timer(rospy.Duration(.01), lambda timer_event: joy_callback(last_msg) if last_msg is not None else None)
+rospy.Subscriber('spacenav/joy', Joy, cb)
+
 
 rospy.spin()
