@@ -61,8 +61,8 @@ shooter:
 shooter_flood:
     red_range: 40
     yellow_range: 20
-    green_range: 20
-    blue_range: 40
+    green_range: 30
+    blue_range: 15
 grapes:
     blue_ref: {b: 111, g: 96, r: 38}
     yellow_ref: {b: 55, g: 110, r: 78}

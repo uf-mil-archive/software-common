@@ -13,7 +13,7 @@ using namespace boost;
 using namespace cv;
 using namespace std;
 
-static const int OFFSET=20;
+static const int OFFSET=16;
 
 IFinder::FinderResult ShooterFloodFinder::find(const subjugator::ImageSource::Image &img) {
 	Mat hsv;
@@ -49,7 +49,11 @@ IFinder::FinderResult ShooterFloodFinder::find(const subjugator::ImageSource::Im
 
 	erode(dbg,dbg,Mat::ones(3,3,CV_8UC1));		
 	dilate(dbg,dbg,Mat::ones(5,5,CV_8UC1));
-	erode(dbg,dbg,Mat::ones(3,3,CV_8UC1));
+
+        if (objectPath[0] != "red")
+            dbg &= hsv_split[1] > 48;
+        
+	erode(dbg,dbg,Mat::ones(5,5,CV_8UC1));
 
 	// call to specific member function here
 	Contours contours(dbg, 50, 7000000,1500000);
@@ -111,9 +115,11 @@ IFinder::FinderResult ShooterFloodFinder::find(const subjugator::ImageSource::Im
 	}
 
 	if (quad_point) {
-		circle(res, quad_point->point, 10, Scalar(255, 255, 0), 3);
 		circle(res, quad_point->point + Point(OFFSET, OFFSET), 2, Scalar(0, 255, 0), 3);
+		circle(res, quad_point->point + Point(OFFSET, -OFFSET), 2, Scalar(0, 255, 0), 3);
+		circle(res, quad_point->point + Point(-OFFSET, OFFSET), 2, Scalar(0, 255, 0), 3);
 		circle(res, quad_point->point + Point(-OFFSET, -OFFSET), 2, Scalar(0, 255, 0), 3);
+
                 //dbg = quad_point->scores;
 	}
 
@@ -152,13 +158,14 @@ boost::optional<ShooterFloodFinder::QuadPointResults> ShooterFloodFinder::trackQ
 
 	// Gets rid of almost all noise, because only the actual point will
 	// appear as a mostly solid square of size OFFSET
-	erode(scores, scores, Mat::ones(OFFSET+1,OFFSET+1,CV_8UC1));
+//	erode(scores, scores, Mat::ones(OFFSET+1,OFFSET+1,CV_8UC1));
+	erode(scores, scores, Mat::ones(OFFSET/2-1,OFFSET/2-1,CV_8UC1));
 
 	Point maxpoint;
 	double maxscore;
 	minMaxLoc(scores, NULL, &maxscore, NULL, &maxpoint);
 
-	if (maxscore > 5) {
+	if (maxscore > 25) {
 		QuadPointResults results;
 		results.point = maxpoint;
 		results.score = maxscore;
