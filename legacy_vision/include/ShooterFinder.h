@@ -2,7 +2,6 @@
 #define SHOOTER_FINDER_H
 
 #include "IFinder.h"
-#include <boost/optional.hpp>
 
 class ShooterFinder : public IFinder
 {
@@ -21,18 +20,6 @@ class ShooterFinder : public IFinder
 				throw std::runtime_error("invalid objectPath");
 		};
 		FinderResult find(const subjugator::ImageSource::Image &img);
-
-	private:        
-                struct QuadPointResults {
-                    cv::Point point;
-                    int score;
-		    cv::Vec<uchar, 4> hues;
-		    cv::Vec<uchar, 4> sats;
-		};
-		boost::optional<QuadPointResults> trackQuadPoint(
-			const cv::Mat (&hsv_split)[3]);
-                std::pair<cv::Vec<uchar, 4>, cv::Vec<uchar, 4> > sample_point(
-                    const cv::Mat (&hsv_split)[3], int r, int c, int offset);
 };
 
 #endif
