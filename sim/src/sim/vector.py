@@ -58,6 +58,8 @@ class V(tuple):
             (    2*self[1]*self[2] + 2*self[3]*self[0], 1 - 2*self[1]*self[1] - 2*self[3]*self[3],     2*self[2]*self[3] - 2*self[1]*self[0]),
             (    2*self[1]*self[3] - 2*self[2]*self[0],     2*self[2]*self[3] + 2*self[1]*self[0], 1 - 2*self[1]*self[1] - 2*self[2]*self[2]),
         )
+    def quat_to_matrix4(self):
+        return [list(row)+[0] for row in self.quat_to_matrix()] + [[0, 0, 0, 1]]
     def quat_to_axisangle(self):
         self = self.unit()
         if self[0] < 0:
