@@ -13,7 +13,7 @@ using namespace boost;
 using namespace cv;
 using namespace std;
 
-static const int OFFSET=16;
+static const int OFFSET=20;
 
 IFinder::FinderResult ShooterFloodFinder::find(const subjugator::ImageSource::Image &img) {
 	Mat hsv;
@@ -37,10 +37,12 @@ IFinder::FinderResult ShooterFloodFinder::find(const subjugator::ImageSource::Im
 		else
 			pt = Point(1, 1);
             
-		Mat h_no_border = hsv_split[0](Rect(1, 1, hsv_split[0].cols-2, hsv_split[0].rows-2));
+//		Mat h_no_border = hsv_split[0](Rect(1, 1, hsv_split[0].cols-2, hsv_split[0].rows-2));
+		Mat h_no_border = img.image(Rect(1, 1, img.image.cols-2, img.image.rows-2));
+                Normalizer::normRGB(h_no_border);
 		rectangle(dbg, quad_point->point, quad_point->point+600*pt, Scalar(255));
 		floodFill(h_no_border, dbg, quad_point->point + OFFSET*pt, Scalar(), NULL,
-                          Scalar(range), Scalar(range),
+                          Scalar(range, range, range), Scalar(range, range, range),
                           FLOODFILL_FIXED_RANGE | FLOODFILL_MASK_ONLY | 4);
 		dbg = (dbg != 0);
 	}
