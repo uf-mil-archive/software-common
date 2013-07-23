@@ -14,6 +14,7 @@ class Blob
 			float perimeter;
 			cv::Point2f centroid;
 			float radius;
+			cv::Point2f rect_center;
 			cv::Point2f direction;
 			float aspect_ratio;  // ratio of length along angle to length perpendicular to angle. guaranteed to be >= 1
 			bool is_vertical; // long axis is within 45deg of vertical

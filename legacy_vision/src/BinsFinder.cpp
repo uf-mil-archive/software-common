@@ -3,6 +3,7 @@
 #include "Contours.h"
 #include "Normalizer.h"
 #include "Thresholder.h"
+#include "Blob.h"
 
 #include "BinsFinder.h"
 
@@ -11,6 +12,31 @@ using namespace cv;
 using namespace std;
 
 const std::string BinsFinder::names[4] = {"10", "16", "37", "98"};
+
+optional<Mat> extract_bottom(const Mat bin) {
+    Mat normalized = Normalizer::normRGB(bin);
+    vector<Mat> normBGR; split(normalized, normBGR);
+    Mat bottom; threshold(normBGR[0], bottom, 0, 255, THRESH_OTSU|THRESH_BINARY_INV);
+	Blob blobs(bottom, 0, 1e12, 1e12);
+	if(!blobs.data.size()) return none;
+	Blob::BlobData &blob = blobs.data[0];
+	Size bottom_size(300, 150);
+	Point2f bottom_src[4];
+	Point2f perp_dir(-blob.direction.y, blob.direction.x);
+	for(int i = 0; i < 4; i++) {
+	    double a = i==1||i==2 ? 0.5 : -0.5;
+	    double b = i==2||i==3 ? 0.5 : -0.5;
+	    bottom_src[i] = blob.rect_center + a*blob.direction*blob.long_length + b*perp_dir*blob.short_length;
+    }
+    Point2f bottom_dst[4];
+    bottom_dst[0] = Point2f(0, 0);
+    bottom_dst[1] = Point2f(bottom_size.width, 0);
+    bottom_dst[2] = Point2f(bottom_size.width, bottom_size.height);
+    bottom_dst[3] = Point2f(0, bottom_size.height);
+    Mat bottom_t = getPerspectiveTransform(bottom_src, bottom_dst);
+    Mat bottom2;warpPerspective(bin, bottom2, bottom_t, bottom_size);
+    return bottom2;
+}
 
 IFinder::FinderResult BinsFinder::find(const subjugator::ImageSource::Image &img) {
     Mat blurred; GaussianBlur(img.image, blurred, Size(0,0), 1.3);
@@ -69,11 +95,15 @@ IFinder::FinderResult BinsFinder::find(const subjugator::ImageSource::Image &img
 
             Mat t = getPerspectiveTransform(src, dst);
             Mat bin;warpPerspective(img.image, bin, t, bin_size);
-            bins.push_back(bin);
-            centroids.push_back(box.centroid);
             
             Mat normalized = Normalizer::normRGB(bin);
             warpPerspective(normalized, res, t, img.image.size(), WARP_INVERSE_MAP, BORDER_TRANSPARENT);
+            
+            optional<Mat> bottom = extract_bottom(bin);
+            if(!bottom) continue;
+            bins.push_back(*bottom);
+            centroids.push_back(box.centroid);
+            
             
             property_tree::ptree fResult;
             fResult.put_child("center", Point_to_ptree(box.centroid, img));

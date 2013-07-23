@@ -55,6 +55,7 @@ Blob::Blob(const Mat &img, float minContour, float maxContour, float maxPerimete
                 bdata.direction = cv::Point2f(cos(rr_angle_rad), sin(rr_angle_rad));
 		bdata.circularity = convex_area_holder/(pi<double>()*pow(radius_holder, 2));
 		bdata.contour = contour;
+		bdata.rect_center = rr.center;
 
 		bdata.aspect_ratio = rr.size.width/rr.size.height;
                 bdata.is_vertical = pow(sin(rr_angle_rad), 2) > pow(cos(rr_angle_rad), 2);
