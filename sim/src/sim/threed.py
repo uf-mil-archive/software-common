@@ -414,7 +414,7 @@ class Interface(object):
         self.pos = pos
         
         self.display_flags = pygame.DOUBLEBUF|pygame.OPENGL|pygame.RESIZABLE
-        self.display = pygame.display.set_mode((700, 400), self.display_flags)
+        self.display = pygame.display.set_mode((640, 480), self.display_flags)
         self.clock = pygame.time.Clock()
         
         self.pitch = self.yaw = 0
@@ -489,6 +489,19 @@ class Interface(object):
         pos = self.pos
         
         self.world.draw()
+        
+        glDisable(GL_LIGHTING)
+        glDisable(GL_DEPTH_TEST)
+        with GLMatrix:
+            glTranslate(*self.pos + forward + left - local_up)
+            glBegin(GL_LINES)
+            for i in xrange(3):
+                glColor3f(*(j==i for j in xrange(3)))
+                glVertex3f(0, 0, 0)
+                glVertex3f(*(.1*(j==i) for j in xrange(3)))
+            glEnd()
+        glEnable(GL_DEPTH_TEST)
+        glEnable(GL_LIGHTING)
         
         pygame.display.flip()
 
