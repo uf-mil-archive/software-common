@@ -45,7 +45,7 @@ IFinder::FinderResult HedgeFinder::find(const subjugator::ImageSource::Image &im
 	Point bottom_center;
 	bool found_bottom = false;
 	BOOST_FOREACH(const Blob::BlobData &data, blob.data)
-		if(!data.is_vertical && 25 < data.aspect_ratio && data.aspect_ratio < 50) {
+		if(!data.is_vertical && 20 < data.aspect_ratio && data.aspect_ratio < 50) {
 			bottom_center = data.centroid;
 			found_bottom = true;
 		}
@@ -54,7 +54,7 @@ IFinder::FinderResult HedgeFinder::find(const subjugator::ImageSource::Image &im
 		float center_y = -1000;
 		bool found_side = false;
 		BOOST_FOREACH(const Blob::BlobData &data, blob.data)
-			if(data.is_vertical && 4 < data.aspect_ratio && data.aspect_ratio < 25 &&
+			if(data.is_vertical && 4 < data.aspect_ratio && data.aspect_ratio < 20 &&
 					data.centroid.y < bottom_center.y && data.centroid.y > center_y) {
 				center_y = data.centroid.y;
 				found_side = true;
