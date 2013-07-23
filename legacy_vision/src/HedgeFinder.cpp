@@ -19,10 +19,11 @@ IFinder::FinderResult HedgeFinder::find(const subjugator::ImageSource::Image &im
 
 	// call to thresholder here
 	Mat dbg = Thresholder(normalized).green();
-	erode(dbg, dbg, cv::Mat::ones(3,3,CV_8UC1));
-	dilate(dbg, dbg, cv::Mat::ones(7,7,CV_8UC1));
+	erode(dbg, dbg, cv::Mat::ones(3,3,CV_8UC1)); // -1
+	dilate(dbg, dbg, cv::Mat::ones(7,7,CV_8UC1)); // +3
+	erode(dbg, dbg, cv::Mat::ones(5,5,CV_8UC1)); // -2
 
-	Blob blob(dbg, 1000, 100000, 20000);
+	Blob blob(dbg, 100, 100000, 20000);
 
 	Mat res = img.image.clone();
 	blob.drawResult(res, CV_RGB(0, 0, 255));
@@ -44,7 +45,7 @@ IFinder::FinderResult HedgeFinder::find(const subjugator::ImageSource::Image &im
 	Point bottom_center;
 	bool found_bottom = false;
 	BOOST_FOREACH(const Blob::BlobData &data, blob.data)
-		if(!data.is_vertical && 12 < data.aspect_ratio && data.aspect_ratio < 19) {
+		if(!data.is_vertical && 25 < data.aspect_ratio && data.aspect_ratio < 50) {
 			bottom_center = data.centroid;
 			found_bottom = true;
 		}
@@ -53,7 +54,7 @@ IFinder::FinderResult HedgeFinder::find(const subjugator::ImageSource::Image &im
 		float center_y = -1000;
 		bool found_side = false;
 		BOOST_FOREACH(const Blob::BlobData &data, blob.data)
-			if(data.is_vertical && 4 < data.aspect_ratio && data.aspect_ratio < 10 &&
+			if(data.is_vertical && 4 < data.aspect_ratio && data.aspect_ratio < 25 &&
 					data.centroid.y < bottom_center.y && data.centroid.y > center_y) {
 				center_y = data.centroid.y;
 				found_side = true;
@@ -61,16 +62,6 @@ IFinder::FinderResult HedgeFinder::find(const subjugator::ImageSource::Image &im
 		if(found_side) {
 			center = Point(bottom_center.x, center_y);
 			scale = bottom_center.y - center_y;
-		}
-	} else {
-		// try to find center from average of two side bar centers
-		vector<Point> centers;
-		BOOST_FOREACH(const Blob::BlobData &data, blob.data)
-			if(data.is_vertical && 4 < data.aspect_ratio && data.aspect_ratio < 10)
-				centers.push_back(data.centroid);
-		if(centers.size() == 2) {
-			center = 0.5*(centers[0] + centers[1]);
-			scale = norm(centers[1] - centers[0])/2;
 		}
 	}
 	if(scale < 0) return FinderResult(vector<property_tree::ptree>(), res, dbg);
