@@ -73,7 +73,7 @@ IFinder::FinderResult GrapesFinder::find(const subjugator::ImageSource::Image &i
 		dilate(red, red, cv::Mat::ones(5,5,CV_8UC1)); */
 		Mat red = thresholder.forrest(yellow_ref, red_ref, 10, 0.8);
 		erode(red, red, cv::Mat::ones(3,3,CV_8UC1));
-		dilate(red, red, cv::Mat::ones(9,9,CV_8UC1));
+		dilate(red, red, cv::Mat::ones(17,17,CV_8UC1));
 		erode(red, red, cv::Mat::ones(3,3,CV_8UC1));
 		//erode(red, red, cv::Mat::ones(5,5,CV_8UC1));
 		Blob blob(red, 1000, 1000000, 1000000);
