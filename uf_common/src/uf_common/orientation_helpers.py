@@ -102,10 +102,19 @@ lookat_camera = look_at_camera # deprecated
 
 EAST, NORTH, WEST, SOUTH = [transformations.quaternion_about_axis(math.pi/2*i, [0, 0, 1]) for i in xrange(4)]
 
+def safe_wait_for_message(topic, topic_type):
+    while True:
+        try:
+            return rospy.wait_for_message(topic, topic_type, .5)
+        except rospy.exceptions.ROSException, e:
+            if 'timeout' not in e.message: raise
+            print topic, 'wait_for_message timed out!'
+            
+
 class PoseEditor(object):
     @classmethod
     def from_Odometry_topic(cls, topic='/odom'):
-        return cls.from_Odometry(rospy.wait_for_message(topic, Odometry))
+        return cls.from_Odometry(safe_wait_for_message(topic, Odometry))
     
     @classmethod
     def from_Odometry(cls, msg):
@@ -113,7 +122,7 @@ class PoseEditor(object):
     
     @classmethod
     def from_PoseTwistStamped_topic(cls, topic):
-        return cls.from_PoseTwistStamped(rospy.wait_for_message(topic, PoseTwistStamped))
+        return cls.from_PoseTwistStamped(safe_wait_for_message(topic, PoseTwistStamped))
     
     @classmethod
     def from_PoseTwistStamped(cls, msg):
