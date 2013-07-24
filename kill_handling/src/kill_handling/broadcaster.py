@@ -12,14 +12,18 @@ class KillBroadcaster(object):
         self.set_kill = rospy.ServiceProxy('/set_kill', SetKill)
     
     def send(self, active):
-        self.set_kill(Kill(
-            header=Header(
-                stamp=rospy.Time.now(),
-            ),
-            id=self.id,
-            active=active,
-            description=self.description,
-        ), False)
+        try:
+            self.set_kill(Kill(
+                header=Header(
+                    stamp=rospy.Time.now(),
+                ),
+                id=self.id,
+                active=active,
+                description=self.description,
+            ), False)
+        except:
+            import traceback
+            traceback.print_exc()
 
     def clear(self):
         self.set_kill(Kill(
