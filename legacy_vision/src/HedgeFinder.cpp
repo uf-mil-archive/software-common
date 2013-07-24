@@ -13,19 +13,20 @@ using namespace std;
 IFinder::FinderResult HedgeFinder::find(const subjugator::ImageSource::Image &img) {
 	// blur the image to remove noise
 	//GaussianBlur(ioimages->prcd,ioimages->prcd,Size(3,3),10,15,BORDER_DEFAULT);
+	Mat blurred; GaussianBlur(img.image, blurred, Size(0, 0), 5, 5);
 
 	// call to normalizer here
-	Mat normalized = Normalizer::normRGB(img.image);
+	Mat normalized = Normalizer::normRGB(blurred);
 
 	// call to thresholder here
 	Mat dbg = Thresholder(normalized).green();
 	erode(dbg, dbg, cv::Mat::ones(3,3,CV_8UC1)); // -1
 	dilate(dbg, dbg, cv::Mat::ones(7,7,CV_8UC1)); // +3
-	erode(dbg, dbg, cv::Mat::ones(5,5,CV_8UC1)); // -2
+	erode(dbg, dbg, cv::Mat::ones(7,7,CV_8UC1)); // -2
 
 	Blob blob(dbg, 100, 100000, 20000);
 
-	Mat res = img.image.clone();
+	Mat res = normalized.clone();
 	blob.drawResult(res, CV_RGB(0, 0, 255));
 
 	// send average centroid of blobs, but with tiny scale so we servo until we can recognize the structure
@@ -45,7 +46,7 @@ IFinder::FinderResult HedgeFinder::find(const subjugator::ImageSource::Image &im
 	Point bottom_center;
 	bool found_bottom = false;
 	BOOST_FOREACH(const Blob::BlobData &data, blob.data)
-		if(!data.is_vertical && 20 < data.aspect_ratio && data.aspect_ratio < 50) {
+		if(!data.is_vertical && 9 < data.aspect_ratio && data.aspect_ratio < 50) {
 			bottom_center = data.centroid;
 			found_bottom = true;
 		}
@@ -54,7 +55,7 @@ IFinder::FinderResult HedgeFinder::find(const subjugator::ImageSource::Image &im
 		float center_y = -1000;
 		bool found_side = false;
 		BOOST_FOREACH(const Blob::BlobData &data, blob.data)
-			if(data.is_vertical && 4 < data.aspect_ratio && data.aspect_ratio < 20 &&
+			if(data.is_vertical && 4 < data.aspect_ratio && data.aspect_ratio < 9 &&
 					data.centroid.y < bottom_center.y && data.centroid.y > center_y) {
 				center_y = data.centroid.y;
 				found_side = true;

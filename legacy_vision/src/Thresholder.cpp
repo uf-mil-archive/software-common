@@ -70,12 +70,15 @@ Mat Thresholder::yellow() {
 
 Mat Thresholder::green() {
 	Mat dbg;
+        Mat x = (channelsRGB[1] + 64) - (channelsRGB[0] - 64);
+        adaptiveThreshold(x,dbg,255,0,THRESH_BINARY,101,-4);
+        return dbg;
 	add(channelsLAB[1], channelsHSV[0], dbg);
-	adaptiveThreshold(dbg,dbg,255,0,THRESH_BINARY_INV,71,4); // used incorrectly, but seems to work very robustly!
-	Mat b; adaptiveThreshold(channelsLAB[2],b,255,0,THRESH_BINARY_INV,201,30);
-	subtract(dbg,b,dbg);
-	erode(dbg,dbg,cv::Mat::ones(9,9,CV_8UC1));
-	dilate(dbg,dbg,cv::Mat::ones(7,7,CV_8UC1));
+	adaptiveThreshold(dbg,dbg,255,0,THRESH_BINARY_INV,201,5); // used incorrectly, but seems to work very robustly!
+	Mat b; adaptiveThreshold(channelsLAB[2],b,255,0,THRESH_BINARY_INV,201,20);
+	//subtract(dbg,b,dbg);
+	//erode(dbg,dbg,cv::Mat::ones(9,9,CV_8UC1));
+	//dilate(dbg,dbg,cv::Mat::ones(7,7,CV_8UC1));
 	return dbg;
 }
 
