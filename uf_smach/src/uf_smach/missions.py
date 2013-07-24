@@ -30,20 +30,42 @@ class PlanSet(object):
     def get_plans(self):
         return self._plans.keys()
     
-    def make_sm(self, shared, allow_nonexistent_contigencies=False):
+    def make_sm(self, shared, master_timeout=None, allow_nonexistent_contigencies=False):
         sm = smach.StateMachine(outcomes=['succeeded', 'failed', 'preempted'])
         with sm:
-            for plan in _iterate_main_first(self._plans):
+            for plan in _iterate_plans(self._plans):
                 plan_sm, contigency_outcomes = self._make_plan_sm(shared, plan)
                 transitions = self._make_plan_transitions(plan, contigency_outcomes,
                                                           allow_nonexistent_contigencies)
                 smach.StateMachine.add('PLAN_' + plan.upper(), plan_sm, transitions=transitions)
+        if master_timeout is None:
+            return sm
+        
+        sm_conc = smach.Concurrence(outcomes=['succeeded', 'master_timeout', 'preempted'],
+                                    default_outcome='master_timeout',
+                                    outcome_map={'succeeded': { 'PLANS': 'succeeded' },
+                                                 'preempted': { 'PLANS': 'preempted',
+                                                                'MASTER_TIMEOUT': 'preempted'}},
+                                    child_termination_cb=lambda so: True)
+        with sm_conc:
+            smach.Concurrence.add('PLANS', sm)
+            smach.Concurrence.add('MASTER_TIMEOUT', common_states.SleepState(master_timeout))
+
+        sm = smach.StateMachine(outcomes=['succeeded', 'failed', 'preempted'])
+        with sm:
+            smach.StateMachine.add('PLANS', sm_conc,
+                                   transitions={'master_timeout': 'TIMEOUT',
+                                                'succeeded': 'TIMEOUT'})
+            smach.StateMachine.add('TIMEOUT', self._make_plan_sm(shared, 'timeout')[0],
+                                   transitions={'no_contigency': 'failed'})
         return sm
 
     def _make_plan_transitions(self, plan, contigency_outcomes, allow_nonexistent_contigencies):
         transitions = {'succeeded': 'succeeded', 'preempted': 'preempted'}
         for outcome in contigency_outcomes:
-            if outcome in self._plans:
+            if outcome == 'timeout':
+                transitions[outcome] = 'failed'
+            elif outcome in self._plans:
                 transitions[outcome] = 'PLAN_' + outcome.upper()
             elif outcome == 'no_contigency' or allow_nonexistent_contigencies:
                 transitions[outcome] = 'failed'
@@ -113,17 +135,19 @@ class PlanSet(object):
                                common_states.SaveWaypointState('last_path'))
         return sm
 
-def _iterate_main_first(items):
+def _iterate_plans(items):
     if 'main' in items:
         yield 'main'
     for item in items:
-        if item != 'main':
+        if item != 'main' and item != 'timeout':
             yield item
     
 class MissionServer(object):
-    def __init__(self, plan_names):
+    def __init__(self, plan_names, master_timeout=None):
         self._plans = PlanSet(plan_names)
+        self._master_timeout = master_timeout
         self._sm = None
+        self._shared = uf_smach.util.StateSharedHandles()
         self._pub = rospy.Publisher('mission/plans', PlansStamped)
         self._srv = rospy.Service('mission/modify_plan', ModifyPlan, self._modify_plan)
         self._run_srv = actionlib.SimpleActionServer('mission/run', RunMissionsAction,
@@ -132,13 +156,12 @@ class MissionServer(object):
         self._run_srv.start()
         self._tim = rospy.Timer(rospy.Duration(.1), lambda _: self._publish_plans())
         self._kill_listener = KillListener(self._on_preempt)
-        self._shared = uf_smach.util.StateSharedHandles()
 
     def get_plan(self, plan):
         return self._plans.get_plan(plan)
 
     def execute(self, goal):
-        self._sm = self._plans.make_sm(self._shared)
+        self._sm = self._plans.make_sm(self._shared, self._master_timeout)
         sis = smach_ros.IntrospectionServer('mission_planner', self._sm, '/SM_ROOT')
         sis.start()
         outcome = self._sm.execute()
