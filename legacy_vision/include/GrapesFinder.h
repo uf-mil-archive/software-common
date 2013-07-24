@@ -10,7 +10,7 @@ class GrapesFinder : public IFinder
 			if(objectPath.size() != 1 || !(
 					objectPath[0] == "board" ||
 					objectPath[0] == "grape" ||
-					objectPath[0] == "grape_close" ||
+					objectPath[0] == "lever" ||
 			false))
 				throw std::runtime_error("invalid objectPath");
 		};
