@@ -138,7 +138,7 @@ class ReturnToWaypointState(smach.State):
             return 'failed'
         current = PoseEditor.from_PoseTwistStamped_topic('/trajectory')
         goal = saved_waypoints[self._name]
-        current = current.look_at(goal.position)
+        current = current.look_at_without_pitching(goal.position)
         if not self._go(current):
             self._shared['moveto'].clear_callbacks()
             return 'preempted'
