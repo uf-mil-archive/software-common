@@ -13,7 +13,7 @@ using namespace boost;
 using namespace cv;
 using namespace std;
 
-static const int OFFSET=16;
+static const int OFFSET=18;
 
 IFinder::FinderResult ShooterFloodFinder::find(const subjugator::ImageSource::Image &img) {
 	Mat hsv;
@@ -43,16 +43,14 @@ IFinder::FinderResult ShooterFloodFinder::find(const subjugator::ImageSource::Im
 		rectangle(dbg, quad_point->point, quad_point->point+600*pt, Scalar(255));
 		floodFill(h_no_border, dbg, quad_point->point + OFFSET*pt, Scalar(), NULL,
                           Scalar(range, range, range), Scalar(range, range, range),
-                          FLOODFILL_FIXED_RANGE | FLOODFILL_MASK_ONLY | 4);
+                          /*FLOODFILL_FIXED_RANGE | */FLOODFILL_MASK_ONLY | 4);
+
 		dbg = (dbg != 0);
 	}
 
-	erode(dbg,dbg,Mat::ones(3,3,CV_8UC1));		
 	dilate(dbg,dbg,Mat::ones(5,5,CV_8UC1));
-
         if (objectPath[0] != "red")
             dbg &= hsv_split[1] > 48;
-        
 	erode(dbg,dbg,Mat::ones(5,5,CV_8UC1));
 
 	// call to specific member function here
