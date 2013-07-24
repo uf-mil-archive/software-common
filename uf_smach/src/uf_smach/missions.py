@@ -111,7 +111,8 @@ class PlanSet(object):
 
     def _make_path_sm(self, shared, path):
         if path in ('left', 'right'):
-            selector = legacy_vision_states.select_by_angle(path)
+            selector = legacy_vision_states.select_by_body_direction(
+                [0, 1 if path == 'left' else -1, 0])
         else:
             selector = legacy_vision_states.select_first
 

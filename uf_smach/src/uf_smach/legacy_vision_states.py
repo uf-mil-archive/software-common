@@ -212,3 +212,13 @@ def select_by_angle(direction_name):
         return max(results, key=get_wantedness)
     return _
 
+def select_by_body_direction(body_vector):
+    body_vector = numpy.array(body_vector)
+    def _(results, traj_start, (tf_p, tf_q)):
+        def get_wantedness(result):
+            pos_vec = numpy.array(map(float, result['center']))
+            pos_vec_world = transformations.quaternion_matrix(tf_q)[:3, :3].dot(pos_vec)
+            return pos_vec_world.dot(traj_start._rot.dot(body_vector))
+        
+        return max(results, key=get_wantedness)
+    return _
