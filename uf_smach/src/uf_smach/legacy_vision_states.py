@@ -23,10 +23,12 @@ class WaitForObjectsState(smach.State):
         self._object_name = object_name
         self._timeout = rospy.Duration(timeout)
         self._cond = threading.Condition()
+        self._found_ctr = 0
         self._found = False
         self._action = action
 
     def execute(self, userdata):
+        self._found_ctr = 0
         self._found = False
         if self._object_name is not None:
             goal = FindGoal()
@@ -49,9 +51,13 @@ class WaitForObjectsState(smach.State):
     def _feedback_cb(self, feedback):
         results = map(json.loads, feedback.targetreses[0].object_results)
         if results:
-            with self._cond:
-                self._found = True
-                self._cond.notify_all()
+            self._found_ctr += 1
+            if self._found_ctr >= 5:
+                with self._cond:
+                    self._found = True
+                    self._cond.notify_all()
+        else:
+            self._found_ctr = 0
 
 class BaseManeuverObjectState(smach.State):
     def __init__(self, shared, action, selector=lambda targetreses, traj_start, (tf_p, tf_q): targetreses[0]):
@@ -145,14 +151,14 @@ class CenterApproachObjectState(BaseManeuverObjectState):
 
     def _get_goal(self, result, current, (tf_p, tf_q)):
         approach_vel = (self._desired_scale - float(result['scale']))/self._desired_scale
-        approach_vel = max(min(approach_vel, .2), 0)
+        approach_vel = max(min(approach_vel, .2), -.2)
         print float(result['scale']), approach_vel
         
         vec = numpy.array(map(float, result['center'])); vec /= numpy.linalg.norm(vec)
         vec_world = transformations.quaternion_matrix(tf_q)[:3, :3].dot(vec)
         camera_axis = transformations.quaternion_matrix(tf_q)[:3, :3].dot([0, 0, 1])
         
-        if vec_world.dot(camera_axis) > math.cos(math.radians(1)) and abs(approach_vel) < .01:
+        if vec_world.dot(camera_axis) > math.cos(math.radians(1)) and abs(approach_vel) < .02:
             # if it's within a 2 degree cone of camera axis, terminate
             return None
         
