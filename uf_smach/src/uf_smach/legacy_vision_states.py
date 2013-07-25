@@ -100,14 +100,10 @@ class BaseManeuverObjectState(smach.State):
             else:
                 self._fail_ctr = 0
             current = PoseEditor.from_PoseTwistStamped_topic('/trajectory')
-            try:
-                body_from_result_tf = self._shared['tf_listener'].lookupTransform('/base_link', feedback.header.frame_id, rospy.Time(0))
-            except:
-                del self._shared['tf_listener']
-                self._shared['tf_listener'] = tf.TransformListener()
-                print (current.frame_id, feedback.header.frame_id, feedback.header.stamp-rospy.Time.now(), rospy.Duration(1))
-                traceback.print_exc()
-                return
+            body_from_result_tf = {
+                '/forward_camera': ((0.566, 0.0, 0.049), (0.5, -0.5, 0.5, -0.5)),
+                '/down_camera': ((0.297, 0.0, -0.102), (0.7071067811865476, -0.7071067811865475, 0.0, 0.0)),
+            }[feedback.header.frame_id]
             
             result = self._selector(good_results, self._traj_start, body_from_result_tf)
             
