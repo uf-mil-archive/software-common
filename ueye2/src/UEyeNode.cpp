@@ -79,12 +79,6 @@ void UEyeNode::applyConfig(const ueye2::UEyeConfig &config) {
 }
 
 void UEyeNode::runOnce() {
-    if (image_pub.getNumSubscribers() == 0) {
-        cam->stop();
-        ros::Duration(.1).sleep();
-        return;
-    }
-
     if (!cam->isStarted()) {
         cam->start();
         if (next_config) {
