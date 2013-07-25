@@ -1,4 +1,5 @@
 #include <boost/foreach.hpp>
+#include <boost/optional.hpp>
 
 #include "Normalizer.h"
 #include "Thresholder.h"
@@ -44,12 +45,15 @@ IFinder::FinderResult HedgeFinder::find(const subjugator::ImageSource::Image &im
 
 	// find bottom bar. assumes that more than one matching blob is never detected
 	Point bottom_center;
+	const Blob::BlobData *bottom;
 	bool found_bottom = false;
 	BOOST_FOREACH(const Blob::BlobData &data, blob.data)
 		if(!data.is_vertical && 9 < data.aspect_ratio && data.aspect_ratio < 50) {
 			bottom_center = data.centroid;
 			found_bottom = true;
+			bottom = &data;
 		}
+	optional<cv::Point3d> forward;
 	if(found_bottom) {
 		// find y coordinate from maximum y centroid of vertical bars that are above the bottom bar
 		float center_y = -1000;
@@ -64,6 +68,19 @@ IFinder::FinderResult HedgeFinder::find(const subjugator::ImageSource::Image &im
 			center = Point(bottom_center.x, center_y);
 			scale = bottom_center.y - center_y;
 		}
+		
+		cv::Point3d ray1 = img.camera_model.projectPixelTo3dRay(bottom->rect_center + bottom->direction*(bottom->long_length/2));
+		cv::Point3d ray2 = img.camera_model.projectPixelTo3dRay(bottom->rect_center - bottom->direction*(bottom->long_length/2));
+		double desired_y = (ray1.y + ray2.y)/2;
+		if(ray1.y != 0 && ray2.y != 0) {
+		    ray1 *= desired_y / ray1.y;
+		    ray2 *= desired_y / ray2.y;
+		    cv::Point3d x = ray2 - ray1; // x.y is 0
+		    cv::Point3d perp(x.z, x.y, -x.x);
+		    if(perp.z < 0) perp = -perp;
+		    perp *= 1/norm(perp);
+		    forward = perp;
+	    }
 	}
 	if(scale < 0) return FinderResult(vector<property_tree::ptree>(), res, dbg);
 
@@ -74,6 +91,9 @@ IFinder::FinderResult HedgeFinder::find(const subjugator::ImageSource::Image &im
 	property_tree::ptree fResult;
 	fResult.put_child("center", Point_to_ptree(center, img));
 	fResult.put("scale", scale);
+	if(forward) {
+    	fResult.put_child("forward", raw_to_ptree(*forward));
+	}
 	resultVector.push_back(fResult);
 	return FinderResult(resultVector, res, dbg);
 }

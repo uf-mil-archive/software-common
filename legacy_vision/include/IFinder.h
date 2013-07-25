@@ -47,6 +47,13 @@ class IFinder {
 			result.push_back(std::make_pair("", boost::lexical_cast<std::string>(ray.z)));
 			return result;
 		}
+		boost::property_tree::ptree raw_to_ptree(const cv::Point3d& ray) {
+			boost::property_tree::ptree result;
+			result.push_back(std::make_pair("", boost::lexical_cast<std::string>(ray.x)));
+			result.push_back(std::make_pair("", boost::lexical_cast<std::string>(ray.y)));
+			result.push_back(std::make_pair("", boost::lexical_cast<std::string>(ray.z)));
+			return result;
+		}
 };
 
 #endif
