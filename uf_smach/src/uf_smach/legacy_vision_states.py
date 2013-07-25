@@ -99,12 +99,7 @@ class BaseManeuverObjectState(smach.State):
             current = PoseEditor.from_PoseTwistStamped_topic('/trajectory')
             print 1
             try:
-                self._shared['tf_listener'].waitForTransform(current.frame_id, feedback.header.frame_id, feedback.header.stamp, rospy.Duration(0.1))
-            except:
-                print (current.frame_id, feedback.header.frame_id, feedback.header.stamp-rospy.Time.now(), rospy.Duration(1))
-                traceback.print_exc()
-            try:
-                world_from_result_tf = self._shared['tf_listener'].lookupTransform(current.frame_id, feedback.header.frame_id, feedback.header.stamp)
+                world_from_result_tf = self._shared['tf_listener'].lookupTransform(current.frame_id, feedback.header.frame_id, rospy.Time(0))
             except:
                 print (current.frame_id, feedback.header.frame_id, feedback.header.stamp-rospy.Time.now(), rospy.Duration(1))
                 traceback.print_exc()
