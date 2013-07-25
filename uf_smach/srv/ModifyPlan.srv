@@ -1,5 +1,6 @@
 uint8 INSERT=0
 uint8 REMOVE=1
+uint8 REPLACE=2
 
 string plan
 uint8 operation

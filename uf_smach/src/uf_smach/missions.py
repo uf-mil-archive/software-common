@@ -18,7 +18,7 @@ def register_factory(name, factory):
 def get_missions():
     return _mission_factories.keys()
 
-PlanEntry = namedtuple('PlanEntry', 'mission timeout contigency_plan path')
+PlanEntry = namedtuple('PlanEntry', 'mission timeout contigency_plan path dist')
 
 class PlanSet(object):
     def __init__(self, names):
@@ -88,7 +88,7 @@ class PlanSet(object):
             for entry, entry_sm, contigency_outcome in zip(entries, entry_sms, contigency_outcomes):
                 if entry.path is not None:
                     smach.Sequence.add('PIPE_' + entry.mission.upper(),
-                                       self._make_path_sm(shared, entry.path),
+                                       self._make_path_sm(shared, entry.path, entry.dist),
                                        transitions={'failed': contigency_outcome})
                 smach.Sequence.add(entry.mission.upper(), entry_sm)
         return sm, contigency_outcomes
@@ -109,7 +109,7 @@ class PlanSet(object):
             smach.Concurrence.add('TIMEOUT', common_states.SleepState(entry.timeout))
         return sm, contigency_outcome
 
-    def _make_path_sm(self, shared, path):
+    def _make_path_sm(self, shared, path, dist):
         if path in ('left', 'right'):
             selector = legacy_vision_states.select_by_body_direction(
                 [0, 1 if path == 'left' else -1, 0])
@@ -134,6 +134,9 @@ class PlanSet(object):
                                                                      selector))
             smach.Sequence.add('SAVE_POS_'+path.upper(),
                                common_states.SaveWaypointState('last_path'))
+            if dist > 0:
+                smach.Sequence.add('OPEN_LOOP',
+                                   common_states.WaypointState(shared, lambda cur: cur.forward(dist)))
         return sm
 
 def _iterate_plans(items):
@@ -182,7 +185,7 @@ class MissionServer(object):
                 header=Header(stamp=rospy.Time.now()),
                 plans=[Plan(name=name,
                             entries=[uf_smach.msg.PlanEntry(entry.mission, rospy.Duration(entry.timeout),
-                                                            entry.contigency_plan, entry.path)
+                                                            entry.contigency_plan, entry.path, entry.dist)
                                      for entry in self._plans.get_plan(name)])
                        for name in self._plans.get_plans()],
                 available_missions=get_missions()))
@@ -194,7 +197,8 @@ class MissionServer(object):
         entry = PlanEntry(req.entry.mission,
                           req.entry.timeout.to_sec(),
                           req.entry.contigency_plan if len(req.entry.contigency_plan) > 0 else None,
-                          req.entry.path if req.entry.path != 'none' else None)
+                          req.entry.path if req.entry.path != 'none' else None,
+                          req.entry.dist)
         if req.operation == ModifyPlanRequest.INSERT:
             if req.pos > len(plan):
                 return None
@@ -203,6 +207,10 @@ class MissionServer(object):
             if req.pos >= len(plan):
                 return None
             del plan[req.pos]
+        elif req.operation == ModifyPlanRequest.REPLACE:
+            if req.pos >= len(plan):
+                return None
+            plan[req.pos] = entry
         else:
             return None
         return ()

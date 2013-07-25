@@ -13,9 +13,9 @@ import rospy
 from std_msgs.msg import Header
 from qt_gui.plugin import Plugin
 from python_qt_binding import loadUi
-from python_qt_binding.QtCore import pyqtSignal, QTimer
+from python_qt_binding.QtCore import pyqtSignal, QTimer, Qt
 from python_qt_binding.QtGui import QWidget, QFrame, QComboBox, \
-    QPushButton, QSpinBox, QTreeWidget, QTreeWidgetItem
+    QPushButton, QSpinBox, QDoubleSpinBox, QTreeWidget, QTreeWidgetItem
 
 uipath = os.path.dirname(os.path.realpath(__file__))
 
@@ -33,9 +33,10 @@ class MissionPlugin(Plugin):
 
         self._widget.findChild(QPushButton, 'addButton').clicked.connect(self._on_add)
         self._widget.findChild(QPushButton, 'removeButton').clicked.connect(self._on_remove)
+        self._widget.findChild(QPushButton, 'skipToButton').clicked.connect(self._on_skip_to)
         self._widget.findChild(QPushButton, 'startButton').clicked.connect(self._on_start)
         self._widget.findChild(QPushButton, 'stopButton').clicked.connect(self._on_stop)
-        
+
         self.on_plans_changed.connect(self._on_plans)
         self._plans_sub = rospy.Subscriber('mission/plans', PlansStamped,
                                            lambda msg: self.on_plans_changed.emit(msg))
@@ -65,7 +66,8 @@ class MissionPlugin(Plugin):
             mission=self._widget.findChild(QComboBox, 'missionCombo').currentText(),
             timeout=rospy.Duration(int(self._widget.findChild(QSpinBox, 'timeoutSpin').value())),
             contigency_plan=contigency,
-            path=self._widget.findChild(QComboBox, 'pathCombo').currentText())
+            path=self._widget.findChild(QComboBox, 'pathCombo').currentText(),
+            dist=float(self._widget.findChild(QDoubleSpinBox, 'distSpin').value()))
         self._modify_srv(plan, ModifyPlanRequest.INSERT, pos, entry)
 
     def _on_remove(self, event):
@@ -79,6 +81,20 @@ class MissionPlugin(Plugin):
         pos = item.parent().indexOfChild(item)
         self._modify_srv(plan, ModifyPlanRequest.REMOVE, pos, PlanEntry()) 
 
+    def _on_skip_to(self, event):
+        selected_items = self._widget.findChild(QTreeWidget, 'missionTreeWidget').selectedItems()
+        if len(selected_items) == 0:
+            return
+        item = selected_items[0]
+        if item.parent() is None:
+            return
+        plan = item.parent().text(0)
+        pos = item.parent().indexOfChild(item)
+        self._modify_srv(plan, ModifyPlanRequest.REPLACE, pos, PlanEntry(
+                item.text(0), rospy.Duration(int(item.text(1))), item.text(2), '', 0))
+        for i in xrange(pos):
+            self._modify_srv(plan, ModifyPlanRequest.REMOVE, 0, PlanEntry())
+        
     def _on_start(self, event):
         if self._run_action is None:
             self._run_action = actionlib.SimpleActionClient('mission/run', RunMissionsAction)
@@ -105,11 +121,15 @@ class MissionPlugin(Plugin):
                 contigency = entry.contigency_plan
                 if len(contigency) == 0:
                     contigency = 'none'
-                item.addChild(QTreeWidgetItem([entry.mission, str(entry.timeout.secs),
-                                              contigency, entry.path]))
+                dist = str(entry.dist) if entry.dist != 0 else ''
+                subitem = QTreeWidgetItem([entry.mission, str(entry.timeout.secs),
+                                           contigency, entry.path, dist])
+                item.setFlags(item.flags() | Qt.ItemIsEditable)
+                item.addChild(subitem)
             mission_tree.addTopLevelItem(item)
             item.setExpanded(True)
-            contigency_combo.addItem(plan.name)
+            if plan.name != 'main':
+                contigency_combo.addItem(plan.name)
         contigency_combo.addItem('none')
         
         mission_combo = self._widget.findChild(QComboBox, 'missionCombo')
