@@ -91,7 +91,7 @@ class MissionPlugin(Plugin):
         plan = item.parent().text(0)
         pos = item.parent().indexOfChild(item)
         self._modify_srv(plan, ModifyPlanRequest.REPLACE, pos, PlanEntry(
-                item.text(0), rospy.Duration(int(item.text(1))), item.text(2), '', 0))
+                item.text(0), rospy.Duration(int(item.text(1))), item.text(2), 'none', 0))
         for i in xrange(pos):
             self._modify_srv(plan, ModifyPlanRequest.REMOVE, 0, PlanEntry())
         
