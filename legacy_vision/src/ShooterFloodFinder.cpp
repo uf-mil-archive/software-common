@@ -2,6 +2,7 @@
 
 #include <stdio.h>
 #include <iostream>
+#include <utility>
 
 #include "Contours.h"
 #include "Normalizer.h"
@@ -15,6 +16,12 @@ using namespace std;
 
 static const int OFFSET=18;
 
+static Point pointFromIndex(int i, int offset) {
+    int sx = (i & 1) ? offset : -offset;
+    int sy = (i & 2) ? offset : -offset;
+    return Point(sx, sy);
+}
+
 IFinder::FinderResult ShooterFloodFinder::find(const subjugator::ImageSource::Image &img) {
 	Mat hsv;
 	cvtColor(img.image, hsv, CV_BGR2HSV);
@@ -27,15 +34,7 @@ IFinder::FinderResult ShooterFloodFinder::find(const subjugator::ImageSource::Im
 	boost::optional<QuadPointResults> quad_point = trackQuadPoint(hsv_split);
 	if (quad_point) {
 		int range = config.get<int>(objectPath[0] + "_range");
-		Point pt;
-		if (objectPath[0] == "red")
-			pt = Point(-1, -1);
-		else if (objectPath[0] == "green")
-			pt = Point(-1, 1);
-		else if (objectPath[0] == "blue")
-			pt = Point(1, -1);
-		else
-			pt = Point(1, 1);
+		Point pt = quad_point->dirs[objectPath[0]];
             
 //		Mat h_no_border = hsv_split[0](Rect(1, 1, hsv_split[0].cols-2, hsv_split[0].rows-2));
 		Mat h_no_border = img.image(Rect(1, 1, img.image.cols-2, img.image.rows-2));
@@ -173,6 +172,28 @@ boost::optional<ShooterFloodFinder::QuadPointResults> ShooterFloodFinder::trackQ
 		results.hues = tmp.first;
 		results.sats = tmp.second;
                 results.scores = scores;
+
+		std::vector<std::pair<uint, int> > vec;
+		for (int i=0; i<4; i++) {
+		    int hue = results.hues[i];
+		    if (hue > 140) // red (hopefully)
+			hue = 0;
+		    vec.push_back(make_pair(hue, i));
+		}
+
+		std::sort(vec.begin(), vec.end());
+
+		for (int i=0; i<4; i++) {
+		    std::cout << vec[i].first << ' ' << pointFromIndex(vec[i].second, 1) << ' ';
+		}
+
+		std::cout << std::endl;
+
+		results.dirs["red"] = pointFromIndex(vec[0].second, 1);
+		results.dirs["yellow"] = pointFromIndex(vec[1].second, 1);
+		results.dirs["green"] = pointFromIndex(vec[2].second, 1);
+		results.dirs["blue"] = pointFromIndex(vec[3].second, 1);
+		
 		return results;
 	} else {
 		return boost::none;
@@ -180,14 +201,13 @@ boost::optional<ShooterFloodFinder::QuadPointResults> ShooterFloodFinder::trackQ
 }
 
 std::pair<Vec<uchar, 4>, Vec<uchar, 4> > ShooterFloodFinder::sample_point(const Mat (&hsv_split)[3],
-								     int r, int c, int offset) {
+									  int r, int c, int offset) {
 	Vec<uchar, 4> hues;
 	Vec<uchar, 4> sats;
 	for (int i=0; i<4; i++) {
-		int sx = (i & 1) ? offset : -offset;
-		int sy = (i & 2) ? offset : -offset;
-		hues[i] = hsv_split[0].at<uchar>(r+sx, c+sy);
-		sats[i] = hsv_split[1].at<uchar>(r+sx, c+sy);
+		cv::Point pt = pointFromIndex(i, offset);
+		hues[i] = hsv_split[0].at<uchar>(r+pt.y, c+pt.x);
+		sats[i] = hsv_split[1].at<uchar>(r+pt.y, c+pt.x);
 	}
 	return make_pair(hues, sats);
 }
