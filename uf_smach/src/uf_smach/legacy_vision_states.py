@@ -152,7 +152,7 @@ class CenterApproachObjectState(BaseManeuverObjectState):
         BaseManeuverObjectState.__init__(self, *args, **kwargs)
 
     def _get_goal(self, result, current, (tf_p, tf_q)):
-        approach_vel = (self._desired_scale - float(result['scale']))/self._desired_scale
+        approach_vel = (self._desired_scale - float(result['scale']))/self._desired_scale*self._gain/1.5
         approach_vel = max(min(approach_vel, .2), -.2)
         print float(result['scale']), approach_vel
         
