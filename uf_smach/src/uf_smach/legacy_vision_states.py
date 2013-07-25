@@ -101,7 +101,7 @@ class BaseManeuverObjectState(smach.State):
                 self._fail_ctr = 0
             current = PoseEditor.from_PoseTwistStamped_topic('/trajectory')
             try:
-                world_from_result_tf = self._shared['tf_listener'].lookupTransform(current.frame_id, feedback.header.frame_id, rospy.Time(0))
+                body_from_result_tf = self._shared['tf_listener'].lookupTransform('/base_link', feedback.header.frame_id, rospy.Time(0))
             except:
                 del self._shared['tf_listener']
                 self._shared['tf_listener'] = tf.TransformListener()
@@ -109,9 +109,9 @@ class BaseManeuverObjectState(smach.State):
                 traceback.print_exc()
                 return
             
-            result = self._selector(good_results, self._traj_start, world_from_result_tf)
+            result = self._selector(good_results, self._traj_start, body_from_result_tf)
             
-            goal = self._get_goal(result, current, world_from_result_tf)
+            goal = self._get_goal(result, current, body_from_result_tf)
             if goal is None:
                 self._done = True
                 self._cond.notify_all()
@@ -126,20 +126,20 @@ class CenterObjectState(BaseManeuverObjectState):
 
     def _get_goal(self, result, current, (tf_p, tf_q)):
         vec = numpy.array(map(float, result['center'])); vec /= numpy.linalg.norm(vec)
-        vec_world = transformations.quaternion_matrix(tf_q)[:3, :3].dot(vec)
+        vec_body = transformations.quaternion_matrix(tf_q)[:3, :3].dot(vec)
         camera_axis = transformations.quaternion_matrix(tf_q)[:3, :3].dot([0, 0, 1])
         
-        if vec_world.dot(camera_axis) > math.cos(math.radians(1)):
+        if vec_body.dot(camera_axis) > math.cos(math.radians(1)):
             # if it's within a 2 degree cone of camera axis, terminate
             return None
         
         # get rid of component going along camera axis
-        vec_world2 = vec_world - camera_axis*camera_axis.dot(vec_world)
+        vec_body2 = vec_body - camera_axis*camera_axis.dot(vec_body)
         
-        vel_world = self._gain*vec_world2
-        if numpy.linalg.norm(vel_world) > .2:
-            vel_world = .2 * vel_world/numpy.linalg.norm(vel_world)
-        return current.as_MoveToGoal(linear=current._rot.T.dot(vel_world))
+        vel_body = self._gain*vec_body2
+        if numpy.linalg.norm(vel_body) > .2:
+            vel_body = .2 * vel_body/numpy.linalg.norm(vel_body)
+        return current.as_MoveToGoal(linear=vel_body)
 
 class CenterApproachObjectState(BaseManeuverObjectState):
     def __init__(self, *args, **kwargs):
@@ -153,47 +153,47 @@ class CenterApproachObjectState(BaseManeuverObjectState):
         print float(result['scale']), approach_vel
         
         vec = numpy.array(map(float, result['center'])); vec /= numpy.linalg.norm(vec)
-        vec_world = transformations.quaternion_matrix(tf_q)[:3, :3].dot(vec)
+        vec_body = transformations.quaternion_matrix(tf_q)[:3, :3].dot(vec)
         camera_axis = transformations.quaternion_matrix(tf_q)[:3, :3].dot([0, 0, 1])
         
-        if vec_world.dot(camera_axis) > math.cos(math.radians(1)) and abs(approach_vel) < .02:
+        if vec_body.dot(camera_axis) > math.cos(math.radians(1)) and abs(approach_vel) < .02:
             # if it's within a 2 degree cone of camera axis, terminate
             return None
         
         # get rid of component going along camera axis
-        vec_world2 = vec_world - camera_axis*camera_axis.dot(vec_world)
+        vec_body2 = vec_body - camera_axis*camera_axis.dot(vec_body)
         
-        vel_world = self._gain*vec_world2 # TODO make customizable
-        if numpy.linalg.norm(vel_world) > .2:
-            vel_world = .2 * vel_world/numpy.linalg.norm(vel_world)
+        vel_body = self._gain*vec_body2 # TODO make customizable
+        if numpy.linalg.norm(vel_body) > .2:
+            vel_body = .2 * vel_body/numpy.linalg.norm(vel_body)
         else:
-            vel_world += approach_vel*camera_axis
-        return current.as_MoveToGoal(linear=current._rot.T.dot(vel_world))
+            vel_body += approach_vel*camera_axis
+        return current.as_MoveToGoal(linear=vel_body)
 
 class AlignObjectState(BaseManeuverObjectState):
     def __init__(self, *args, **kwargs):
-        self._body_vec_align = kwargs.pop('body_vec_align', [1, 0, 0])
+        self._body_vec_align = transformations.unit_vector(kwargs.pop('body_vec_align', [1, 0, 0]))
         BaseManeuverObjectState.__init__(self, *args, **kwargs)
     
     def _get_goal(self, result, current, (tf_p, tf_q)):
-        direction = numpy.array(map(float, result['direction']))
-        direction_world = transformations.quaternion_matrix(tf_q)[:3, :3].dot(direction)
+        direction = transformations.unit_vector(map(float, result['direction']))
+        direction_body = transformations.quaternion_matrix(tf_q)[:3, :3].dot(direction)
         
         direction_symmetry = int(result.get('direction_symmetry', 1))
-        best_direction_world = max(
-            [transformations.rotation_matrix(i/direction_symmetry*2*math.pi, [0, 0, 1])[:3, :3].dot(direction_world) for i in xrange(direction_symmetry)],
-            key=lambda direction: direction.dot(current._rot.dot(self._body_vec_align)))
+        best_direction_body = max(
+            [transformations.rotation_matrix(i/direction_symmetry*2*math.pi, [0, 0, 1])[:3, :3].dot(direction_body) for i in xrange(direction_symmetry)],
+            key=lambda direction: direction.dot(self._body_vec_align))
         
-        if current._rot.dot(self._body_vec_align).dot(best_direction_world) > \
+        if self._body_vec_align.dot(best_direction_body) > \
                 math.cos(math.radians(2)):
             return None
         
-        print current.turn_vec_towards_rel(self._body_vec_align, best_direction_world)
-        return current.turn_vec_towards_rel(self._body_vec_align, best_direction_world)
+        return current.turn_vec_towards_rel(self._body_vec_align, current._rot.dot(best_direction_body)).as_MoveToGoal(speed=math.sqrt(1-self._body_vec_align.dot(best_direction_body)**2))
 
 def select_first(targetreses, traj_start, tf):
     return targetreses[0]
     
+'''currently broken because it assumes world tf
 def select_by_angle(direction_name):
     assert direction_name in ['left', 'right']
     def _(results, traj_start, (tf_p, tf_q)):
@@ -209,15 +209,15 @@ def select_by_angle(direction_name):
             return best_direction_world.dot(traj_start.left_vector)*(1 if direction_name == 'left' else -1)
         
         return max(results, key=get_wantedness)
-    return _
+    return _'''
 
 def select_by_body_direction(body_vector):
     body_vector = numpy.array(body_vector)
     def _(results, traj_start, (tf_p, tf_q)):
         def get_wantedness(result):
             pos_vec = numpy.array(map(float, result['center']))
-            pos_vec_world = transformations.quaternion_matrix(tf_q)[:3, :3].dot(pos_vec)
-            return pos_vec_world.dot(traj_start._rot.dot(body_vector))
+            pos_vec_body = transformations.quaternion_matrix(tf_q)[:3, :3].dot(pos_vec)
+            return pos_vec_body.dot(body_vector)
         
         return max(results, key=get_wantedness)
     return _
