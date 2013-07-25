@@ -88,9 +88,7 @@ class BaseManeuverObjectState(smach.State):
         return 'succeeded' if self._done else 'failed'
 
     def _feedback_cb(self, feedback):
-        print 'a'
         with self._cond:
-            print 'b'
             good_results = map(json.loads, feedback.targetreses[0].object_results)
             #print good_results
             if len(good_results) == 0:
@@ -101,9 +99,7 @@ class BaseManeuverObjectState(smach.State):
                 return
             else:
                 self._fail_ctr = 0
-            print 'c'
             current = PoseEditor.from_PoseTwistStamped_topic('/trajectory')
-            print 1
             try:
                 world_from_result_tf = self._shared['tf_listener'].lookupTransform(current.frame_id, feedback.header.frame_id, rospy.Time(0))
             except:
