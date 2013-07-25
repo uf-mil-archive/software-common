@@ -107,6 +107,8 @@ class BaseManeuverObjectState(smach.State):
             try:
                 world_from_result_tf = self._shared['tf_listener'].lookupTransform(current.frame_id, feedback.header.frame_id, rospy.Time(0))
             except:
+                del self._shared['tf_listener']
+                self._shared['tf_listener'] = tf.TransformListener()
                 print (current.frame_id, feedback.header.frame_id, feedback.header.stamp-rospy.Time.now(), rospy.Duration(1))
                 traceback.print_exc()
                 return
