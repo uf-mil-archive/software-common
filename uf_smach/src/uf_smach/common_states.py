@@ -106,8 +106,8 @@ class WaypointSeriesState(smach.State):
             self._cond.notify_all()    
 
 class WaypointState(WaypointSeriesState):
-    def __init__(self, shared, goal_func):
-        WaypointSeriesState.__init__(self, shared, [goal_func])
+    def __init__(self, shared, goal_func, speed=0):
+        WaypointSeriesState.__init__(self, shared, [goal_func], speed)
 
 # Smach's userdata system is really, really difficult to use for something like this.
 # Next year, if we want to switch to userdata we should put this entire dict in it, then
