@@ -62,11 +62,16 @@ class BaseHydrophoneState(smach.State):
         
 
 class HydrophoneTravelState(BaseHydrophoneState):
+    def __init__(self, shared, freq):
+        BaseHydrophoneState.__init__(self, shared, freq)
+        self._stall_ctr = 0
+        
     def _compute_goal(self, ping):
         current = PoseEditor.from_PoseTwistStamped_topic('/trajectory')
         new = current.yaw_left(ping.heading)
 
         if abs(ping.heading) < 15/180*math.pi:
+            self._stall_ctr += 1
             if ping.declination < 30/180*math.pi:
                 speed = .7
             elif ping.declination < 45/180*math.pi:
@@ -76,8 +81,13 @@ class HydrophoneTravelState(BaseHydrophoneState):
                 if ping.declination > 55/180*math.pi:
                     return 'succeeded'
         else:
+            self._stall_ctr = max(self.stall_ctr-1, 0)
             speed = 0
 
+        if self._stall_ctr > 10:
+            print 'stalled'
+            self._stall_ctr = 0
+            return cur.set_orientation(orientation_helpers.NORTH).turn_right_deg(22.5).forward(5)
         print 'heading', ping.heading/math.pi*180, 'declination', ping.declination/math.pi*180, 'speed', speed
         return new.as_MoveToGoal(linear=[speed, 0, 0])
 
