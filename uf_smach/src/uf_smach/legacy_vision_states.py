@@ -166,9 +166,51 @@ class CenterApproachObjectState(BaseManeuverObjectState):
             vel_body += approach_vel*camera_axis
         return current.as_MoveToGoal(linear=vel_body)
 
+class CenterApproachYawObjectState(BaseManeuverObjectState):
+    def __init__(self, *args, **kwargs):
+        self._gain = kwargs.pop('gain', 1.5)
+        self._desired_scale = kwargs.pop('desired_scale')
+        BaseManeuverObjectState.__init__(self, *args, **kwargs)
+
+    def _get_goal(self, result, current, (tf_p, tf_q)):
+        approach_vel = (self._desired_scale - float(result['scale']))/self._desired_scale*self._gain/1.5
+        approach_vel = max(min(approach_vel, .2), -.2)
+
+        yaw_vel = -result['forward'][0]
+        yaw_vel = max(min(yaw_vel, .1, -.1))
+        strafe_vel = 2*yaw_vel*4 # 2 * angle * radius
+        print float(result['scale']), approach_vel, yaw_vel, strafe_vel
+        
+        vec = numpy.array(map(float, result['center'])); vec /= numpy.linalg.norm(vec)
+        vec_world = transformations.quaternion_matrix(tf_q)[:3, :3].dot(vec)
+        camera_axis = transformations.quaternion_matrix(tf_q)[:3, :3].dot([0, 0, 1])
+        
+        if vec_world.dot(camera_axis) > math.cos(math.radians(1)) and \
+                abs(approach_vel) < .02 and \
+                abs(strafe_vel) < .02:
+            # if it's within a 2 degree cone of camera axis, terminate
+            return None
+        
+        # get rid of component going along camera axis
+        vec_world2 = vec_world - camera_axis*camera_axis.dot(vec_world)
+        
+        vel_world = self._gain*vec_world2
+        val_angular = numpy.array([0, 0, 0])
+        if numpy.linalg.norm(vel_world) > .2:
+            vel_world = .2 * vel_world/numpy.linalg.norm(vel_world)
+        else:
+            vel_world += approach_vel*camera_axis
+            if numpy.linalg.norm(vel_world) < .2:
+                vel_world += numpy.array([0, strafe_vel, 0])
+                vel_angular += numpy.array([0, 0, yaw_vel])
+                
+        return current.as_MoveToGoal(linear=current._rot.T.dot(vel_world),
+                                     angular=vel_angular)
+    
 class AlignObjectState(BaseManeuverObjectState):
     def __init__(self, *args, **kwargs):
         self._body_vec_align = transformations.unit_vector(kwargs.pop('body_vec_align', [1, 0, 0]))
+        self._done_ctr = 0
         BaseManeuverObjectState.__init__(self, *args, **kwargs)
     
     def _get_goal(self, result, current, (tf_p, tf_q)):
@@ -182,8 +224,11 @@ class AlignObjectState(BaseManeuverObjectState):
         
         if self._body_vec_align.dot(best_direction_body) > \
                 math.cos(math.radians(2)):
-            return None
-        
+            self._done_ctr += 1
+            if self._done_ctr > 5:
+                return None
+        else:
+            self._done_ctr = 0
         return current.turn_vec_towards_rel(self._body_vec_align, current._rot.dot(best_direction_body)).as_MoveToGoal(speed=math.sqrt(1-self._body_vec_align.dot(best_direction_body)**2))
 
 def select_first(targetreses, traj_start, tf):
