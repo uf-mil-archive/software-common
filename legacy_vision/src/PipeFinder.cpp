@@ -1,6 +1,6 @@
 #include <boost/foreach.hpp>
 
-#include "Line.h"
+#include "Blob.h"
 #include "Normalizer.h"
 #include "Thresholder.h"
 
@@ -17,23 +17,24 @@ IFinder::FinderResult PipeFinder::find(const subjugator::ImageSource::Image &img
 
 	// call to thresholder here
 	Mat orange = Thresholder(normalized).orange();
-	erode(orange, orange, cv::Mat::ones(3,3,CV_8UC1));
-	dilate(orange, orange, cv::Mat::ones(7,7,CV_8UC1));
-	erode(orange, orange, cv::Mat::ones(7,7,CV_8UC1));
+	erode(orange, orange, cv::Mat::ones(5,5,CV_8UC1)); // -2
+	dilate(orange, orange, cv::Mat::ones(7,7,CV_8UC1)); // +3
+	erode(orange, orange, cv::Mat::ones(3,3,CV_8UC1)); // -1
 
-	Line line(2, config, orange);
+        Blob blob(orange, 1000, 1e10, 1e10);
 
 	Mat res = img.image.clone();
-	line.drawResult(res);
+        if(blob.data.size() > 2)
+                blob.data.resize(2);
+	blob.drawResult(res, CV_RGB(0, 255, 0));
 
 	// Prepare results
 	vector<property_tree::ptree> resultVector;
-	BOOST_FOREACH(const AvgLine &avgline, line.avgLines) {
+	BOOST_FOREACH(const Blob::BlobData &item, blob.data) {
 		property_tree::ptree fResult;
-		fResult.put_child("center", Point_to_ptree(avgline.centroid, img));
-		fResult.put_child("direction", Direction_to_ptree(avgline.centroid, avgline.direction, img));
+		fResult.put_child("center", Point_to_ptree(item.rect_center, img));
+		fResult.put_child("direction", Direction_to_ptree(item.rect_center, item.direction, img));
 		fResult.put("direction_symmetry", 2);
-		fResult.put("scale", avgline.length);
 		resultVector.push_back(fResult);
 	}
 
