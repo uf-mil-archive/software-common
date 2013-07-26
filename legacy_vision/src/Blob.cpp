@@ -84,7 +84,7 @@ void Blob::drawResult(Mat &img, const Scalar &color) {
 		   << "R " << item.radius;
 		putText(img, os.str().c_str(), Point(item.centroid.x-30,item.centroid.y-10), FONT_HERSHEY_DUPLEX, 1, CV_RGB(0,0,0), 1.5);
 		std::ostringstream os2;
-		os2 << item.aspect_ratio;
+		os2 << item.circularity;
 		putText(img, os2.str().c_str(), Point(item.centroid.x-30,item.centroid.y+10), FONT_HERSHEY_DUPLEX, 1, CV_RGB(0,0,0), 1.5);
 	}
 
