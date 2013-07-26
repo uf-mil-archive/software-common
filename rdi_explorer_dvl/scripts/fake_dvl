@@ -4,19 +4,22 @@ import roslib
 roslib.load_manifest('rdi_explorer_dvl')
 import rospy
 from std_msgs.msg import Header
-from geometry_msgs.msg import Vector3, Vector3Stamped
+from uf_common.msg import VelocityMeasurements, VelocityMeasurement
 
 rospy.init_node('fake_dvl')
 
-pub = rospy.Publisher('dvl', Vector3Stamped)
+pub = rospy.Publisher('dvl', VelocityMeasurements)
 
 while not rospy.is_shutdown():
     rospy.sleep(.1)
     
-    pub.publish(Vector3Stamped(
+    pub.publish(VelocityMeasurements(
         header=Header(
             stamp=rospy.Time.now(),
             frame_id='/dvl',
         ),
-        vector=Vector3(0, 0, 0),
+        velocity_measurements=[VelocityMeasurement(
+            velocity=0,
+            correlation=0,
+        ) for i in xrange(4)],
     ))
