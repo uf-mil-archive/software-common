@@ -17,11 +17,11 @@ class SharedActionClient(object):
         self._feedback = None
 
     def send_goal(self, goal, done_cb=None, active_cb=None, feedback_cb=None):
+        self.set_callbacks(done_cb, active_cb, feedback_cb)
         self._client.send_goal(goal,
                                done_cb=self._done_cb,
                                active_cb=self._active_cb,
                                feedback_cb=self._feedback_cb)
-        self.set_callbacks(done_cb, active_cb, feedback_cb)
 
     def set_callbacks(self, done_cb=None, active_cb=None, feedback_cb=None):
         self._active_callback = active_cb
