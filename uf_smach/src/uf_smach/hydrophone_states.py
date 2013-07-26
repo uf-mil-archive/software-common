@@ -31,7 +31,7 @@ class BaseHydrophoneState(smach.State):
 
         while not self.preempt_requested():
             with self._cond:
-                self._cond.wait(1)
+                self._cond.wait(.5)
                 if self._ping is None:
                     no_ping_ctr += 1
                     if no_ping_ctr == 5:
@@ -59,19 +59,22 @@ class BaseHydrophoneState(smach.State):
             with self._cond:
                 self._ping = processed_ping
                 self._cond.notify()
-        
 
 class HydrophoneTravelState(BaseHydrophoneState):
-    def __init__(self, shared, freq):
-        BaseHydrophoneState.__init__(self, shared, freq)
+    def __init__(self, *args, **kwargs):
+        BaseHydrophoneState.__init__(self, *args, **kwargs)
+        self._stall_ctr = 0        
+
+    def execute(self, userdata):
         self._stall_ctr = 0
+        return BaseHydrophoneState.execute(self, userdata)
         
     def _compute_goal(self, ping):
         current = PoseEditor.from_PoseTwistStamped_topic('/trajectory')
         new = current.yaw_left(ping.heading)
 
         if abs(ping.heading) < 15/180*math.pi:
-            self._stall_ctr += 1
+            self._stall_ctr = max(self._stall_ctr - 1, 0)
             if ping.declination < 30/180*math.pi:
                 speed = .7
             elif ping.declination < 45/180*math.pi:
@@ -81,7 +84,9 @@ class HydrophoneTravelState(BaseHydrophoneState):
                 if ping.declination > 55/180*math.pi:
                     return 'succeeded'
         else:
-            self._stall_ctr = max(self.stall_ctr-1, 0)
+            self._stall_ctr += 1
+            if self._stall_ctr > 10:
+                return 'failed'
             speed = 0
 
         if self._stall_ctr > 10:
