@@ -55,7 +55,7 @@ class BaseHydrophoneState(smach.State):
         return 'preempted'
 
     def _callback(self, processed_ping):
-        if abs(processed_ping.freq - self._freq) < 1e3 and processed_ping.valid:
+        if abs(processed_ping.freq - self._freq) < 1.25e3 and processed_ping.valid:
             with self._cond:
                 self._ping = processed_ping
                 self._cond.notify()
