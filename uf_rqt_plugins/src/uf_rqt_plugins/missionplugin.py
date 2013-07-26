@@ -98,7 +98,9 @@ class MissionPlugin(Plugin):
     def _on_start(self, event):
         if self._run_action is None:
             self._run_action = actionlib.SimpleActionClient('mission/run', RunMissionsAction)
+            print 'waiting for server'
             self._run_action.wait_for_server()
+        print 'sending goal'
         self._run_action.send_goal(RunMissionsGoal())
 
     def _on_stop(self, event):

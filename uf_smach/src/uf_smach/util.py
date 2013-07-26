@@ -52,10 +52,15 @@ class SharedActionClient(object):
 
 class StateSharedHandles(dict):
     def __init__(self):
+        print 'find_forward'
         self['find_forward'] = SharedActionClient('find_forward', FindAction)
+        print 'find_down'
         self['find_down'] = SharedActionClient('find_down', FindAction)
+        print 'find2_forward_camera'
         self['find2_forward_camera'] = SharedActionClient('find2_forward_camera', Find2Action)
+        print 'find2_down_camera'
         self['find2_down_camera'] = SharedActionClient('find2_down_camera', Find2Action)
+        print 'moveto'
         self['moveto'] = SharedActionClient('moveto', MoveToAction)
         self['tf_listener'] = tf.TransformListener()
 
