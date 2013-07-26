@@ -114,11 +114,11 @@ IFinder::FinderResult GrapesFinder::find(const subjugator::ImageSource::Image &i
 		dilate(red, red, cv::Mat::ones(17,17,CV_8UC1));
 		erode(red, red, cv::Mat::ones(3,3,CV_8UC1));
 		//erode(red, red, cv::Mat::ones(5,5,CV_8UC1));
-		Blob blob(red, 300, 1000000, 1000000);
+		Blob blob(red, 1000, 1000000, 1000000);
 		
 		
 	    for(unsigned int i = 0; i < blob.data.size(); )
-		    if(blob.data[i].circularity < .5 || blob.data[i].radius > 50)
+		    if(blob.data[i].circularity < .2 || blob.data[i].radius < 20 || blob.data[i].radius > 70)
 			    blob.data.erase(blob.data.begin()+i);
 		    else
 			    i++;
@@ -134,6 +134,8 @@ IFinder::FinderResult GrapesFinder::find(const subjugator::ImageSource::Image &i
 
 		Mat res = img.image.clone();
 		blob.drawResult(res, CV_RGB(255, 255, 255));
+                if(blob.data.size()) blob.data.resize(1);
+		blob.drawResult(res, CV_RGB(255, 0, 0));
 
 		return FinderResult(resultVector, res, yellow/2 | red);
 	}
