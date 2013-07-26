@@ -168,6 +168,9 @@ class MissionServer(object):
         self._sm = self._plans.make_sm(self._shared, self._master_timeout)
         sis = smach_ros.IntrospectionServer('mission_planner', self._sm, '/SM_ROOT')
         sis.start()
+        print 'Waiting for unkill'
+        while self._kill_listener.get_killed():
+            rospy.sleep(.1)
         outcome = self._sm.execute()
         sis.stop()
         self._shared['moveto'].cancel_goal()
