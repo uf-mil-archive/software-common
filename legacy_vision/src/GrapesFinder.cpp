@@ -42,7 +42,7 @@ IFinder::FinderResult GrapesFinder::find(const subjugator::ImageSource::Image &i
 	    vec3b_from_ptree(config.get_child("blue_ref")),
 	    vec3b_from_ptree(config.get_child("yellow_ref")), 50, 0.5);
     dilate(yellow, yellow, cv::Mat::ones(11,11,CV_8UC1));
-	erode(yellow, yellow, cv::Mat::ones(11,11,CV_8UC1));
+	erode(yellow, yellow, cv::Mat::ones(17,17,CV_8UC1));
 
 	Contours contours(yellow, 1000, 7000000, 1500000);
 
