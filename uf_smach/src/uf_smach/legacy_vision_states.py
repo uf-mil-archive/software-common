@@ -229,7 +229,8 @@ class AlignObjectState(BaseManeuverObjectState):
                 return None
         else:
             self._done_ctr = 0
-        return current.turn_vec_towards_rel(self._body_vec_align, current._rot.dot(best_direction_body)).as_MoveToGoal(speed=math.sqrt(1-self._body_vec_align.dot(best_direction_body)**2))
+        speed = numpy.linalg.norm(numpy.cross(self._body_vec_align, best_direction_body))
+        return current.turn_vec_towards_rel(self._body_vec_align, current._rot.dot(best_direction_body)).as_MoveToGoal(speed=speed)
 
 def select_first(targetreses, traj_start, tf):
     return targetreses[0]
