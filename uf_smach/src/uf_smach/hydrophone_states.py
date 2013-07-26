@@ -17,11 +17,12 @@ from uf_common.msg import MoveToAction, MoveToGoal
 from hydrophones.msg import ProcessedPing
 
 class BaseHydrophoneState(smach.State):
-    def __init__(self, shared, freq):
+    def __init__(self, shared, freq, freq_range=1e3):
         smach.State.__init__(self, outcomes=['succeeded', 'failed', 'preempted'])
 
         self._shared = shared
         self._freq = freq
+        self._freq_range = freq_range
         self._ping = None
         self._cond = threading.Condition()
 
@@ -55,7 +56,7 @@ class BaseHydrophoneState(smach.State):
         return 'preempted'
 
     def _callback(self, processed_ping):
-        if abs(processed_ping.freq - self._freq) < 1.25e3 and processed_ping.valid:
+        if abs(processed_ping.freq - self._freq) < self._freq_range and processed_ping.valid:
             with self._cond:
                 self._ping = processed_ping
                 self._cond.notify()
