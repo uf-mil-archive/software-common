@@ -90,9 +90,7 @@ class HydrophoneTravelState(BaseHydrophoneState):
             speed = 0
 
         if self._stall_ctr > 10:
-            print 'stalled'
-            self._stall_ctr = 0
-            return cur.set_orientation(orientation_helpers.NORTH).turn_right_deg(22.5).forward(5)
+            return 'failed'
         print 'heading', ping.heading/math.pi*180, 'declination', ping.declination/math.pi*180, 'speed', speed
         return new.as_MoveToGoal(linear=[speed, 0, 0])
 
