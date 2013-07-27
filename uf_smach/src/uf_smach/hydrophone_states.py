@@ -64,10 +64,12 @@ class BaseHydrophoneState(smach.State):
 class HydrophoneTravelState(BaseHydrophoneState):
     def __init__(self, *args, **kwargs):
         BaseHydrophoneState.__init__(self, *args, **kwargs)
-        self._stall_ctr = 0        
+        self._stall_ctr = 0
+        self._good_ctr = 0
 
     def execute(self, userdata):
         self._stall_ctr = 0
+        self._good_ctr = 0
         return BaseHydrophoneState.execute(self, userdata)
         
     def _compute_goal(self, ping):
@@ -78,12 +80,16 @@ class HydrophoneTravelState(BaseHydrophoneState):
             self._stall_ctr = max(self._stall_ctr - 1, 0)
             if ping.declination < 30/180*math.pi:
                 speed = .7
+                self._good_ctr = 0
             elif ping.declination < 45/180*math.pi:
                 speed = .3
+                self._good_ctr = 0
             else:
                 speed = .1
-                if ping.declination > 55/180*math.pi:
-                    return 'succeeded'
+                if ping.declination > 60/180*math.pi:
+                    self._good_ctr += 1
+                    if self._good_ctr >= 3:
+                        return 'succeeded'
         else:
             self._stall_ctr += 1
             if self._stall_ctr > 10:
