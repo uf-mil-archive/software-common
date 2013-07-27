@@ -108,11 +108,11 @@ class HydrophoneApproachState(BaseHydrophoneState):
     
     def _compute_goal(self, ping):
         current = PoseEditor.from_PoseTwistStamped_topic('/trajectory')
-        if ping.declination < self._last_declination and ping.declination > math.radians(85):
+        if ping.declination < self._last_declination and ping.declination > math.radians(80):
             return 'succeeded'
         self._last_declination = ping.declination
         
-        speed = .1 if ping.declination < math.radians(85) else .05
+        speed = .1 if ping.declination < math.radians(75) else .05
         vel = speed*numpy.array([math.cos(ping.heading), math.sin(ping.heading), 0])
 
         print 'heading', ping.heading/math.pi*180, 'declination', ping.declination/math.pi*180, 'vel', vel
