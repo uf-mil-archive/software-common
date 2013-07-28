@@ -88,17 +88,16 @@ class HydrophoneTravelState(BaseHydrophoneState):
                 speed = .1
                 if ping.declination > 55/180*math.pi:
                     self._good_ctr += 1
-                    if self._good_ctr >= 3:
+                    if self._good_ctr >= 2:
                         return 'succeeded'
+                else:
+                    self._good_ctr = 0
         else:
             self._stall_ctr += 1
-            if self._stall_ctr > 10:
+            if self._stall_ctr > 5:
                 return 'failed'
             speed = 0
-
-        if self._stall_ctr > 10:
-            return 'failed'
-        print 'heading', ping.heading/math.pi*180, 'declination', ping.declination/math.pi*180, 'speed', speed
+        print 'heading', ping.heading/math.pi*180, 'declination', ping.declination/math.pi*180, 'speed', speed, 'stall', self._stall_ctr
         return new.as_MoveToGoal(linear=[speed, 0, 0])
 
 class HydrophoneApproachState(BaseHydrophoneState):
