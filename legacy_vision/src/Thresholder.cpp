@@ -44,13 +44,7 @@ Mat Thresholder::shooterRed() {
 }
 
 Mat Thresholder::red() {
-	Mat dbg;
-	Mat b; adaptiveThreshold(channelsLAB[2],b,255,0,THRESH_BINARY_INV,251,10); // use lab channel hack
-	add(b,channelsRGB[2],dbg); // combine with red channel
-	Mat v; inRange(channelsHSV[2],Scalar(0,0,0,0),Scalar(120,0,0,0),v); // filter out blacks
-	subtract(dbg,v,dbg); // filter out blacks
-	subtract(dbg,channelsRGB[1],dbg); // filter white/green/yellow
-	adaptiveThreshold(dbg,dbg,255,0,THRESH_BINARY,201,-15);
+	Mat dbg; adaptiveThreshold(channelsRGB[1],dbg,255,0,THRESH_BINARY_INV,51,8);
 	return dbg;
 }
 

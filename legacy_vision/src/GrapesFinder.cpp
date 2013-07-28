@@ -30,11 +30,11 @@ static Vec3b vec3b_from_ptree(property_tree::ptree pt) {
 }
 
 IFinder::FinderResult GrapesFinder::find(const subjugator::ImageSource::Image &img) {
+	// blur the image to remove noise
+        Mat blurred; GaussianBlur(img.image, blurred, Size(0, 0), 5, 5);
 	// call to normalizer here
 	const Mat normalized = img.image;
 
-	// blur the image to remove noise
-	//Mat blurred; GaussianBlur(normalized, blurred, Size(5,5), 10, 15, BORDER_DEFAULT);
 
 	Thresholder thresholder(normalized);
 
@@ -109,19 +109,28 @@ IFinder::FinderResult GrapesFinder::find(const subjugator::ImageSource::Image &i
 		bitwise_and(red, tempMask, red); // use mask to only find red areas within holes in yellow
 		erode(red, red, cv::Mat::ones(5,5,CV_8UC1));
 		dilate(red, red, cv::Mat::ones(5,5,CV_8UC1)); */
-		Mat red = thresholder.forrest(yellow_ref, red_ref, 10, 0.8);
-		erode(red, red, cv::Mat::ones(3,3,CV_8UC1));
-		dilate(red, red, cv::Mat::ones(17,17,CV_8UC1));
-		erode(red, red, cv::Mat::ones(3,3,CV_8UC1));
+                Mat normalized = Normalizer::normRGB(blurred);
+		Mat red = Thresholder(normalized).red();
+		//erode(red, red, cv::Mat::ones(3,3,CV_8UC1));
+		//dilate(red, red, cv::Mat::ones(17,17,CV_8UC1));
+		//erode(red, red, cv::Mat::ones(3,3,CV_8UC1));
 		//erode(red, red, cv::Mat::ones(5,5,CV_8UC1));
-		Blob blob(red, 1000, 1000000, 1000000);
+		Blob blob(red, 400, 1000000, 1000000);
 		
+		Mat res = normalized.clone();
+		blob.drawResult(res, CV_RGB(255, 0, 0));
 		
 	    for(unsigned int i = 0; i < blob.data.size(); )
-		    if(blob.data[i].circularity < .35 || blob.data[i].radius < 20 || blob.data[i].radius > 70)
+		    if(blob.data[i].circularity < .35 || blob.data[i].radius < 10 || blob.data[i].radius > 60)
 			    blob.data.erase(blob.data.begin()+i);
 		    else
 			    i++;
+
+
+		blob.drawResult(res, CV_RGB(0, 0, 255));
+
+                if(blob.data.size()) blob.data.resize(1);
+		blob.drawResult(res, CV_RGB(0, 255, 0));
 
 		vector<property_tree::ptree> resultVector;
 		BOOST_FOREACH(const Blob::BlobData &b, blob.data) {
@@ -131,11 +140,6 @@ IFinder::FinderResult GrapesFinder::find(const subjugator::ImageSource::Image &i
 			fResult.put("scale", pow(b.short_length, 2));
 			resultVector.push_back(fResult);
 		}
-
-		Mat res = img.image.clone();
-		blob.drawResult(res, CV_RGB(255, 255, 255));
-                if(blob.data.size()) blob.data.resize(1);
-		blob.drawResult(res, CV_RGB(255, 0, 0));
 
 		return FinderResult(resultVector, res, yellow/2 | red);
 	}
