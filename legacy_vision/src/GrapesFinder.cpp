@@ -118,7 +118,7 @@ IFinder::FinderResult GrapesFinder::find(const subjugator::ImageSource::Image &i
 		
 		
 	    for(unsigned int i = 0; i < blob.data.size(); )
-		    if(blob.data[i].circularity < .35 || blob.data[i].radius < 20 || blob.data[i].radius > 40)
+		    if(blob.data[i].circularity < .35 || blob.data[i].radius < 20 || blob.data[i].radius > 70)
 			    blob.data.erase(blob.data.begin()+i);
 		    else
 			    i++;
