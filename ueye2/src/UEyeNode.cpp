@@ -8,6 +8,7 @@
 #include <fstream>
 
 UEyeNode::UEyeNode(const ros::NodeHandle &nh, const ros::NodeHandle &private_nh) :
+    timeout_ctr(0),
     nh(nh),
     private_nh(private_nh),
     it(nh),
@@ -95,7 +96,14 @@ void UEyeNode::runOnce() {
     image->step = image->width*4;
     image->header.frame_id = frame_id;
     if (!cam->getBayeredImage(&image->data.front(), image->data.size(), 100)) {
+        timeout_ctr++;
+        if (timeout_ctr >= 10) {
+            ROS_WARN("No frames received over last second.");
+            timeout_ctr = 0;
+        }
         return;
+    } else {
+        timeout_ctr = 0;
     }
     image->header.stamp = ros::Time::now();
     image_pub.publish(image);

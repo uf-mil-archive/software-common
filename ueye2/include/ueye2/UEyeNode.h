@@ -27,6 +27,7 @@ private:
     std::string calibration_file;
     boost::scoped_ptr<UEyeCamera> cam;
     sensor_msgs::CameraInfo camera_info;
+    int timeout_ctr;
 
     ros::NodeHandle nh;
     ros::NodeHandle private_nh;
