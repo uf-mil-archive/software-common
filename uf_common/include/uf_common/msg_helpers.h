@@ -28,10 +28,6 @@ inline T vec2xyz(Eigen::Vector3d v) {
     return make_xyz<T>(v(0), v(1), v(2));
 }
 template <class T>
-inline T vec2xyz(btVector3 v) {
-    return make_xyz<T>(v.x(), v.y(), v.z());
-}
-template <class T>
 inline T vec2xyz(tf::Vector3 v) {
     return make_xyz<T>(v.x(), v.y(), v.z());
 }
