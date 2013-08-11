@@ -12,6 +12,11 @@
   <depend package="rospy"/>
   <depend package="std_msgs"/>
   <depend package="geometry_msgs"/>
+  <depend package="eigen_conversions"/>
+
+  <rosdep name="eigen" />
+
+  <export>
+    <cpp cflags="-I${prefix}/include `pkg-config --cflags eigen3`"/>
+  </export>
 </package>
-
-
