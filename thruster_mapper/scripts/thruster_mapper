@@ -54,6 +54,7 @@ def wrench_callback(msg):
             ti, # thrusterinfo
             trans + rot.dot(xyz_array(ti.position)), # position in wrench frame
             rot.dot(transformations.unit_vector(xyz_array(ti.direction))), # direction in wrench frame
+            rot.dot(xyz_array(ti.torque_per_force)), # torque_per_force in wrench_frame
         ))
     
     if not good_thrusterinfos:
@@ -61,8 +62,8 @@ def wrench_callback(msg):
     
     wrench_from_efforts = numpy.array([numpy.concatenate([
         direction, # force = direction * effort
-        numpy.cross(position, direction), # torque = (position X direction) * effort
-    ]) for ti, position, direction in good_thrusterinfos]).T
+        numpy.cross(position, direction) + torque_per_force, # torque = (position X direction + torque_per_force) * effort
+    ]) for ti, position, direction, torque_per_force in good_thrusterinfos]).T
     
     # divide torques by 1/tradeoff_distance to make units match and provide
     #     a tunable parameter for the tradeoff between force and torque error
@@ -80,7 +81,7 @@ def wrench_callback(msg):
     if error > 0.01: # N
         rospy.loginfo("Thruster efforts don't exactly match desired wrench. Error: %.2f N", error)
     
-    for (ti, _, _), effort in zip(good_thrusterinfos, efforts):
+    for (ti, _, _, _), effort in zip(good_thrusterinfos, efforts):
         thruster_listener.send_command(ti.id, effort)
 rospy.Subscriber('wrench', WrenchStamped, wrench_callback)
 

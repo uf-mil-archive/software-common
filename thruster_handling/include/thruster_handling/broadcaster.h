@@ -22,6 +22,7 @@ private:
   Eigen::Vector3d direction;
   double min_force;
   double max_force;
+  Eigen::Vector3d torque_per_force;
   boost::function<void(double)> command_callback;
   ros::Publisher _pub;
   ros::Subscriber _command_sub;
@@ -39,6 +40,7 @@ public:
                       Eigen::Vector3d direction,
                       double min_force,
                       double max_force,
+                      Eigen::Vector3d torque_per_force,
                       boost::function<void(double)> command_callback) :
     nh(nh),
     frame_id(frame_id),
@@ -48,6 +50,7 @@ public:
     direction(direction),
     min_force(min_force),
     max_force(max_force),
+    torque_per_force(torque_per_force),
     command_callback(command_callback) {
     
     _pub = nh.advertise<ThrusterInfo>("thrusters/info", 10);
@@ -66,6 +69,7 @@ public:
     tf::vectorEigenToMsg(direction, ti.direction);
     ti.min_force = min_force;
     ti.max_force = max_force;
+    tf::vectorEigenToMsg(torque_per_force, ti.torque_per_force);
     _pub.publish(ti);
   }
 };

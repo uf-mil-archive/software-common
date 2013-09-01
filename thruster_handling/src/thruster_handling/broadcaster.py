@@ -8,7 +8,7 @@ class ThrusterBroadcaster(object):
     def _command_callback(self, msg):
         self.command_callback(msg.force)
     
-    def __init__(self, frame_id, id, lifetime, position, direction, min_force, max_force, command_callback):
+    def __init__(self, frame_id, id, lifetime, position, direction, min_force, max_force, torque_per_force, command_callback):
         self.frame_id = frame_id
         self.id = id
         self.lifetime = lifetime
@@ -16,6 +16,7 @@ class ThrusterBroadcaster(object):
         self.direction = direction
         self.min_force = min_force
         self.max_force = max_force
+        self.torque_per_force = torque_per_force
         self.command_callback = command_callback
         
         self.pub = rospy.Publisher('thrusters/info', ThrusterInfo)
@@ -34,4 +35,5 @@ class ThrusterBroadcaster(object):
             direction=Vector3(*self.direction),
             min_force=self.min_force,
             max_force=self.max_force,
+            torque_per_force=Vector3(*self.torque_per_force),
         ))
