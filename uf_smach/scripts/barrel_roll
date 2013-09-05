@@ -12,7 +12,7 @@ def main():
     rospy.init_node('barrel_roll_state_machine')
 
     # Create a SMACH state machine
-    sm = smach.Sequence(['succeeded'], 'succeeded')
+    sm = smach.Sequence(['succeeded', 'preempted'], 'succeeded')
 
     # Create all the stuff shared between states
     shared = StateSharedHandles()
