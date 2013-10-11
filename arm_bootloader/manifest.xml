@@ -1,0 +1,20 @@
+<package>
+  <description brief="arm_bootloader">
+
+     arm_bootloader
+
+  </description>
+  <author>Forrest Voight</author>
+  <license>BSD</license>
+  <review status="unreviewed" notes=""/>
+  <url>http://ros.org/wiki/arm_bootloader</url>
+  <depend package="roscpp"/>
+  <depend package="libopencm3"/>
+
+  <export>
+    <cpp cflags="-I${prefix}/include"/>
+  </export>
+
+</package>
+
+

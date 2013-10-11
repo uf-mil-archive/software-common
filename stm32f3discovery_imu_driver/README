@@ -1,0 +1,20 @@
+This is an example of an ARM firmware project that can be used with or without the bootloader.
+
+
+Pins used:
+* PA2 - serial data out of ARM processor
+* PA3 - serial data in to ARM processor
+
+
+To use it without the bootloader, run:
+
+rosmake
+st-flash write build/firmware_out/firmware.bin 0x8000000
+bin/stm32f3discovery_imu_driver --no-bootloader
+
+
+To use it with the bootloader, run:
+
+rosmake
+st-flash write `rospack find arm_bootloader`/build/firmware_out/firmware.bin 0x8000000
+bin/stm32f3discovery_imu_driver
