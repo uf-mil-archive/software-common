@@ -33,7 +33,8 @@ bool flash_write(void *dest, void *src, size_t length_in_bytes) {
   
   for(uint32_t i = 0; i < length_in_bytes/2; i++) {
       FLASH_CR |= FLASH_CR_PG;
-      reinterpret_cast<uint16_t*>(dest)[i] = reinterpret_cast<uint16_t*>(src)[i];
+      reinterpret_cast<uint16_t*>(dest)[i] =
+        reinterpret_cast<uint16_t*>(src)[i];
       flash_wait_for_last_operation();
       FLASH_CR &= ~static_cast<uint32_t>(FLASH_CR_PG);
       if(!(FLASH_SR & FLASH_SR_EOP)) return false;
@@ -44,7 +45,9 @@ bool flash_write(void *dest, void *src, size_t length_in_bytes) {
 
 extern unsigned _end_empty;
 uint8_t *flash_start = reinterpret_cast<uint8_t*>(0x8000000);
-uint8_t *first_used_page_start = reinterpret_cast<uint8_t*>(reinterpret_cast<size_t>(&_end_empty) & ~(static_cast<size_t>(2048)-1));
+uint8_t *first_used_page_start =
+  reinterpret_cast<uint8_t*>(reinterpret_cast<size_t>(&_end_empty) &
+    ~(static_cast<size_t>(2048)-1));
 uint8_t *last_unused_page_start = first_used_page_start - 2048;
 
 struct LastPage {
@@ -53,7 +56,8 @@ struct LastPage {
 };
 LastPage *lastpage = reinterpret_cast<LastPage *>(last_unused_page_start);
 
-arm_bootloader::ChecksumAdder<arm_bootloader::Packetizer<void (*)(uint8_t byte)> > *p_checksumadder;
+arm_bootloader::ChecksumAdder<
+  arm_bootloader::Packetizer<void (*)(uint8_t byte)> > *p_checksumadder;
 
 void messageReceived(const Command &msg) {
   if(msg.dest != 0x1234) return;
@@ -68,11 +72,13 @@ void messageReceived(const Command &msg) {
     } break;
   
     case CommandID::GetStatus: {
-      resp.resp.GetStatus.bootloader_magic = GetStatusResponse::BOOTLOADER_MAGIC_VALUE;
+      resp.resp.GetStatus.bootloader_magic =
+        GetStatusResponse::BOOTLOADER_MAGIC_VALUE;
     } break;
     
     case CommandID::GetProgramHash: {
-      if(flash_start + msg.args.GetProgramHash.length > last_unused_page_start) {
+      if(flash_start + msg.args.GetProgramHash.length >
+          last_unused_page_start) {
         resp.resp.GetProgramHash.error_number = 1;
         break;
       }
