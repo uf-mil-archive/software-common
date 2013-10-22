@@ -31,7 +31,7 @@ set(LIBRARY_OUTPUT_PATH ${PROJECT_SOURCE_DIR}/lib)
 
 add_custom_command(
     COMMAND git clone https://github.com/libopencm3/libopencm3.git libopencm3
-    COMMAND git --git-dir=libopencm3/.git --work-tree=libopencm3 reset --hard 8c8592e2b6309c3dcfdaf40e441ae3cb406b57eb
+    COMMAND git --git-dir=libopencm3/.git --work-tree=libopencm3 reset --hard a99f4fb6206598c714ed8576b5e834ee99e79ae3
     OUTPUT libopencm3/.git/HEAD
 )
 
