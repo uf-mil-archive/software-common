@@ -1,38 +1,47 @@
-#ifndef ARM_TEST_ARM_BOOTLOADER_INCLUDE_ARM_BOOTLOADER_SUBBUS_PROTOCOL_H
-#define ARM_TEST_ARM_BOOTLOADER_INCLUDE_ARM_BOOTLOADER_SUBBUS_PROTOCOL_H
+#ifndef _FBDARVFXLZPFVOBY_
+#define _FBDARVFXLZPFVOBY_
 
-#include "../../firmware/sha256.h"
+#include <uf_subbus_protocol/sha256.h>
 
-namespace arm_bootloader {
+namespace uf_subbus_protocol {
+
+class ISink {
+public:
+  virtual void handleStart() = 0;
+  virtual void handleByte(uint8_t byte) = 0;
+  virtual void handleEnd() = 0;
+};
 
 static uint8_t const ESCAPE = 0x34;
 static uint8_t const ESCAPE_START = 0x01;
 static uint8_t const ESCAPE_ESCAPE = 0x02;
 static uint8_t const ESCAPE_END = 0x03;
 
-template<typename SendRawByteType>
+template<typename InnerType>
 class Packetizer {
-  SendRawByteType sendRawByte;
+  InnerType &inner;
   
 public:
-  Packetizer(SendRawByteType sendRawByte) : sendRawByte(sendRawByte) {
+  Packetizer(InnerType &inner) : inner(inner) {
   }
   
   void handleStart() {
-    sendRawByte(ESCAPE);
-    sendRawByte(ESCAPE_START);
+    inner.handleStart();
+    inner.handleByte(ESCAPE);
+    inner.handleByte(ESCAPE_START);
   }
   void handleByte(uint8_t byte) {
     if(byte == ESCAPE) {
-      sendRawByte(ESCAPE);
-      sendRawByte(ESCAPE_ESCAPE);
+      inner.handleByte(ESCAPE);
+      inner.handleByte(ESCAPE_ESCAPE);
     } else {
-      sendRawByte(byte);
+      inner.handleByte(byte);
     }
   }
   void handleEnd() {
-    sendRawByte(ESCAPE);
-    sendRawByte(ESCAPE_END);
+    inner.handleByte(ESCAPE);
+    inner.handleByte(ESCAPE_END);
+    inner.handleEnd();
   }
 };
 
@@ -214,6 +223,39 @@ public:
   }
   void clear() {
     is_set = false;
+  }
+};
+
+
+template<typename ObjectType, typename SinkType>
+class SimpleSender {
+  Packetizer<SinkType> packetizer;
+  ChecksumAdder<Packetizer<SinkType> > checksumadder;
+  
+public:
+  SimpleSender(SinkType &sink) :
+    packetizer(sink), checksumadder(packetizer) {
+  }
+  void write_object(ObjectType const &obj) {
+    uf_subbus_protocol::write_object(obj, checksumadder);
+  }
+};
+
+template<typename ObjectType, typename CallbackType>
+class SimpleReceiver {
+  ObjectReceiver<ObjectType, CallbackType> objectreceiver;
+  ChecksumChecker<ObjectReceiver<ObjectType, CallbackType> >
+    cc;
+  Depacketizer<ChecksumChecker<ObjectReceiver<ObjectType, CallbackType> > >
+    depacketizer;
+
+public:
+  SimpleReceiver(CallbackType messageReceived) :
+    objectreceiver(messageReceived), cc(objectreceiver), depacketizer(cc) {
+  }
+  
+  void handleRawByte(uint8_t byte) {
+    depacketizer.handleRawByte(byte);
   }
 };
 

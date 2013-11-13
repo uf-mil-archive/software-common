@@ -9,7 +9,9 @@
   <review status="unreviewed" notes=""/>
   <url>http://ros.org/wiki/arm_bootloader</url>
   <depend package="roscpp"/>
+
   <depend package="libopencm3"/>
+  <depend package="uf_subbus_protocol"/>
 
   <export>
     <cpp cflags="-I${prefix}/include"/>

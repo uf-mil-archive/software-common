@@ -1,5 +1,5 @@
-#ifndef PROTOCOL_H
-#define PROTOCOL_H
+#ifndef _BEZPKWLJADSOEQBW_
+#define _BEZPKWLJADSOEQBW_
 
 #include <stdint.h>
 

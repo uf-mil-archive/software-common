@@ -22,11 +22,11 @@ set(LIBRARY_OUTPUT_PATH ${PROJECT_SOURCE_DIR}/lib)
 #rosbuild_gensrv()
 
 rosbuild_find_ros_package(libopencm3)
-rosbuild_find_ros_package(arm_bootloader)
+rosbuild_find_ros_package(uf_subbus_protocol)
 
 add_custom_command(
     WORKING_DIRECTORY ../firmware
-    COMMAND $(MAKE) BUILD_DIR=../build/firmware_out TOOLCHAIN_DIR=${libopencm3_PACKAGE_PATH}/build/libopencm3 ARM_BOOTLOADER_DIR=${arm_bootloader_PACKAGE_PATH}
+    COMMAND $(MAKE) BUILD_DIR=../build/firmware_out TOOLCHAIN_DIR=${libopencm3_PACKAGE_PATH}/build/libopencm3 UF_SUBBUS_PROTOCOL_DIR=${uf_subbus_protocol_PACKAGE_PATH}
     OUTPUT firmware_out/firmware.bin.dummy
 )
 add_custom_command(

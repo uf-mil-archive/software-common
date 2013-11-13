@@ -25,7 +25,7 @@ PREFIX	?= arm-none-eabi
 # PREFIX		?= arm-elf
 CC		= $(PREFIX)-gcc
 CXX		= $(PREFIX)-g++
-LD		= $(PREFIX)-gcc
+LD		= $(PREFIX)-g++
 OBJCOPY		= $(PREFIX)-objcopy
 OBJDUMP		= $(PREFIX)-objdump
 GDB		= $(PREFIX)-gdb
@@ -36,10 +36,12 @@ BUILD_DIR ?= .
 CFLAGS		+= -Os -g -Wall -Wextra -I$(TOOLCHAIN_DIR)/include \
 		   -fno-common -mcpu=cortex-m4 -mthumb \
 		   -mfloat-abi=hard -mfpu=fpv4-sp-d16 -MD -DSTM32F3 \
-		   -Wsign-conversion -Wsign-compare
-CXXFLAGS    += $(CFLAGS) -std=c++11
+		   -Wsign-conversion -Wsign-compare \
+                   -I$(UF_SUBBUS_PROTOCOL_DIR)/include \
+                   -I../include
+CXXFLAGS	+= $(CFLAGS) -std=c++11
 LDSCRIPT	?= $(BINARY).ld
-LDFLAGS		+= --static -lc -lnosys -L$(TOOLCHAIN_DIR)/lib \
+LDFLAGS		+= --static -Wl,-start-group -lc -lnosys -L$(TOOLCHAIN_DIR)/lib \
 			 -L$(TOOLCHAIN_DIR)/lib/stm32/f3 \
 		   -T$(LDSCRIPT) -nostartfiles -Wl,--gc-sections \
 		   -mthumb -mcpu=cortex-m4 -mthumb -mfloat-abi=hard -mfpu=fpv4-sp-d16

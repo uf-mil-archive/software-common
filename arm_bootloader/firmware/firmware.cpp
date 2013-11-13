@@ -6,10 +6,10 @@
 #include <libopencm3/stm32/gpio.h>
 #include <libopencm3/stm32/flash.h>
 
-#include "sha256.h"
-#include "../include/arm_bootloader/subbus_protocol.h"
+#include <uf_subbus_protocol/protocol.h>
+#include <uf_subbus_protocol/sha256.h>
 
-#include "protocol.h"
+#include <arm_bootloader/protocol.h>
 
 using namespace arm_bootloader;
 
@@ -56,8 +56,19 @@ struct LastPage {
 };
 LastPage *lastpage = reinterpret_cast<LastPage *>(last_unused_page_start);
 
-arm_bootloader::ChecksumAdder<
-  arm_bootloader::Packetizer<void (*)(uint8_t byte)> > *p_checksumadder;
+class UARTSink : public uf_subbus_protocol::ISink {
+public:
+  void handleStart() {
+  }
+  void handleByte(uint8_t byte) {
+    usart_send_blocking(USART2, byte);
+  }
+  void handleEnd() {
+  }
+};
+
+uf_subbus_protocol::ChecksumAdder<
+  uf_subbus_protocol::Packetizer<UARTSink> > *p_checksumadder;
 
 void messageReceived(const Command &msg) {
   if(msg.dest != 0x1234) return;
@@ -83,16 +94,16 @@ void messageReceived(const Command &msg) {
         break;
       }
       
-      sha256_state md; sha256_init(md);
+      uf_subbus_protocol::sha256_state md; uf_subbus_protocol::sha256_init(md);
       for(uint32_t pos = 0; pos < msg.args.GetProgramHash.length; pos++) {
         uint8_t data = flash_start[pos];
         if(pos < 4) data = *(reinterpret_cast<uint8_t*>(&lastpage->program_stack_pointer) + pos);
         else if(pos < 8) data = *(reinterpret_cast<uint8_t*>(&lastpage->program_reset_vector) + (pos - 4));
-        sha256_process(md, &data, 1);
+        uf_subbus_protocol::sha256_process(md, &data, 1);
       }
       
       resp.resp.GetProgramHash.error_number = 0;
-      sha256_done(md, resp.resp.GetProgramHash.hash);
+      uf_subbus_protocol::sha256_done(md, resp.resp.GetProgramHash.hash);
     } break;
     
     case CommandID::FlashPage: {
@@ -157,7 +168,7 @@ void messageReceived(const Command &msg) {
   }
   
   if(resp.id) {
-    write_object(resp, *p_checksumadder);
+    uf_subbus_protocol::write_object(resp, *p_checksumadder);
   }
   
   switch(msg.command) {
@@ -205,10 +216,6 @@ void usart_setup(void) {
   usart_enable(USART2);
 }
 
-void write_byte(uint8_t byte) {
-  usart_send_blocking(USART2, byte);
-}
-
 uint8_t read_byte() {
   usart_wait_recv_ready(USART2);
   return usart_recv(USART2);
@@ -219,38 +226,21 @@ int main() {
   rcc_peripheral_enable_clock(&RCC_AHBENR, RCC_AHBENR_IOPEEN);
   usart_setup();
   
-  arm_bootloader::Packetizer<void (*)(uint8_t byte)>
-    packetizer(write_byte);
-  arm_bootloader::ChecksumAdder<arm_bootloader::Packetizer<void (*)(uint8_t byte)> >
+  UARTSink uartsink;
+  uf_subbus_protocol::Packetizer<UARTSink>
+    packetizer(uartsink);
+  uf_subbus_protocol::ChecksumAdder<uf_subbus_protocol::Packetizer<UARTSink> >
     checksumadder(packetizer);
   p_checksumadder = &checksumadder;
   
-  arm_bootloader::ObjectReceiver<Command, void(const Command &)>
+  uf_subbus_protocol::ObjectReceiver<Command, void(const Command &)>
     objectreceiver(messageReceived);
-  arm_bootloader::ChecksumChecker<arm_bootloader::ObjectReceiver<Command, void(const Command &)> >
+  uf_subbus_protocol::ChecksumChecker<uf_subbus_protocol::ObjectReceiver<Command, void(const Command &)> >
     cc(objectreceiver);
-  arm_bootloader::Depacketizer<arm_bootloader::ChecksumChecker<arm_bootloader::ObjectReceiver<Command, void(const Command &)> > >
+  uf_subbus_protocol::Depacketizer<uf_subbus_protocol::ChecksumChecker<uf_subbus_protocol::ObjectReceiver<Command, void(const Command &)> > >
     depacketizer(cc);
   
   while(true) {
     depacketizer.handleRawByte(read_byte());
   }
-}
-
-
-
-extern "C" {
-
-void _exit(int) {
-  while(true);
-}
-
-void _kill(int) {
-  ;
-}
-
-int _getpid() {
-  return 0;
-}
-
 }

@@ -1,7 +1,7 @@
-#ifndef I2C_H
-#define I2C_H
+#ifndef _BRMYSZLJUPSYELNW_
+#define _BRMYSZLJUPSYELNW_
 
-#include "protocol.h"
+#include <stm32f3discovery_imu_driver/protocol.h>
 
 void i2c_setup(void);
 void i2c_read_imu(stm32f3discovery_imu_driver::GetIMUDataResponse &resp);

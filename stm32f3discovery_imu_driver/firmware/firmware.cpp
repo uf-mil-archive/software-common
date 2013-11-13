@@ -7,15 +7,26 @@
 #include <libopencm3/stm32/flash.h>
 #include <libopencm3/stm32/gpio.h>
 
-#include "sha256.h"
-#include <arm_bootloader/subbus_protocol.h>
+#include <uf_subbus_protocol/protocol.h>
 
-#include "protocol.h"
+#include <stm32f3discovery_imu_driver/protocol.h>
+
 #include "i2c.h"
 
 using namespace stm32f3discovery_imu_driver;
 
-arm_bootloader::ChecksumAdder<arm_bootloader::Packetizer<void (*)(uint8_t byte)> > *p_checksumadder;
+class UARTSink : public uf_subbus_protocol::ISink {
+public:
+  void handleStart() {
+  }
+  void handleByte(uint8_t byte) {
+    usart_send_blocking(USART2, byte);
+  }
+  void handleEnd() {
+  }
+};
+
+uf_subbus_protocol::ChecksumAdder<uf_subbus_protocol::Packetizer<UARTSink> > *p_checksumadder;
 
 void messageReceived(const Command &msg) {
   if(msg.dest != 0x1234) return;
@@ -44,7 +55,7 @@ void messageReceived(const Command &msg) {
   }
   
   if(resp.id) {
-    write_object(resp, *p_checksumadder);
+    uf_subbus_protocol::write_object(resp, *p_checksumadder);
   }
 
   switch(msg.command) {
@@ -84,10 +95,6 @@ void usart_setup(void) {
   usart_enable(USART2);
 }
 
-void write_byte(uint8_t byte) {
-  usart_send_blocking(USART2, byte);
-}
-
 uint8_t read_byte() {
   usart_wait_recv_ready(USART2);
   return usart_recv(USART2);
@@ -99,38 +106,21 @@ int main() {
   usart_setup();
 	i2c_setup();
   
-  arm_bootloader::Packetizer<void (*)(uint8_t byte)>
-    packetizer(write_byte);
-  arm_bootloader::ChecksumAdder<arm_bootloader::Packetizer<void (*)(uint8_t byte)> >
+  UARTSink uartsink;
+  uf_subbus_protocol::Packetizer<UARTSink>
+    packetizer(uartsink);
+  uf_subbus_protocol::ChecksumAdder<uf_subbus_protocol::Packetizer<UARTSink> >
     checksumadder(packetizer);
   p_checksumadder = &checksumadder;
   
-  arm_bootloader::ObjectReceiver<Command, void(const Command &)>
+  uf_subbus_protocol::ObjectReceiver<Command, void(const Command &)>
     objectreceiver(messageReceived);
-  arm_bootloader::ChecksumChecker<arm_bootloader::ObjectReceiver<Command, void(const Command &)> >
+  uf_subbus_protocol::ChecksumChecker<uf_subbus_protocol::ObjectReceiver<Command, void(const Command &)> >
     cc(objectreceiver);
-  arm_bootloader::Depacketizer<arm_bootloader::ChecksumChecker<arm_bootloader::ObjectReceiver<Command, void(const Command &)> > >
+  uf_subbus_protocol::Depacketizer<uf_subbus_protocol::ChecksumChecker<uf_subbus_protocol::ObjectReceiver<Command, void(const Command &)> > >
     depacketizer(cc);
   
   while(true) {
     depacketizer.handleRawByte(read_byte());
   }
-}
-
-
-
-extern "C" {
-
-void _exit(int) {
-  while(true);
-}
-
-void _kill(int) {
-  ;
-}
-
-int _getpid() {
-  return 0;
-}
-
 }

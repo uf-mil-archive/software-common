@@ -2,7 +2,9 @@
 #include <libopencm3/stm32/f3/rcc.h>
 #include <libopencm3/stm32/gpio.h>
 
-#include "protocol.h"
+#include <stm32f3discovery_imu_driver/protocol.h>
+
+#include "i2c.h"
 
 using namespace stm32f3discovery_imu_driver;
 

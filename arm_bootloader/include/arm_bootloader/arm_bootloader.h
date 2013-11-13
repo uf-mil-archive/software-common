@@ -1,5 +1,5 @@
-#ifndef ARM_TEST_ARM_BOOTLOADER_INCLUDE_ARM_BOOTLOADER_ARM_BOOTLOADER_H
-#define ARM_TEST_ARM_BOOTLOADER_INCLUDE_ARM_BOOTLOADER_ARM_BOOTLOADER_H
+#ifndef _IVXONIZWBGYIXQWV_
+#define _IVXONIZWBGYIXQWV_
 
 #include <random>
 #include <iostream>
@@ -10,10 +10,9 @@
 
 #include <ros/ros.h>
 
-#include "../../firmware/protocol.h"
-#include "subbus_protocol.h"
-
-#include "../../firmware/sha256.h"
+#include <uf_subbus_protocol/protocol.h>
+#include <uf_subbus_protocol/sha256.h>
+#include <arm_bootloader/protocol.h>
 
 namespace arm_bootloader {
 
@@ -28,9 +27,22 @@ void write_data(boost::asio::serial_port &sp, uint8_t const *begin, uint8_t cons
     ROS_ERROR("error on write: %s; dropping", exc.what());
   }
 }
-void write_byte(boost::asio::serial_port *sp, uint8_t byte) {
-  write_data(*sp, &byte, &byte + 1);
-}
+
+class SerialPortSink : public uf_subbus_protocol::ISink {
+  boost::asio::serial_port &sp;
+public:
+  SerialPortSink(boost::asio::serial_port &sp) :
+    sp(sp) {
+  }
+  void handleStart() {
+  }
+  void handleByte(uint8_t byte) {
+    write_data(sp, &byte, &byte + 1);
+  }
+  void handleEnd() {
+  }
+};
+
 
 template<typename Response>
 class Reader {
@@ -77,11 +89,11 @@ public:
   
   boost::optional<Response> read(ID id) {
     boost::function<void(const Response &)> tmp = boost::bind(&Reader::handleResult, this, _1, id);
-    ObjectReceiver<Response, boost::function<void(const Response &)> >
+    uf_subbus_protocol::ObjectReceiver<Response, boost::function<void(const Response &)> >
       objectreceiver(tmp);
-    ChecksumChecker<ObjectReceiver<Response, boost::function<void(const Response &)> > >
+    uf_subbus_protocol::ChecksumChecker<uf_subbus_protocol::ObjectReceiver<Response, boost::function<void(const Response &)> > >
       cc(objectreceiver);
-    Depacketizer<ChecksumChecker<ObjectReceiver<Response, boost::function<void(const Response &)> > > >
+    uf_subbus_protocol::Depacketizer<uf_subbus_protocol::ChecksumChecker<uf_subbus_protocol::ObjectReceiver<Response, boost::function<void(const Response &)> > > >
       depacketizer(cc);
     
     result = boost::none;
@@ -90,7 +102,7 @@ public:
     // to do a reset for subsequent reads to work.
     sp.get_io_service().reset();
 
-    boost::function<void(uint8_t)> tmp2 = boost::bind(&Depacketizer<ChecksumChecker<ObjectReceiver<Response, boost::function<void(const Response &)> > > >::handleRawByte, &depacketizer, _1);
+    boost::function<void(uint8_t)> tmp2 = boost::bind(&uf_subbus_protocol::Depacketizer<uf_subbus_protocol::ChecksumChecker<uf_subbus_protocol::ObjectReceiver<Response, boost::function<void(const Response &)> > > >::handleRawByte, &depacketizer, _1);
     // Asynchronously read 1 character.
     boost::asio::async_read(sp, boost::asio::buffer(&buf, 1),
             boost::bind(&Reader::read_complete,
@@ -122,9 +134,10 @@ bool attempt_bootload(boost::asio::serial_port &sp,
   
   Reader<Response> reader(sp, 1000);
   
-  Packetizer<boost::function<void (uint8_t)> >
-    packetizer(boost::bind(write_byte, &sp, _1));
-  ChecksumAdder<Packetizer<boost::function<void (uint8_t)> > >
+  SerialPortSink sps(sp);
+  uf_subbus_protocol::Packetizer<SerialPortSink>
+    packetizer(sps);
+  uf_subbus_protocol::ChecksumAdder<uf_subbus_protocol::Packetizer<SerialPortSink> >
     checksumadder(packetizer);
   
 unsure_if_talking_to_bootloader:
@@ -178,9 +191,9 @@ unsure_if_program_correct:
       return false;
     }
     
-    sha256_state md; sha256_init(md);
-    sha256_process(md, firmware_bin, firmware_bin_len);
-    uint8_t hash[32]; sha256_done(md, hash);
+    uf_subbus_protocol::sha256_state md; uf_subbus_protocol::sha256_init(md);
+    uf_subbus_protocol::sha256_process(md, firmware_bin, firmware_bin_len);
+    uint8_t hash[32]; uf_subbus_protocol::sha256_done(md, hash);
     
     hash_matched = true;
     for(int i = 0; i < 32; i++) {

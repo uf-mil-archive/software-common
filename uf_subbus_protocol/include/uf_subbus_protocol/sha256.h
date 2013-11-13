@@ -9,14 +9,14 @@
  * Tom St Denis, tomstdenis@gmail.com, http://libtom.org
  */
 
-#ifndef SHA256_H
-#define SHA256_H
+#ifndef _NTZVLIYKNNMYVSDR_
+#define _NTZVLIYKNNMYVSDR_
 
 #include <cassert>
 #include <cstdint>
 #include <cstring>
 
-namespace arm_bootloader {
+namespace uf_subbus_protocol {
 
 
 struct sha256_state {

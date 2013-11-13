@@ -2,7 +2,7 @@
 
 #include <arm_bootloader/arm_bootloader.h>
 
-#include "../firmware/protocol.h"
+#include <stm32f3discovery_imu_driver/protocol.h>
 
 extern unsigned char firmware_bin[];
 extern int firmware_bin_len;
@@ -29,9 +29,10 @@ int main(int argc, char **argv) {
   
   arm_bootloader::Reader<Response> reader(sp, 1000);
   
-  arm_bootloader::Packetizer<boost::function<void (uint8_t)> >
-    packetizer(boost::bind(arm_bootloader::write_byte, &sp, _1));
-  arm_bootloader::ChecksumAdder<arm_bootloader::Packetizer<boost::function<void (uint8_t)> > >
+  arm_bootloader::SerialPortSink sps(sp);
+  uf_subbus_protocol::Packetizer<arm_bootloader::SerialPortSink>
+    packetizer(sps);
+  uf_subbus_protocol::ChecksumAdder<uf_subbus_protocol::Packetizer<arm_bootloader::SerialPortSink> >
     checksumadder(packetizer);
   
   while(true) {
