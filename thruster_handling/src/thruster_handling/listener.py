@@ -10,6 +10,8 @@ class ThrusterListener(object):
             return # this is older than current info
 
         self._thruster_cache[msg.id] = (msg, rospy.Time.now())
+        if msg.id not in self._command_pubs:
+            self._command_pubs[msg.id] = rospy.Publisher('thrusters/command/' + msg.id, ThrusterCommand)
 
     def _thrustercommand_callback(self, id, msg):
         self._command_cache[id] = msg
