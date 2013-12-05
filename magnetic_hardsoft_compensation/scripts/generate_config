@@ -97,8 +97,11 @@ def test():
 test()
 
 
+xyz_array = lambda o: numpy.array([o.x, o.y, o.z])
 with rosbag.Bag(sys.argv[1]) as bag:
-    points = numpy.array([[msg.vector.x, msg.vector.y, msg.vector.z]
+    points = numpy.array([
+            xyz_array(msg.magnetic_field) if hasattr(msg, 'magnetic_field') else
+            xyz_array(msg.vector)
         for topic, msg, t in bag.read_messages(topics=['/imu/mag_raw'])])
 
 if not len(points):
