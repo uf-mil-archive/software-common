@@ -7,7 +7,7 @@
 
 template<class T>
 T clamp(T x, T lo, T hi) {
-    return min(max(x, lo), hi);
+    return std::min(std::max(x, lo), hi);
 }
 
 struct Segment {
