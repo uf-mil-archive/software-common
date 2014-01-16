@@ -1,0 +1,3 @@
+uf_rqt_plugins:
+
+Move plugins that depend on actuator_driver and power_router to SubjuGator and PropaGator repositories, respectively.
