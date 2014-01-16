@@ -17,7 +17,6 @@
   <depend package="rise_6dof"/>
   <depend package="indirect_kalman_6dof"/>
   <depend package="hydrophones"/>
-  <depend package="actuator_driver"/>
   <depend package="actionlib"/>
   <depend package="actionlib_msgs"/>
 </package>
