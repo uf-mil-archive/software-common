@@ -22,7 +22,7 @@ rosbuild_genmsg()
 #rosbuild_gensrv()
 
 #common commands for building c++ executables and libraries
-rosbuild_add_library(nodelet src/nodelet.cpp)
+rosbuild_add_library(magnetic_dynamic_compensation_nodelet src/nodelet.cpp)
 #target_link_libraries(${PROJECT_NAME} another_library)
 #rosbuild_add_boost_directories()
 #rosbuild_link_boost(${PROJECT_NAME} thread)

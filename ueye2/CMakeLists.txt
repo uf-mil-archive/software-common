@@ -29,9 +29,9 @@ rosbuild_add_executable(${PROJECT_NAME} src/node.cpp src/UEyeCamera.cpp src/UEye
 rosbuild_link_boost(${PROJECT_NAME} thread)
 target_link_libraries(${PROJECT_NAME} ueye_api)
 
-rosbuild_add_library(${PROJECT_NAME} src/nodelet.cpp src/UEyeCamera.cpp src/UEyeNode.cpp)
-rosbuild_link_boost(${PROJECT_NAME} thread)
-target_link_libraries(${PROJECT_NAME} ueye_api)
+rosbuild_add_library(${PROJECT_NAME}_nodelet src/nodelet.cpp src/UEyeCamera.cpp src/UEyeNode.cpp)
+rosbuild_link_boost(${PROJECT_NAME}_nodelet thread)
+target_link_libraries(${PROJECT_NAME}_nodelet ueye_api)
 
 #add dynamic reconfigure api
 rosbuild_find_ros_package(dynamic_reconfigure)

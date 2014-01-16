@@ -28,7 +28,7 @@ rosbuild_genmsg()
 
 #common commands for building c++ executables and libraries
 file(GLOB sources src/*.cpp)
-rosbuild_add_library(nodelet ${sources})
+rosbuild_add_library(legacy_vision_nodelet ${sources})
 #target_link_libraries(${PROJECT_NAME} another_library)
 #rosbuild_add_boost_directories()
 #rosbuild_link_boost(${PROJECT_NAME} thread)
