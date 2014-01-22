@@ -1,0 +1,54 @@
+<package>
+  <name>uf_rqt_plugins</name>
+  <version>1.0.0</version>
+  <description>uf_rqt_plugins</description>
+  <maintainer email="matthewbot@gmail.com">Matthew Thompson</maintainer>
+
+  <license>BSD</license>
+
+  <url type="website">http://ros.org/wiki/uf_rqt_plugins</url>
+  <!-- <url type="bugtracker"></url> -->
+
+  <author>Matthew Thompson</author>
+
+  <!-- Dependencies which this package needs to build itself. -->
+  <buildtool_depend>catkin</buildtool_depend>
+
+  <!-- Dependencies needed to compile this package. -->
+  <build_depend>uf_smach</build_depend>
+  <build_depend>uf_common</build_depend>
+  <build_depend>rqt_gui</build_depend>
+  <build_depend>rawgps_common</build_depend>
+  <build_depend>rospy</build_depend>
+  <build_depend>skytraq_driver</build_depend>
+  <build_depend>thruster_handling</build_depend>
+  <build_depend>kill_handling</build_depend>
+  <build_depend>rqt_gui_py</build_depend>
+
+  <!-- Dependencies needed after this package is compiled. -->
+  <run_depend>uf_smach</run_depend>
+  <run_depend>uf_common</run_depend>
+  <run_depend>rqt_gui</run_depend>
+  <run_depend>rawgps_common</run_depend>
+  <run_depend>rospy</run_depend>
+  <run_depend>skytraq_driver</run_depend>
+  <run_depend>thruster_handling</run_depend>
+  <run_depend>kill_handling</run_depend>
+  <run_depend>rqt_gui_py</run_depend>
+
+  <!-- Dependencies needed only for running tests. -->
+  <!-- <test_depend>uf_smach</test_depend> -->
+  <!-- <test_depend>skytraq_driver</test_depend> -->
+  <!-- <test_depend>rqt_gui</test_depend> -->
+  <!-- <test_depend>rawgps_common</test_depend> -->
+  <!-- <test_depend>rospy</test_depend> -->
+  <!-- <test_depend>uf_common</test_depend> -->
+  <!-- <test_depend>thruster_handling</test_depend> -->
+  <!-- <test_depend>kill_handling</test_depend> -->
+  <!-- <test_depend>rqt_gui_py</test_depend> -->
+
+<export>
+    <rqt_gui plugin="${prefix}/plugin.xml"/>
+</export>
+
+</package>
