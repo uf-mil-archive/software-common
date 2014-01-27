@@ -1,0 +1,166 @@
+#!/usr/bin/python
+
+from __future__ import division
+
+import struct
+import traceback
+import math
+import random
+
+import rospy
+from sensor_msgs.msg import MultiEchoLaserScan, LaserEcho, LaserScan
+
+
+def decode_int(data):
+    res = 0
+    for i, byte in enumerate(data):
+        res += 256**i * (ord(byte) if isinstance(byte, str) else byte)
+    return res
+
+def decode(data):
+    type_code, length = struct.unpack('<II', data[0:8]); pos = 8
+    assert len(data) == length, (len(data), length)
+    res = {}
+    while pos != length:
+        sub_type_code, sub_items, sub_item_length = struct.unpack('<HHI', data[pos:pos+8]); pos += 8
+        assert sub_type_code not in res
+        l = []
+        for i in xrange(sub_items):
+            l.append(decode_int(data[pos:pos+sub_item_length])); pos += sub_item_length
+        res[sub_type_code] = l
+    return type_code, res
+
+
+
+
+import usb.core
+
+dev = usb.core.find(idVendor=0x28f1, idProduct=0x0400)
+
+if dev is None:
+    raise ValueError('Device not found')
+
+dev.reset()
+
+dev.set_configuration()
+
+print repr(''.join(map(chr, dev.ctrl_transfer(0xc0, 32, 0x0000, 0, 500))))
+
+import time
+time.sleep(.5)
+
+dev.write(0x01, '0200010008000000'.decode('hex'))
+print decode(dev.read(0x81, 2048))
+
+dev.write(0x01, '0200007008000000'.decode('hex'))
+print decode(dev.read(0x81, 2048))
+
+dev.write(0x01, '020002002600000070000b00020000000410051006100710081009100a100b1036108c10a601'.decode('hex'))
+print decode(dev.read(0x81, 2048))
+
+dev.write(0x01, '02000300120000008c10010002000000da6e'.decode('hex'))
+print decode(dev.read(0x81, 2048))
+
+dev.write(0x01, '0200027008000000'.decode('hex'))
+print decode(dev.read(0x81, 2048))
+
+dev.write(0x01, '0200067008000000'.decode('hex'))
+print decode(dev.read(0x81, 2048))
+
+dev.write(0x01, '020003001d0000000310010001000000026e1001000400000002000000'.decode('hex'))
+print decode(dev.read(0x81, 2048))
+
+dev.write(0x01, '020003001d0000000310010001000000126e1001000400000012000000'.decode('hex'))
+print decode(dev.read(0x81, 2048))
+
+
+print 'start'
+
+A = {0x200003: 'scan data', 0x20003: 'metadata'}
+
+B = {0x200003: {
+  0x1083: 'amplitude-like',
+  0x1084: 'distance_over_2**16',
+  0x1085: '???2',
+  0x1086: '???3',
+  0x1087: 'segment',
+  0x1088: 'flags',
+  0x1089: 'amplitude_over_2**6',
+  0x108a: 'all zeros',
+}, 0x20003: {
+  0x1050: 'time?',
+  0x1053: 'number of hits',
+  0x1011: 'temperature??? jumps up occasionally',
+}}
+
+rospy.init_node('leddartech_evk_driver')
+pub = rospy.Publisher('leddar', LaserScan)
+pub_multi = rospy.Publisher('leddar_multi', MultiEchoLaserScan)
+
+while True:
+    data2 = dev.read(0x82, 7488)
+    data = ''.join(map(chr, data2))
+    try:
+        a, b = decode(data)
+        #print
+        #print A.get(a, hex(a))
+        #for k, v in b.iteritems():
+        #    print '   ', B.get(a, {k: hex(k)}).get(k, hex(k)), v
+    except:
+        traceback.print_exc()
+        raise
+    if A[a] == 'scan data':
+        #print [x/2**16 for x in b[0x1084]]
+        print zip(b[0x1089], b[0x1087])
+        
+        msg = MultiEchoLaserScan()
+        msg.header.stamp = rospy.Time.now()
+        msg.header.frame_id = '/leddar'
+        msg.angle_min = math.radians(-2.8 * 7.5)
+        msg.angle_max = math.radians(2.8 * 7.5)
+        msg.angle_increment = math.radians(2.8)
+        msg.time_increment = 0
+        msg.scan_time = 1/50
+        msg.range_min = 0
+        msg.range_max = 50
+        msg.ranges = [
+            LaserEcho(echoes=[
+                distance/2**16
+                for distance, segment in zip(b[0x1084], b[0x1087])
+                if segment == i
+            ])
+        for i in reversed(range(16))]
+        msg.intensities = [
+            LaserEcho(echoes=[
+                amplitude/2**6
+                for amplitude, segment in zip(b[0x1089], b[0x1087])
+                if segment == i
+            ])
+        for i in reversed(range(16))]
+        pub_multi.publish(msg)
+        
+        msg = LaserScan()
+        msg.header.stamp = rospy.Time.now()
+        msg.header.frame_id = '/leddar'
+        msg.angle_min = math.radians(-2.8 * 7.5)
+        msg.angle_max = math.radians(2.8 * 7.5)
+        msg.angle_increment = math.radians(2.8)
+        msg.time_increment = 0
+        msg.scan_time = 1/50
+        msg.range_min = 0
+        msg.range_max = 50
+        msg.ranges = [
+            random.choice([
+                distance/2**16
+                for distance, segment in zip(b[0x1084], b[0x1087])
+                if segment == i
+            ] or [1e500])
+        for i in reversed(range(16))]
+        msg.intensities = [
+            random.choice([
+                amplitude/2**6
+                for amplitude, segment in zip(b[0x1089], b[0x1087])
+                if segment == i
+            ] or [1e500])
+        for i in reversed(range(16))]
+        pub.publish(msg)
