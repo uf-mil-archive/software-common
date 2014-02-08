@@ -22,21 +22,17 @@ def fit_ellipsoid(points):
     points = numpy.array(points)
     
     # fit model
-    #     X[0] x2 + X[1] y2 + X[2] z2 +
-    #     X[3] (2xy) + X[4] (2xz) + X[5] (2yz) +
-    #     X[5] (-2x) + X[7] (-2y) + X[8] (-2z) = 1
+    #     X[0] x2 + X[1] y2 +
+    #     X[2] (2xy) +
+    #     X[3] (-2x) + X[4] (-2y)) = 1
     # to points using linear least squares
     
     A = numpy.zeros((points.shape[0], 9))
     A[:,0] = points[:,0]**2
     A[:,1] = points[:,1]**2
-    A[:,2] = points[:,2]**2
-    A[:,3] = 2*points[:,0]*points[:,1]
-    A[:,4] = 2*points[:,0]*points[:,2]
-    A[:,5] = 2*points[:,1]*points[:,2]
-    A[:,6] = -2*points[:,0]
-    A[:,7] = -2*points[:,1]
-    A[:,8] = -2*points[:,2]
+    A[:,2] = 2*points[:,0]*points[:,1]
+    A[:,3] = -2*points[:,0]
+    A[:,4] = -2*points[:,1]
     
     B = numpy.ones((points.shape[0], 1))
     
@@ -47,11 +43,10 @@ def fit_ellipsoid(points):
     # general equation for an ellipse, you see that ka below is
     # proportional to A and that shift is computed correctly
     ka = numpy.linalg.inv(numpy.array([
-        [X[0], X[3], X[4]],
-        [X[3], X[1], X[5]],
-        [X[4], X[5], X[2]],
+        [X[0], X[2]],
+        [X[2], X[1]],
     ]))
-    shift = ka.dot(X[6:9])
+    shift = ka.dot(X[3:5])
     print ka
     
     # the A matrix has eigenvalues which are squares of the axis scale factors, so
@@ -68,7 +63,7 @@ def fit_ellipsoid(points):
     # they are by looking at the distribution of distances from the origin
     scale_inv = numpy.linalg.inv(scale)
     compensated = [scale_inv.dot(p - shift) for p in points]
-    for axis in xrange(3):
+    for axis in xrange(2):
         assert min(p[axis] for p in compensated) < 0 < max(p[axis] for p in compensated)
     radii = map(numpy.linalg.norm, compensated)
     error = numpy.std(radii)/numpy.mean(radii)
@@ -94,14 +89,15 @@ def test():
     assert numpy.allclose(scale2, scale)
     assert numpy.allclose(shift2, shift)
     assert error < 1e-6
-test()
+#test()
 
 
 xyz_array = lambda o: numpy.array([o.x, o.y, o.z])
+xy_array = lambda o: numpy.array([o.x, o.y])
 with rosbag.Bag(sys.argv[1]) as bag:
     points = numpy.array([
-            xyz_array(msg.magnetic_field) if hasattr(msg, 'magnetic_field') else
-            xyz_array(msg.vector)
+            xy_array(msg.magnetic_field) if hasattr(msg, 'magnetic_field') else
+            xy_array(msg.vector)
         for topic, msg, t in bag.read_messages(topics=['/imu/mag_raw'])])
 
 if not len(points):
