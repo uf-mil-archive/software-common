@@ -19,6 +19,9 @@ find_package(catkin REQUIRED COMPONENTS tf geometry_msgs nodelet roscpp uf_commo
 #  MinSizeRel     : w/o debug symbols, w/ optimization, stripped binaries
 #set(ROS_BUILD_TYPE RelWithDebInfo)
 
+set(CMAKE_CXX_FLAGS_RELWITHDEBINFO "-O2 -g") # don't disable assertions
+set(CMAKE_BUILD_TYPE RelWithDebInfo)
+
 
 # CATKIN_MIGRATION: removed during catkin migration
 # rosbuild_init()
