@@ -9,7 +9,8 @@ import numpy
 import roslib
 roslib.load_manifest('uf_common')
 import rospy
-from geometry_msgs.msg import Vector3Stamped, Vector3
+from geometry_msgs.msg import Vector3
+from sensor_msgs.msg import MagneticField
 
 from uf_common.orientation_helpers import xyz_array
 from uf_common.msg import VelocityMeasurements
@@ -17,7 +18,7 @@ from uf_common.msg import VelocityMeasurements
 
 rospy.init_node('velocitymeasurements_to_vector3')
 
-vel_pub = rospy.Publisher('vel', Vector3Stamped)
+vel_pub = rospy.Publisher('vel', MagneticField)
 def cb(msg):
     msg.velocity_measurements = [x for x in msg.velocity_measurements
         if not math.isnan(x.velocity)]
@@ -29,7 +30,7 @@ def cb(msg):
     if rank < len(x):
         rospy.logerr('velocity not observable!')
         return
-    vel_pub.publish(Vector3Stamped(
+    vel_pub.publish(MagneticField(
         header=msg.header,
         vector=Vector3(*x),
     ))

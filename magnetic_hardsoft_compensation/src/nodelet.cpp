@@ -4,7 +4,7 @@
 #include <nodelet/nodelet.h>
 #include <pluginlib/class_list_macros.h>
 #include <ros/ros.h>
-#include <geometry_msgs/Vector3Stamped.h>
+#include <sensor_msgs/MagneticField.h>
 
 #include <uf_common/param_helpers.h>
 #include <uf_common/msg_helpers.h>
@@ -19,19 +19,19 @@ namespace magnetic_hardsoft_compensation {
             ros::Subscriber sub;
             ros::Publisher pub;
             
-            void handle(const geometry_msgs::Vector3Stamped::ConstPtr& msg) {
+            void handle(const sensor_msgs::MagneticField::ConstPtr& msg) {
                 if(msg->header.frame_id != frame_id) {
                     ROS_ERROR("msg's frame_id != configured frame_id! ignoring message");
                     return;
                 }
                 
-                Eigen::Vector3d raw = uf_common::xyz2vec(msg->vector);
+                Eigen::Vector3d raw = uf_common::xyz2vec(msg->magnetic_field);
                 
                 Eigen::Vector3d processed = scale_inverse * (raw - shift);
                 
-                geometry_msgs::Vector3Stamped result;
+                sensor_msgs::MagneticField result;
                 result.header = msg->header;
-                result.vector = uf_common::vec2xyz<geometry_msgs::Vector3>(processed);
+                result.magnetic_field = uf_common::vec2xyz<geometry_msgs::Vector3>(processed);
                 
                 pub.publish(result);
             }
@@ -49,8 +49,8 @@ namespace magnetic_hardsoft_compensation {
                 
                 ros::NodeHandle& nh = getNodeHandle();
                 
-                sub = nh.subscribe<geometry_msgs::Vector3Stamped>("imu/mag_raw", 1000, boost::bind(&Nodelet::handle, this, _1));
-                pub = nh.advertise<geometry_msgs::Vector3Stamped>("imu/mag", 10);
+                sub = nh.subscribe<sensor_msgs::MagneticField>("imu/mag_raw", 1000, boost::bind(&Nodelet::handle, this, _1));
+                pub = nh.advertise<sensor_msgs::MagneticField>("imu/mag", 10);
             }
 
     };

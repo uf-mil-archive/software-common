@@ -6,7 +6,7 @@
 #include <nodelet/nodelet.h>
 #include <pluginlib/class_list_macros.h>
 #include <ros/ros.h>
-#include <geometry_msgs/Vector3Stamped.h>
+#include <sensor_msgs/MagneticField.h>
 #include <tf/transform_datatypes.h>
 
 #include "magnetic_dynamic_compensation/FieldInfo.h"
@@ -27,8 +27,8 @@ namespace magnetic_dynamic_compensation {
                 fieldinfo_map[msg->id] = *msg;
             }
             
-            void handle(const geometry_msgs::Vector3Stamped::ConstPtr& msg) {
-                tf::Vector3 measured_mag_field; tf::vector3MsgToTF(msg->vector, measured_mag_field);
+            void handle(const sensor_msgs::MagneticField::ConstPtr& msg) {
+                tf::Vector3 measured_mag_field; tf::vector3MsgToTF(msg->magnetic_field, measured_mag_field);
                 
                 tf::Vector3 local_mag_field(0, 0, 0);
                 BOOST_FOREACH(const FieldInfo &info, fieldinfo_map | boost::adaptors::map_values) {
@@ -48,10 +48,10 @@ namespace magnetic_dynamic_compensation {
                 
                 tf::Vector3 real_mag_field = measured_mag_field - local_mag_field;
                 
-                geometry_msgs::Vector3Stamped result;
+                sensor_msgs::MagneticField result;
                 result.header.frame_id = msg->header.frame_id;
                 result.header.stamp = msg->header.stamp;
-                tf::vector3TFToMsg(real_mag_field, result.vector);
+                tf::vector3TFToMsg(real_mag_field, result.magnetic_field);
                 
                 pub.publish(result);
             }
@@ -63,8 +63,8 @@ namespace magnetic_dynamic_compensation {
                 ros::NodeHandle& nh = getNodeHandle();
                 
                 sub_fieldinfo = nh.subscribe<FieldInfo>("/imu/mag_generated_info", 1000, boost::bind(&Nodelet::handle_fieldinfo, this, _1));
-                sub = nh.subscribe<geometry_msgs::Vector3Stamped>("imu/mag_raw", 1000, boost::bind(&Nodelet::handle, this, _1));
-                pub = nh.advertise<geometry_msgs::Vector3Stamped>("imu/mag", 10);
+                sub = nh.subscribe<sensor_msgs::MagneticField>("imu/mag_raw", 1000, boost::bind(&Nodelet::handle, this, _1));
+                pub = nh.advertise<sensor_msgs::MagneticField>("imu/mag", 10);
             }
 
     };

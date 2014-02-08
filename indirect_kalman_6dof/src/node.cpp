@@ -10,7 +10,7 @@
 #include <boost/scoped_ptr.hpp>
 #include <tf/transform_listener.h>
 #include <tf/message_filter.h>
-#include <geometry_msgs/Vector3Stamped.h>
+#include <sensor_msgs/MagneticField.h>
 #include <sensor_msgs/Imu.h>
 #include <nav_msgs/Odometry.h>
 
@@ -126,8 +126,8 @@ struct Node {
         navcomp->updateKalman();
     }
 
-    void onMag(geometry_msgs::Vector3StampedConstPtr mag) {
-        Eigen::Vector3d y_m = uf_common::xyz2vec(mag->vector);
+    void onMag(sensor_msgs::MagneticFieldConstPtr mag) {
+        Eigen::Vector3d y_m = uf_common::xyz2vec(mag->magnetic_field);
         navcomp->updateMag(y_m, mag->header.stamp.toSec());
     }
 

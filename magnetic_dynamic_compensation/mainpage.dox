@@ -28,10 +28,10 @@ $ rosrun nodelet nodelet load magnetic_dynamic_compensation/nodelet manager [sta
 \subsubsection topics ROS topics
 
 Subscribes to:
-- \b "imu/mag_raw": [geometry_msgs/Vector3Stamped] uncompensated magnetic field (tesla)
+- \b "imu/mag_raw": [sensor_msgs/MagneticField] uncompensated magnetic field (tesla)
 
 Publishes to:
-- \b "img/mag": [geometry_msgs/Vector3Stamped] compensated magnetic field (tesla)
+- \b "img/mag": [sensor_msgs/MagneticField] compensated magnetic field (tesla)
 
 
 \subsubsection parameters ROS parameters
