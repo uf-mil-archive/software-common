@@ -167,6 +167,9 @@ class Mesh(object):
     
     def rotate(self, q):
         return Mesh([q.quat_rot(x) for x in self.vertices], self.texcoords, [q.quat_rot(x) for x in self.normals], self.indices, self.materials)
+    
+    def scale(self, s):
+        return Mesh([x.scale(s) for x in self.vertices], self.texcoords, self.normals, self.indices, self.materials)
 
 
 def rotate_to_body(body, inv=False):
