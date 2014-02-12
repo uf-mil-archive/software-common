@@ -37,8 +37,8 @@ static boost::property_tree::ptree ptree_from_xmlrpc(XmlRpc::XmlRpcValue &x) {
             }
             break;
         default:
-            cout << x.getType() << std::endl;
-            assert(false); break;
+            throw std::runtime_error("unknown XmlRpcValue type");
+            break;
     }
     return res;
 }

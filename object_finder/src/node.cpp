@@ -408,7 +408,7 @@ struct Particle {
         */
         if(!(isfinite(P) && P >= 0)) {
             cout << "bad P: " << P << endl;
-            assert(false);
+            throw std::runtime_error("bad P");
         }
         return P;
     }

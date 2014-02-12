@@ -95,7 +95,7 @@ struct TaggedImage {
         else if(image.encoding == "rgb8" || image.encoding == "bgr8") step = 3;
         else {
             ROS_ERROR("unknown image encoding: %s", image.encoding.c_str());
-            assert(false);
+            throw std::runtime_error("unknown image encoding");
         }
         bool reversed = image.encoding == "bgra8" || image.encoding == "bgr8";
         
