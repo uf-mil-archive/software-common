@@ -10,69 +10,34 @@
 
 namespace uf_common {
 
-inline Eigen::MatrixXd get_Matrix(ros::NodeHandle& nh, const std::string& name) {
-    XmlRpc::XmlRpcValue my_list; ROS_ASSERT_MSG(nh.getParam(name, my_list),
-        "param %s is missing", name.c_str());
-    ROS_ASSERT_MSG(my_list.getType() == XmlRpc::XmlRpcValue::TypeArray,
-        "param %s must be a list", name.c_str());
 
-    ROS_ASSERT_MSG(my_list.size() >= 1,
-        "param %s is zero-length", name.c_str());
-    Eigen::MatrixXd res(my_list.size(), my_list[0].size());
-    for (int32_t i = 0; i < my_list.size(); i++) {
-        XmlRpc::XmlRpcValue row = my_list[i];
-        ROS_ASSERT_MSG(row.getType() == XmlRpc::XmlRpcValue::TypeArray,
-            "param %s[%i] must be a list", name.c_str(), i);
-        ROS_ASSERT_MSG(row.size() == my_list[0].size(),
-            "param %s[%i]'s length doesn't match", name.c_str(), i);
-        for (int32_t j = 0; j < row.size(); j++) {
-            XmlRpc::XmlRpcValue entry = row[j];
-            if(entry.getType() == XmlRpc::XmlRpcValue::TypeDouble)
-                res(i, j) = static_cast<double>(entry);
-            else if(entry.getType() == XmlRpc::XmlRpcValue::TypeInt)
-                res(i, j) = static_cast<int>(entry);
-            else {
-                ROS_ASSERT_MSG(false, "param type = %i", entry.getType());
-            }
-        }
-    }
-    return res;
+void fail(std::string const &error_string) {
+  throw std::runtime_error(error_string);
+}
+template<typename FirstType, typename SecondType, typename... MoreTypes>
+void fail(FirstType first, SecondType second, MoreTypes... more) {
+  std::ostringstream ss;
+  ss << first << second;
+  return fail(ss.str(), more...);
 }
 
-inline Eigen::VectorXd get_Vector(ros::NodeHandle& nh, const std::string& name) {
-    XmlRpc::XmlRpcValue my_list; ROS_ASSERT(nh.getParam(name, my_list));
-    ROS_ASSERT(my_list.getType() == XmlRpc::XmlRpcValue::TypeArray);
-
-    Eigen::VectorXd res(my_list.size());
-    for (int32_t i = 0; i < my_list.size(); i++) {
-        if(my_list[i].getType() == XmlRpc::XmlRpcValue::TypeDouble)
-            res[i] = static_cast<double>(my_list[i]);
-        else if(my_list[i].getType() == XmlRpc::XmlRpcValue::TypeInt)
-            res[i] = static_cast<int>(my_list[i]);
-        else {
-            ROS_ASSERT_MSG(false, "param type = %i", my_list[i].getType());
-        }
-    }
-    return res;
-}
-
-inline Eigen::Vector3d get_Vector3(ros::NodeHandle& nh, const std::string& name) {
-    return get_Vector(nh, name);
-}
-
-inline tf::Vector3 get_tfVector3(ros::NodeHandle& nh, const std::string& name) {
-    return vec2vec(get_Vector3(nh, name));
-}
-
-inline tf::Quaternion get_tfQuaternion(ros::NodeHandle& nh, const std::string& name) {
-    return vec2quat(get_Vector(nh, name));
+template<typename... ErrorDescTypes>
+void require(bool cond, ErrorDescTypes... error_desc) {
+  if(!cond) {
+    fail(error_desc...);
+  }
 }
 
 
 template<typename T, int N>
 bool _getParam(ros::NodeHandle &nh, const std::string &name, Eigen::Matrix<T, N, 1> &res) {
   XmlRpc::XmlRpcValue my_list; if(!nh.getParam(name, my_list)) return false;
-  ROS_ASSERT(my_list.getType() == XmlRpc::XmlRpcValue::TypeArray);
+  require(my_list.getType() == XmlRpc::XmlRpcValue::TypeArray,
+    "param ", name, " must be an array");
+  if(N != Eigen::Dynamic) {
+    require(my_list.size() == N,
+      "param ", name, "must have length ", N, " (is ", my_list.size(), ")");
+  }
   
   res.resize(my_list.size());
   for (int32_t i = 0; i < my_list.size(); i++) {
@@ -81,7 +46,49 @@ bool _getParam(ros::NodeHandle &nh, const std::string &name, Eigen::Matrix<T, N,
     } else if(my_list[i].getType() == XmlRpc::XmlRpcValue::TypeInt) {
       res(i) = static_cast<int>(my_list[i]);
     } else {
-      ROS_ASSERT_MSG(false, "param type = %i", my_list[i].getType());
+      fail("param ", name, "[", i, "] is not numeric");
+    }
+  }
+  return true;
+}
+template<typename T, int N, int M>
+bool _getParam(ros::NodeHandle& nh, const std::string& name, Eigen::Matrix<T, N, M> &res) {
+  static_assert(N != 0, "doesn't work for N = 0");
+  static_assert(M != 1, "wrong template specialization used?");
+  
+  XmlRpc::XmlRpcValue my_list; if(!nh.getParam(name, my_list)) return false;
+  require(my_list.getType() == XmlRpc::XmlRpcValue::TypeArray,
+    "param ", name, " must be an array");
+  require(my_list.size() >= 1,
+    "param " + name + " must not have zero length");
+  if(N != Eigen::Dynamic) {
+    require(my_list.size() == N,
+      "param ", name, "must have length ", N, " (is ", my_list.size(), ")");
+  }
+  
+  require(my_list[0].getType() == XmlRpc::XmlRpcValue::TypeArray,
+    "param ", name, "[0] must be a list");
+  if(M != Eigen::Dynamic) {
+    require(my_list[0].size() == M,
+      "param ", name, "[0] must have length ", M, " (is ", my_list[0].size(), ")");
+  }
+  
+  res.resize(my_list.size(), my_list[0].size());
+  for (int32_t i = 0; i < my_list.size(); i++) {
+    XmlRpc::XmlRpcValue row = my_list[i];
+    require(row.getType() == XmlRpc::XmlRpcValue::TypeArray,
+      "param ", name, "[", i, "] must be a list");
+    require(row.size() == my_list[0].size(),
+      "param ", name, "[", i, "]'s length doesn't match");
+    for (int32_t j = 0; j < row.size(); j++) {
+      XmlRpc::XmlRpcValue entry = row[j];
+      if(entry.getType() == XmlRpc::XmlRpcValue::TypeDouble) {
+        res(i, j) = static_cast<double>(entry);
+      } else if(entry.getType() == XmlRpc::XmlRpcValue::TypeInt) {
+        res(i, j) = static_cast<int>(entry);
+      } else {
+        fail("param ", name, "[", i, ", ", j, "] is not numeric");
+      }
     }
   }
   return true;
@@ -92,16 +99,22 @@ bool _getParam(ros::NodeHandle &nh, const std::string &name, T &res) {
 }
 template<>
 bool _getParam(ros::NodeHandle &nh, const std::string &name, ros::Duration &res) {
-  double dur; if(!nh.getParam(name, dur)) return false;
-  res = ros::Duration(dur); return true;
+  double x; if(!nh.getParam(name, x)) return false;
+  res = ros::Duration(x); return true;
+}
+template<>
+bool _getParam(ros::NodeHandle &nh, const std::string &name, unsigned int &res) {
+  int x; if(!nh.getParam(name, x)) return false;
+  if(x < 0) {
+    fail("param ", name, " must be >= 0");
+  }
+  res = static_cast<unsigned int>(x); return true;
 }
 
 template<typename T>
 T getParam(ros::NodeHandle &nh, std::string name) {
   T res;
-  if(!_getParam(nh, name, res)) {
-    throw std::runtime_error("need " + name + " param");
-  }
+  require(_getParam(nh, name, res), "param ", name, " required");
   return res;
 }
 template<typename T>

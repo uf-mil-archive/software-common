@@ -74,4 +74,5 @@ add_executable(indirect_kalman_6dof
 target_link_libraries(indirect_kalman_6dof ${catkin_LIBRARIES})
 add_dependencies(indirect_kalman_6dof ${catkin_EXPORTED_TARGETS})
 add_dependencies(indirect_kalman_6dof ${PROJECT_NAME}_generate_messages_cpp)
+set_target_properties(indirect_kalman_6dof PROPERTIES COMPILE_FLAGS -std=c++11)
 #target_link_libraries(example ${PROJECT_NAME})

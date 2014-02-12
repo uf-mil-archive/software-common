@@ -6,6 +6,8 @@
 #include <pluginlib/class_list_macros.h>
 #include <ros/ros.h>
 
+#include <uf_common/param_helpers.h>
+
 #include "rdi_explorer_dvl/driver.h"
 
 
@@ -22,15 +24,14 @@ namespace rdi_explorer_dvl {
             }
             
             virtual void onInit() {
-                std::string port;
-                ROS_ASSERT_MSG(getPrivateNodeHandle().getParam("port", port),
-                    "\"port\" param missing");
+                std::string port = uf_common::getParam<std::string>(
+                    getPrivateNodeHandle(), "port");
                 
-                int baudrate = 115200;
-                getPrivateNodeHandle().getParam("baudrate", baudrate);
+                int baudrate = uf_common::getParam<int>(
+                    getPrivateNodeHandle(), "baudrate", 115200);
                 
-                ROS_ASSERT_MSG(getPrivateNodeHandle().getParam("frame_id", frame_id),
-                    "\"frame_id\" param missing");
+                frame_id = uf_common::getParam<std::string>(
+                    getPrivateNodeHandle(), "frame_id");
                 
                 pub = getNodeHandle().advertise<uf_common::VelocityMeasurements>("dvl", 10);
                 range_pub = getNodeHandle().advertise<uf_common::Float64Stamped>("dvl/range", 10);

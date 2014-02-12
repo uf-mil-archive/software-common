@@ -18,13 +18,6 @@ static Eigen::Matrix3d vec2diag(const Eigen::Vector3d &x) {
     return Eigen::DiagonalMatrix<double, 3, 3>(x[0], x[1], x[2]);
 }
 
-static unsigned int get_uint(ros::NodeHandle &nh, const std::string &name) {
-    int val;
-    ROS_ASSERT(nh.getParam(name, val));
-    ROS_ASSERT(val >= 0);
-    return static_cast<unsigned int>(val);
-}
-
 struct Node {
     ros::NodeHandle nh;
     ros::NodeHandle private_nh;
@@ -46,34 +39,30 @@ struct Node {
     {
         NavigationComputer::Config config;
 
-        double f_imu;
-        ROS_ASSERT(private_nh.getParam("f_imu", f_imu));
+        double f_imu = uf_common::getParam<double>(private_nh, "f_imu");
         config.T_imu = 1 / f_imu;
 
-        double f_kalman;
-        ROS_ASSERT(private_nh.getParam("f_kalman", f_kalman));
+        double f_kalman = uf_common::getParam<double>(private_nh, "f_kalman");
         config.T_kalman = 1 / f_kalman;
 
-        config.verify_timestamps = true;
-        private_nh.getParam("verify_timestamps", config.verify_timestamps);
+        config.verify_timestamps = uf_common::getParam<bool>(private_nh, "verify_timestamps", true);
         if (!config.verify_timestamps) {
             ROS_WARN("Not verifying timestamps on sensor data.");
         }
 
-        config.predict.R_g = vec2diag(uf_common::get_Vector3(private_nh, "R_g"));
-        config.predict.R_a = vec2diag(uf_common::get_Vector3(private_nh, "R_a"));
-        config.predict.Q_b_g = vec2diag(uf_common::get_Vector3(private_nh, "Q_b_g"));
+        config.predict.R_g = vec2diag(uf_common::getParam<Eigen::Vector3d>(private_nh, "R_g"));
+        config.predict.R_a = vec2diag(uf_common::getParam<Eigen::Vector3d>(private_nh, "R_a"));
+        config.predict.Q_b_g = vec2diag(uf_common::getParam<Eigen::Vector3d>(private_nh, "Q_b_g"));
 
         config.update.R_g = config.predict.R_g;
-        config.update.R_m = vec2diag(uf_common::get_Vector3(private_nh, "R_m"));
-        double R_d;
-        ROS_ASSERT(private_nh.getParam("R_d", R_d));
+        config.update.R_m = vec2diag(uf_common::getParam<Eigen::Vector3d>(private_nh, "R_m"));
+        double R_d = uf_common::getParam<double>(private_nh, "R_d");
         config.update.R_d.fill(0);
         for (int i=0; i<4; i++)
             config.update.R_d(i, i) = R_d;
-        ROS_ASSERT(private_nh.getParam("R_z", config.update.R_z));
+        config.update.R_z = uf_common::getParam<double>(private_nh, "R_z");
 
-        config.update.m_nav = uf_common::get_Vector3(private_nh, "m_nav");
+        config.update.m_nav = uf_common::getParam<Eigen::Vector3d>(private_nh, "m_nav");
 
         tf::StampedTransform imu2dvl;
         tf_listener.waitForTransform("/dvl", "/imu", ros::Time(0), ros::Duration(10.0));
@@ -94,11 +83,11 @@ struct Node {
         config.update.r_imu2dvl = uf_common::vec2vec(imu2dvl.getOrigin());
         config.update.r_imu2depth = uf_common::vec2vec(imu2depth.getOrigin());
 
-        config.init.accel_samples = get_uint(private_nh, "init_accel_samples");
-        config.init.mag_samples = get_uint(private_nh, "init_mag_samples");
-        config.init.dvl_samples = get_uint(private_nh, "init_dvl_samples");
-        config.init.depth_samples = get_uint(private_nh, "init_depth_samples");
-        config.init.g_nav = uf_common::get_Vector3(private_nh, "g_nav");
+        config.init.accel_samples = uf_common::getParam<unsigned int>(private_nh, "init_accel_samples");
+        config.init.mag_samples = uf_common::getParam<unsigned int>(private_nh, "init_mag_samples");
+        config.init.dvl_samples = uf_common::getParam<unsigned int>(private_nh, "init_dvl_samples");
+        config.init.depth_samples = uf_common::getParam<unsigned int>(private_nh, "init_depth_samples");
+        config.init.g_nav = uf_common::getParam<Eigen::Vector3d>(private_nh, "g_nav");
         config.init.m_nav = config.update.m_nav;
         config.init.r_imu2depth = config.update.r_imu2depth;
         config.init.beam_mat = config.update.beam_mat;

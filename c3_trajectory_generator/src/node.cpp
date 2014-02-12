@@ -121,17 +121,16 @@ struct Node {
         actionserver(nh, "moveto", false),
         disabled(false) {
 
-        ROS_ASSERT(private_nh.getParam("fixed_frame", fixed_frame));
-        ROS_ASSERT(private_nh.getParam("body_frame", body_frame));
+        fixed_frame = uf_common::getParam<std::string>(private_nh, "fixed_frame");
+        body_frame = uf_common::getParam<std::string>(private_nh, "body_frame");
 
-        limits.vmin_b = get_Vector(private_nh, "vmin_b");
-        limits.vmax_b = get_Vector(private_nh, "vmax_b");
-        limits.amin_b = get_Vector(private_nh, "amin_b");
-        limits.amax_b = get_Vector(private_nh, "amax_b");
-        limits.arevoffset_b = get_Vector(private_nh, "arevoffset_b");
-        limits.umax_b = get_Vector(private_nh, "umax_b");
-        double traj_dt_ = 0.0001; private_nh.getParam("traj_dt", traj_dt_);
-        traj_dt = ros::Duration(traj_dt_);
+        limits.vmin_b = uf_common::getParam<subjugator::Vector6d>(private_nh, "vmin_b");
+        limits.vmax_b = uf_common::getParam<subjugator::Vector6d>(private_nh, "vmax_b");
+        limits.amin_b = uf_common::getParam<subjugator::Vector6d>(private_nh, "amin_b");
+        limits.amax_b = uf_common::getParam<subjugator::Vector6d>(private_nh, "amax_b");
+        limits.arevoffset_b = uf_common::getParam<Eigen::Vector3d>(private_nh, "arevoffset_b");
+        limits.umax_b = uf_common::getParam<subjugator::Vector6d>(private_nh, "umax_b");
+        traj_dt = uf_common::getParam<ros::Duration>(private_nh, "traj_dt", ros::Duration(0.0001));
 
         odom_sub = nh.subscribe<Odometry>("odom", 1, boost::bind(&Node::odom_callback, this, _1));
 

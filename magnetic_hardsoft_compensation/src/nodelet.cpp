@@ -5,9 +5,9 @@
 #include <pluginlib/class_list_macros.h>
 #include <ros/ros.h>
 #include <sensor_msgs/MagneticField.h>
+#include <eigen_conversions/eigen_msg.h>
 
 #include <uf_common/param_helpers.h>
-#include <uf_common/msg_helpers.h>
 
 
 namespace magnetic_hardsoft_compensation {
@@ -25,13 +25,13 @@ namespace magnetic_hardsoft_compensation {
                     return;
                 }
                 
-                Eigen::Vector3d raw = uf_common::xyz2vec(msg->magnetic_field);
+                Eigen::Vector3d raw; tf::vectorMsgToEigen(msg->magnetic_field, raw);
                 
                 Eigen::Vector3d processed = scale_inverse * (raw - shift);
                 
                 sensor_msgs::MagneticField result;
                 result.header = msg->header;
-                result.magnetic_field = uf_common::vec2xyz<geometry_msgs::Vector3>(processed);
+                tf::vectorEigenToMsg(processed, result.magnetic_field);
                 
                 pub.publish(result);
             }
@@ -42,9 +42,9 @@ namespace magnetic_hardsoft_compensation {
             virtual void onInit() {
                 ros::NodeHandle& private_nh = getPrivateNodeHandle();
                 
-                ROS_ASSERT(private_nh.getParam("frame_id", frame_id));
-                scale_inverse = uf_common::get_Matrix(private_nh, "scale").inverse();
-                shift = uf_common::get_Vector(private_nh, "shift");
+                frame_id = uf_common::getParam<std::string>(private_nh, "frame_id");
+                scale_inverse = uf_common::getParam<Eigen::Matrix3d>(private_nh, "scale").inverse();
+                shift = uf_common::getParam<Eigen::Vector3d>(private_nh, "shift");
                 
                 
                 ros::NodeHandle& nh = getNodeHandle();

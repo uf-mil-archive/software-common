@@ -68,4 +68,5 @@ add_executable(c3_trajectory_generator src/C3Trajectory.cpp src/node.cpp src/Att
 target_link_libraries(c3_trajectory_generator ${catkin_LIBRARIES})
 add_dependencies(c3_trajectory_generator ${catkin_EXPORTED_TARGETS})
 add_dependencies(c3_trajectory_generator ${PROJECT_NAME}_generate_messages_cpp)
+set_target_properties(c3_trajectory_generator PROPERTIES COMPILE_FLAGS -std=c++11)
 #target_link_libraries(example ${PROJECT_NAME})
