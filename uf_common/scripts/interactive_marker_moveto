@@ -6,7 +6,9 @@ import rospy
 import actionlib
 import tf
 from tf import transformations
-from interactive_markers.interactive_marker_server import *
+from std_msgs.msg import Header
+from visualization_msgs.msg import InteractiveMarker, InteractiveMarkerControl, MenuEntry
+from interactive_markers.interactive_marker_server import InteractiveMarkerServer
 from geometry_msgs.msg import Quaternion, Twist, Pose, Point
 from uf_common.msg import MoveToAction, MoveToGoal, PoseTwist
 from kill_handling.listener import KillListener
