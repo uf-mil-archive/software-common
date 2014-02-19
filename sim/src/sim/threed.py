@@ -62,7 +62,7 @@ def parse_mtl(filename):
             line = line[:line.index("#")]
         if not line: continue
         line = line.split(' ')
-        print line
+        #print line
         if line[0] == "newmtl":
             current_mtl = line[1]
             res[current_mtl] = Material()
@@ -117,7 +117,7 @@ class Mesh(object):
     def generate(self):
         vbos = {}
         for mtl, x in itertools.groupby(zip(self.indices, self.materials), lambda (triangle, mtl): mtl):
-            print mtl, x
+            #print mtl, x
             vecs = []
             for triangle, mtl in x:
                 assert len(triangle) == 3
@@ -568,7 +568,7 @@ class Texture(object):
     def __init__(self, img, mipmap=True):
         import pygame
         data = pygame.image.tostring(img, "RGBA", True)
-        print len(data), img.get_height(), img.get_width()
+        #print len(data), img.get_height(), img.get_width()
         self.t = glGenTextures(1)
         with self:
             glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST_MIPMAP_LINEAR if mipmap else GL_LINEAR)
