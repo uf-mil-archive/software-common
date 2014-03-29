@@ -88,7 +88,6 @@ Eigen::Matrix<double, N, N> cholesky(Eigen::Matrix<double, N, N> x) {
 
 struct Particle {
     TargetDesc goal;
-    boost::shared_ptr<const Obj> obj;
     Vector3d pos;
     Quaterniond q;
     
@@ -98,10 +97,8 @@ struct Particle {
     
     Particle() { }
     Particle(const TargetDesc &goal,
-             boost::shared_ptr<const Obj> obj,
              const TaggedImage &image) :
-        goal(goal),
-        obj(obj) {
+        goal(goal) {
         Matrix6d cov = Map<const Matrix6d>(
             goal.prior_distribution.covariance.data());
         Matrix6d dist_from_iid = cholesky(cov);
@@ -148,7 +145,7 @@ struct Particle {
         }
     }
     double P(const TaggedImage &img, RenderBuffer &rb, bool print_debug_info=false, Vector3d *last_color_dest=NULL) const {
-        if(!obj) {
+        if(goal.type == TargetDesc::TYPE_SPHERE) {
             RenderBuffer::RegionType fg_region = rb.new_region();
             sphere_draw(rb, fg_region, pos, goal.sphere_radius);
             RenderBuffer::RegionType bg_region = rb.new_region();
@@ -232,10 +229,10 @@ struct Particle {
         
         typedef std::pair<const Component *, RenderBuffer::RegionType> Pair;
         static std::vector<Pair> regions; regions.clear();
-        BOOST_FOREACH(const Component &component, obj->components) {
+        BOOST_FOREACH(const Component &component, goal.mesh.components) {
             if(component.name.find("marker ") == 0 || component.name.find("ignore ") == 0) continue;
             RenderBuffer::RegionType region = rb.new_region();
-            component.draw(rb, region, pos, q);
+            obj_finding::draw(component, rb, region, pos, q);
             regions.push_back(make_pair(&component, region));
         }
         
@@ -434,16 +431,14 @@ struct Particle {
 
 struct ParticleFilter {
     TargetDesc targetdesc;
-    boost::shared_ptr<const Obj> obj;
     std::vector<Particle> particles;
     double total_last_P;
     RenderBuffer myrb;
     
-    ParticleFilter(const TargetDesc &targetdesc, boost::shared_ptr<const Obj> obj, const TaggedImage &img, double N) :
-        targetdesc(targetdesc),
-        obj(obj) {
+    ParticleFilter(const TargetDesc &targetdesc, const TaggedImage &img, double N) :
+        targetdesc(targetdesc) {
         for(int i = 0; i < N; i++)
-            particles.push_back(Particle(targetdesc, obj, img));
+            particles.push_back(Particle(targetdesc, img));
     }
     
     void update(const TaggedImage &img, const RenderBuffer &rb, double N) {
@@ -456,7 +451,7 @@ struct ParticleFilter {
             particle.accumulate_successors(new_particles, img, N*2/3., particles, original_total_last_P);
         }
         for(unsigned int i = 0; i < N/3; i++) {
-            new_particles.push_back(Particle(targetdesc, obj, img));
+            new_particles.push_back(Particle(targetdesc, img));
         }
         particles.swap(new_particles);
         
@@ -484,7 +479,7 @@ struct GoalExecutor {
     ros::NodeHandle nh;
     ros::NodeHandle camera_nh;
     ros::NodeHandle private_nh;
-    object_finder::FindGoal goal;
+    FindGoal goal;
     
     tf::TransformListener listener;
     message_filters::Subscriber<sensor_msgs::Image> image_sub;
@@ -496,17 +491,15 @@ struct GoalExecutor {
     ros::Publisher image_pub;
     ros::Publisher image_pub2;
     std::vector<ros::Publisher> extracted_image_pubs;
-    boost::function1<void, const object_finder::FindFeedback&> feedback_callback;
-    
-    vector<boost::shared_ptr<Obj> > current_objs;
+    boost::function1<void, const FindFeedback&> feedback_callback;
     
     double N;
     TaggedImage img;
     std::vector<ParticleFilter> particle_filters;
     ros::Time current_stamp;
     
-    GoalExecutor(const object_finder::FindGoal &goal,
-                 boost::function1<void, const object_finder::FindFeedback&> 
+    GoalExecutor(const FindGoal &goal,
+                 boost::function1<void, const FindFeedback&> 
                     feedback_callback) :
         camera_nh("camera"),
         private_nh("~"),
@@ -518,9 +511,6 @@ struct GoalExecutor {
         feedback_callback(feedback_callback) {
         
         BOOST_FOREACH(const TargetDesc &targetdesc, goal.targetdescs) {
-            current_objs.push_back(targetdesc.type == TargetDesc::TYPE_OBJECT
-                ? boost::make_shared<Obj>(targetdesc.object_filename)
-                : boost::shared_ptr<Obj>());
             ostringstream tmp; tmp << "extracted_images/" << &targetdesc - goal.targetdescs.data();
             extracted_image_pubs.push_back(private_nh.advertise<sensor_msgs::Image>(tmp.str(), 1));
         }
@@ -541,8 +531,7 @@ struct GoalExecutor {
         
         particle_filters.clear();
         BOOST_FOREACH(const TargetDesc &targetdesc, goal.targetdescs) {
-            particle_filters.push_back(ParticleFilter(targetdesc,
-                current_objs[&targetdesc - goal.targetdescs.data()], img, N));
+            particle_filters.push_back(ParticleFilter(targetdesc, img, N));
         }
         
         current_stamp = t;
@@ -644,7 +633,7 @@ struct GoalExecutor {
         }
         
         { // send action feedback
-            object_finder::FindFeedback feedback;
+            FindFeedback feedback;
             BOOST_FOREACH(const Particle &particle, max_ps) {
                 TargetRes targetres;
                 targetres.pose.position = vec2xyz<Point>(particle.pos);
@@ -652,15 +641,6 @@ struct GoalExecutor {
                      quat2xyzw<geometry_msgs::Quaternion>(particle.q);
                 targetres.color = make_rgba<ColorRGBA>(particle.last_color[0],
                     particle.last_color[1], particle.last_color[2], 1);
-                if(particle.obj) {
-                    BOOST_FOREACH(const Marker &marker, particle.obj->markers) {
-                        targetres.markers.push_back(object_finder::MarkerPoint());
-                        targetres.markers[targetres.markers.size()-1].name =
-                            marker.name;
-                        targetres.markers[targetres.markers.size()-1].position =
-                            vec2xyz<Point>(marker.position);
-                    }
-                }
                 targetres.P = particle.last_P;
                 targetres.smoothed_last_P = particle.smoothed_last_P;
                 targetres.P_within_10cm = 0;
@@ -776,7 +756,7 @@ struct GoalExecutor {
 struct Node {
     ros::NodeHandle nh;
     
-    typedef actionlib::SimpleActionServer<object_finder::FindAction> actionserverType;
+    typedef actionlib::SimpleActionServer<FindAction> actionserverType;
     actionserverType actionserver;
     
     boost::optional<GoalExecutor> goal_executor;
@@ -793,7 +773,7 @@ struct Node {
     }
     
     void goalCallback() {
-        boost::shared_ptr<const object_finder::FindGoal> new_goal =
+        boost::shared_ptr<const FindGoal> new_goal =
             actionserver.acceptNewGoal();
         goal_executor = boost::in_place(*new_goal, boost::bind(boost::mem_fn(
             (void (actionserverType::*)(const actionserverType::Feedback &))

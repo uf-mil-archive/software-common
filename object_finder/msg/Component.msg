@@ -1,0 +1,2 @@
+string name
+Triangle[] triangles

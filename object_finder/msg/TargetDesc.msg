@@ -1,8 +1,8 @@
-uint32 TYPE_OBJECT=0
+uint32 TYPE_MESH=0
 uint32 TYPE_SPHERE=1
 uint32 type
 
-string object_filename
+Mesh mesh
 
 float64 sphere_radius
 

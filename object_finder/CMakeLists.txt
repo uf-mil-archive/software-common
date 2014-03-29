@@ -46,9 +46,11 @@ add_action_files(
 #uncomment if you have defined messages
 add_message_files(
   FILES
-  MarkerPoint.msg
   TargetDesc.msg
   TargetRes.msg
+  Mesh.msg
+  Component.msg
+  Triangle.msg
 )
 #uncomment if you have defined services
 #rosbuild_gensrv()
@@ -87,6 +89,7 @@ add_executable(test_obj_finding src/test_obj_finding.cpp src/obj_finding.cpp src
 target_link_libraries(test_obj_finding ${catkin_LIBRARIES})
 add_dependencies(test_obj_finding ${catkin_EXPORTED_TARGETS})
 add_dependencies(test_obj_finding ${PROJECT_NAME}_generate_messages_cpp)
+set_target_properties(test_obj_finding PROPERTIES COMPILE_FLAGS -std=c++11)
 
 add_executable(test_fft src/test_fft.cpp src/fft.cpp)
 target_link_libraries(test_fft fftw3)

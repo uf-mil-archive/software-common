@@ -13,31 +13,44 @@ using namespace std;
 using namespace Eigen;
 using namespace sensor_msgs;
 
+namespace object_finder {
+namespace obj_finding {
+
 static Vector3d flat_vector(Vector2d x) {
     return Vector3d(x[0], x[1], 0);
 }
 
-void Component::draw(RenderBuffer &renderbuffer, int region, Vector3d pos, Quaterniond orientation) const {
-    BOOST_FOREACH(const Triangle &tri, triangles) {
+static Vector3d xyzvec(geometry_msgs::Point x) {
+    return Vector3d(x.x, x.y, x.z);
+}
+
+double triangle_area(Eigen::Vector3d corner0, Eigen::Vector3d corner1, Eigen::Vector3d corner2) {
+    Eigen::Vector3d a = corner1 - corner0;
+    Eigen::Vector3d b = corner2 - corner0;
+    return a.cross(b).norm()/2;
+}
+
+void draw(Component const & component, RenderBuffer &renderbuffer, int region, Vector3d pos, Quaterniond orientation) {
+    BOOST_FOREACH(const Triangle &tri, component.triangles) {
         // XXX one corner being behind the camera does not mean the triangle is invisible!
         // instead, it is an "external triangle" that needs to be handled specially
         
-        Vector3d c0_camera = renderbuffer.img->transform_inverse * (pos + orientation._transformVector(tri.corners[0]));
+        Vector3d c0_camera = renderbuffer.img->transform_inverse * (pos + orientation._transformVector(xyzvec(tri.corners[0])));
         Vector3d c0_homo = renderbuffer.img->proj * c0_camera.homogeneous();
         if(c0_homo(2) <= 0) continue; // behind camera
         Vector2d c0 = c0_homo.hnormalized();
         
-        Vector3d c1_camera = renderbuffer.img->transform_inverse * (pos + orientation._transformVector(tri.corners[1]));
+        Vector3d c1_camera = renderbuffer.img->transform_inverse * (pos + orientation._transformVector(xyzvec(tri.corners[1])));
         Vector3d c1_homo = renderbuffer.img->proj * c1_camera.homogeneous();
         if(c1_homo(2) <= 0) continue; // behind camera
         Vector2d c1 = c1_homo.hnormalized();
         
-        Vector3d c2_camera = renderbuffer.img->transform_inverse * (pos + orientation._transformVector(tri.corners[2]));
+        Vector3d c2_camera = renderbuffer.img->transform_inverse * (pos + orientation._transformVector(xyzvec(tri.corners[2])));
         Vector3d c2_homo = renderbuffer.img->proj * c2_camera.homogeneous();
         if(c2_homo(2) <= 0) continue; // behind camera
         Vector2d c2 = c2_homo.hnormalized();
         
-        renderbuffer.areas[region] += Triangle(flat_vector(c0), flat_vector(c1), flat_vector(c2)).area();
+        renderbuffer.areas[region] += triangle_area(flat_vector(c0), flat_vector(c1), flat_vector(c2));
         
         // sort corners by y coordinate
         if(c1[1] < c0[1]) swap(c1, c0);
@@ -74,63 +87,5 @@ void Component::draw(RenderBuffer &renderbuffer, int region, Vector3d pos, Quate
     }
 }
 
-
-Obj::Obj(const string filename) {
-    vector<Vector3d> vertices;
-    
-    ifstream f(filename.c_str());
-    if(!f.is_open()) {
-        throw runtime_error("couldn't open file");
-    }
-    
-    bool ignore_faces = true;
-    while(!f.eof()) {
-        string line; getline(f, line);
-        
-        size_t hash_pos = line.find("#");
-        if(hash_pos != string::npos) {
-            line = line.substr(0, hash_pos);
-        }
-        
-        size_t content_pos = line.find_first_not_of("\t ");
-        if(content_pos == string::npos) {
-            continue;
-        }
-        line = line.substr(content_pos);
-        
-        stringstream ss(line);
-        
-        string command; ss >> command;
-        
-        if(command == "o") {
-            string name; ss >> name;
-            replace(name.begin(), name.end(), '_', ' ');
-            if(name.find("ignore ") != 0) {
-                components.push_back(Component());
-                components[components.size()-1].name = name;
-                ignore_faces = false;
-            } else {
-                ignore_faces = true;
-            }
-        } else if(command == "v") {
-            double x, y, z; ss >> x >> y >> z;
-            vertices.push_back(Vector3d(x, y, z));
-        } else if(command == "f") {
-            int i0, i1, i2; ss >> i0 >> i1 >> i2;
-            Triangle tri = Triangle(vertices[i0 - 1], vertices[i1 - 1], vertices[i2 - 1]);
-            if(!ignore_faces) {
-                components[components.size()-1].triangles.push_back(tri);
-            }
-        }
-    }
-    sort(components.begin(), components.end()); // sort by name
-    
-    BOOST_FOREACH(const Component &component, components) {
-        if(component.name.find("marker ") != 0) continue;
-        Marker marker;
-        istringstream ss(component.name.substr(string("marker ").length()));
-        ss >> marker.name;
-        marker.position = component.center_of_mass();
-        markers.push_back(marker);
-    }
+}
 }
