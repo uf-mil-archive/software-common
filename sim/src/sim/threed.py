@@ -2,6 +2,7 @@ from __future__ import division
 
 import itertools
 import math
+import os
 import sys
 import time
 import random
@@ -71,7 +72,6 @@ def parse_mtl(filename):
     return res
 
 def mesh_from_obj(filename):
-    mtllib = parse_mtl(filename[:-3] + 'mtl')
     vertices = []
     texcoords = []
     normals = []
@@ -96,12 +96,16 @@ def mesh_from_obj(filename):
             texcoords.append(V(float(x) for x in line[1:]))
         elif line[0] == "vn":
             normals.append(V(float(x) for x in line[1:]))
+        elif line[0] == "mtllib":
+            mtllib = parse_mtl(os.path.join(os.path.dirname(os.path.abspath(filename)), line[1]))
         elif line[0] == 'usemtl':
             current_mtl = line[1]
         elif line[0] == "f":
             if not ignore:
                 indices.append(tuple(tuple(int(y)-1 if y else None for y in (x.split('/')+['',''])[:3]) for x in line[1:]))
                 materials.append(mtllib[current_mtl])
+        else:
+            print line
     return Mesh(vertices, texcoords, normals, indices, materials)
 
 class Mesh(object):
