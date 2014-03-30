@@ -28,7 +28,6 @@
 #include "image.h"
 
 using namespace std;
-using namespace std_msgs;
 using namespace sensor_msgs;
 using namespace geometry_msgs;
 using namespace message_filters;
@@ -70,7 +69,7 @@ Quaterniond quat_from_rotvec(Vector3d r) {
     return Quaterniond(AngleAxisd(r.norm(), r.normalized()));
 }
 
-Vector3d ColorRGBA_to_vec(std_msgs::ColorRGBA c) {
+Vector3d Color_to_vec(Color c) {
     return Vector3d(c.r, c.g, c.b);
 }
 
@@ -85,6 +84,15 @@ Eigen::Matrix<double, N, N> cholesky(Eigen::Matrix<double, N, N> x) {
   return ldlt.transpositionsP().transpose() * Eigen::Matrix<double, N, N>(ldlt.matrixL()) * sqrtd.asDiagonal();
 }
 
+template<typename T>
+T make_rgb(float r, float g, float b) {
+  T res;
+  res.r = r;
+  res.g = g;
+  res.b = b;
+  return res;
+}
+
 
 struct Particle {
     TargetDesc goal;
@@ -95,7 +103,6 @@ struct Particle {
     double last_P;
     double smoothed_last_P;
     
-    Particle() { }
     Particle(const TargetDesc &goal,
              const TaggedImage &image) :
         goal(goal) {
@@ -169,8 +176,8 @@ struct Particle {
                 *last_color_dest = inner_result.avg_color();
             }
             
-            Vector3d inner_color_guess = ColorRGBA_to_vec(goal.fg_color);
-            Vector3d outer_color_guess = ColorRGBA_to_vec(goal.bg_color);
+            Vector3d inner_color_guess = Color_to_vec(goal.sphere_color);
+            Vector3d outer_color_guess = Color_to_vec(goal.sphere_background_color);
             
             Vector3d inner_color = inner_result.avg_color().normalized();
             Vector3d outer_color = outer_result.avg_color().normalized();
@@ -332,8 +339,8 @@ struct Particle {
             *last_color_dest = inner_result.avg_color();
         }
         
-        Vector3d inner_color_guess = ColorRGBA_to_vec(goal.fg_color);
-        Vector3d outer_color_guess = ColorRGBA_to_vec(goal.bg_color);
+        Vector3d inner_color_guess = Color_to_vec(goal.fg_color);
+        Vector3d outer_color_guess = Color_to_vec(goal.bg_color);
         
         Vector3d inner_color = inner_result.avg_color().normalized();
         Vector3d outer_color = outer_result.avg_color().normalized();
@@ -467,11 +474,12 @@ struct ParticleFilter {
     
     Particle get_best() const {
         // find mode
-        Particle max_p; max_p.smoothed_last_P = -1;
+        boost::optional<Particle> maybe_max_p;
         BOOST_FOREACH(const Particle &particle, particles)
-            if(particle.smoothed_last_P > max_p.smoothed_last_P) max_p = particle;
-        assert(max_p.smoothed_last_P >= 0);
-        return max_p;
+            if(!maybe_max_p || particle.smoothed_last_P > maybe_max_p->smoothed_last_P)
+              maybe_max_p = particle;
+        assert(maybe_max_p->smoothed_last_P >= 0);
+        return *maybe_max_p;
     }
 };
 
@@ -615,7 +623,7 @@ struct GoalExecutor {
             int i = 0; BOOST_FOREACH(const ParticleFilter &particle_filter, particle_filters) {
                 BOOST_FOREACH(const Particle &particle, particle_filter.particles) {
                     msg.points.push_back(vec2xyz<Point>(particle.pos));
-                    msg.colors.push_back(make_rgba<ColorRGBA>(
+                    msg.colors.push_back(make_rgba<std_msgs::ColorRGBA>(
                         particle.smoothed_last_P/max_ps[i].smoothed_last_P, 0, 1-particle.smoothed_last_P/max_ps[i].smoothed_last_P, 1));
                 }
              i++; }
@@ -639,8 +647,8 @@ struct GoalExecutor {
                 targetres.pose.position = vec2xyz<Point>(particle.pos);
                 targetres.pose.orientation =
                      quat2xyzw<geometry_msgs::Quaternion>(particle.q);
-                targetres.color = make_rgba<ColorRGBA>(particle.last_color[0],
-                    particle.last_color[1], particle.last_color[2], 1);
+                targetres.color = make_rgb<Color>(particle.last_color[0],
+                    particle.last_color[1], particle.last_color[2]);
                 targetres.P = particle.last_P;
                 targetres.smoothed_last_P = particle.smoothed_last_P;
                 targetres.P_within_10cm = 0;

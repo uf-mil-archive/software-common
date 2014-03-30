@@ -1,5 +1,5 @@
 geometry_msgs/Pose pose
-std_msgs/ColorRGBA color
+Color color
 float64 P
 float64 smoothed_last_P
 float64 P_within_10cm

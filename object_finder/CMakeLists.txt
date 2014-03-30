@@ -51,6 +51,7 @@ add_message_files(
   Mesh.msg
   Component.msg
   Triangle.msg
+  Color.msg
 )
 #uncomment if you have defined services
 #rosbuild_gensrv()
