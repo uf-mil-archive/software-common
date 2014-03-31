@@ -67,6 +67,7 @@ struct ResultWithArea : public Result {
 
 struct TaggedImage {
     sensor_msgs::CameraInfo cam_info;
+    Eigen::ArrayXXd image[3];
     Eigen::Affine3d transform;
     Eigen::Affine3d transform_inverse;
     Eigen::Matrix<double, 3, 4> proj;
@@ -99,6 +100,9 @@ struct TaggedImage {
         }
         bool reversed = image.encoding == "bgra8" || image.encoding == "bgr8";
         
+        for(int i = 0; i < 3; i++) {
+            this->image[i].resize(image.height, image.width);
+        }
         sumimage.resize((image.width+1) * image.height);
         sumimage2.resize((image.width+1) * image.height);
         for(uint32_t row = 0; row < image.height; row++) {
@@ -122,6 +126,10 @@ struct TaggedImage {
                 
                 row2_cumulative_sum += color.cwiseProduct(color);
                 sumimage2[(image.width+1) * row + col+1] = row2_cumulative_sum;
+                
+                for(int i = 0; i < 3; i++) {
+                    this->image[i](row, col) = color(i);
+                }
             }
         }
         
@@ -154,6 +162,12 @@ struct TaggedImage {
         Eigen::Vector3d start = _get_pixel_point(pixel, 0);
         Eigen::Vector3d along = _get_pixel_point(pixel, 1);
         return start + (along - start).normalized() * distance;
+    }
+    
+    inline std::pair<Eigen::Vector2d, double> get_point_pixel(Eigen::Vector3d point) const {
+        Eigen::Vector3d camera = transform_inverse * point;
+        Eigen::Vector3d homo = proj * camera.homogeneous();
+        return std::make_pair(homo.hnormalized(), camera.norm());
     }
 };
 

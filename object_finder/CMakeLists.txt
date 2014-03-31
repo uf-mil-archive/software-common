@@ -81,10 +81,12 @@ include_directories(${EIGEN_INCLUDE_DIRS} include ${Boost_INCLUDE_DIR} ${catkin_
 
 # CATKIN_MIGRATION: removed during catkin migration
 # rosbuild_add_boost_directories()
-add_executable(object_finder src/node.cpp src/obj_finding.cpp src/sphere_finding.cpp)
+add_executable(object_finder src/node.cpp src/obj_finding.cpp src/sphere_finding.cpp src/fft.cpp)
 target_link_libraries(object_finder ${catkin_LIBRARIES})
 add_dependencies(object_finder ${catkin_EXPORTED_TARGETS})
 add_dependencies(object_finder ${PROJECT_NAME}_generate_messages_cpp)
+target_link_libraries(object_finder fftw3)
+set_target_properties(object_finder PROPERTIES COMPILE_FLAGS -std=c++11)
 
 add_executable(test_obj_finding src/test_obj_finding.cpp src/obj_finding.cpp src/sphere_finding.cpp)
 target_link_libraries(test_obj_finding ${catkin_LIBRARIES})

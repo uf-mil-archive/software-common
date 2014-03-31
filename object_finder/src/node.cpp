@@ -26,6 +26,7 @@
 #include "sphere_finding.h"
 #include "obj_finding.h"
 #include "image.h"
+#include "fft.h"
 
 using namespace std;
 using namespace sensor_msgs;
@@ -95,24 +96,32 @@ T make_rgb(float r, float g, float b) {
 
 
 struct Particle {
-    TargetDesc goal;
-    Vector3d pos;
-    Quaterniond q;
+    TargetDesc const goal;
+    Vector3d const pos;
+    Quaterniond const q;
     
-    Vector3d last_color;
-    double last_P;
-    double smoothed_last_P;
+    boost::optional<Vector3d> const last_color;
+    std::vector<double> const past_Ps;
+    double const past_Ps_sum;
     
-    Particle(const TargetDesc &goal,
-             const TaggedImage &image) :
-        goal(goal) {
+    Particle(TargetDesc const &goal,
+             Vector3d pos,
+             Quaterniond q,
+             boost::optional<Vector3d> last_color=boost::none,
+             std::vector<double> past_Ps=std::vector<double>()) :
+      goal(goal), pos(pos), q(q), last_color(last_color), past_Ps(past_Ps),
+      past_Ps_sum(std::accumulate(past_Ps.begin(), past_Ps.end(), 0.)) {
+      assert(past_Ps.size() <= 10);
+    }
+    static Particle random(TargetDesc const &goal,
+                           TaggedImage const &image) {
         Matrix6d cov = Map<const Matrix6d>(
             goal.prior_distribution.covariance.data());
         Matrix6d dist_from_iid = cholesky(cov);
         Vector6d iid; iid << gaussvec(), gaussvec();
         Vector6d dx = dist_from_iid * iid;
         
-        pos = dx.head(3) + xyz2vec(goal.prior_distribution.pose.position);
+        Vector3d pos = dx.head(3) + xyz2vec(goal.prior_distribution.pose.position);
         if(goal.max_dist) {
             pos = image.get_pixel_point(
                 Vector2d(
@@ -120,29 +129,22 @@ struct Particle {
                     uniform()*image.cam_info.height),
                 uniform()*(goal.max_dist-goal.min_dist)+goal.min_dist);
         }
-        q = quat_from_rotvec(dx.tail(3)) *
+        
+        Quaterniond q = quat_from_rotvec(dx.tail(3)) *
             xyzw2quat(goal.prior_distribution.pose.orientation);
         if(goal.check_180z_flip && uniform() >= .5)
             q = q * Quaterniond(0, 0, 1, 0);
-        smoothed_last_P = 1;
+        
+        return Particle(goal, pos, q);
     }
     Particle realpredict(double amount) const {
-        Particle p(*this);
-        p.smoothed_last_P = 1.;
-        // diffusion to test near solutions to try to find a better fit
-        p.pos += amount * gaussvec();
-        if(!goal.disallow_yawing) {
-            p.q = quat_from_rotvec(Vector3d(0, 0, amount * gauss())) * p.q;
-        }
-        if(goal.allow_pitching) {
-            p.q = p.q * quat_from_rotvec(
-                Vector3d(0, amount * gauss(), 0));
-        }
-        if(goal.allow_rolling) {
-            p.q = p.q * quat_from_rotvec(
-                Vector3d(amount * gauss(), 0, 0));
-        }
-        return p;
+        return Particle(
+          goal,
+          pos + amount * gaussvec(),
+          (!goal.disallow_yawing ? quat_from_rotvec(Vector3d(0, 0, amount * gauss())) : Quaterniond::Identity()) *
+          q *
+          (goal.allow_pitching ? quat_from_rotvec(Vector3d(0, amount * gauss(), 0)) : Quaterniond::Identity()) *
+          (goal.allow_rolling ? quat_from_rotvec(Vector3d(amount * gauss(), 0, 0)) : Quaterniond::Identity()));
     }
     Particle predict() const {
         if(uniform() < .5) {
@@ -151,89 +153,95 @@ struct Particle {
             return realpredict(.06);
         }
     }
-    double P(const TaggedImage &img, RenderBuffer &rb, bool print_debug_info=false, Vector3d *last_color_dest=NULL) const {
+    void P(const TaggedImage &img, RenderBuffer &rb, bool print_debug_info=false, std::vector<Particle> * res=NULL) const {
         if(goal.type == TargetDesc::TYPE_SPHERE) {
             RenderBuffer::RegionType fg_region = rb.new_region();
             sphere_draw(rb, fg_region, pos, goal.sphere_radius);
             RenderBuffer::RegionType bg_region = rb.new_region();
             sphere_draw(rb, bg_region, pos, 2*goal.sphere_radius);
-            vector<ResultWithArea> results = rb.get_results();
-            Result inner_result = results[fg_region];
-            Result outer_result = results[bg_region];
-            Result far_result = img.total_result - inner_result; //- outer_result;
             
-            if(inner_result.count < 100 || outer_result.count < 100 || far_result.count < 100) {
-                if(print_debug_info) {
-                    cout << endl;
-                    cout << endl;
-                    cout << "NOT VISIBLE" << endl;
+            std::vector<Vector4d> colors(10 + bg_region + 1);
+            colors[0] << 0, 0, 0, 0;
+            colors[10 + fg_region] << Color_to_vec(goal.sphere_color), 1;
+            colors[10 + bg_region] << Color_to_vec(goal.sphere_background_color), 1;
+            
+            vector<int> dbg_image(img.cam_info.width*img.cam_info.height, 0);
+            vector<Result> x = rb.draw_debug_regions(dbg_image);
+            
+            ArrayXXd planes[3];
+            for(int i = 0; i < 3; i++) {
+              planes[i] = ArrayXXd::Zero(img.cam_info.height, img.cam_info.width);
+            }
+            ArrayXXd weight = ArrayXXd::Zero(img.cam_info.height, img.cam_info.width);
+            
+            int min_y = img.cam_info.height, max_y = 0;
+            int min_x = img.cam_info.height, max_x = 0;
+            for(int y = 0; y < img.cam_info.height; y++) {
+              for(int x = 0; x < img.cam_info.width; x++) {
+                Vector4d color = colors[dbg_image[y * img.cam_info.width + x]];
+                if(!color(3)) continue;
+                min_y = std::min(min_y, y);
+                max_y = std::max(max_y, y);
+                min_x = std::min(min_x, x);
+                max_x = std::max(max_x, x);
+                for(int i = 0; i < 3; i++) {
+                  planes[i](y, x) = color(i);
                 }
-                // not visible
-                return 0.001;
+                weight(y, x) = color(3);
+              }
             }
             
-            if(last_color_dest) {
-                *last_color_dest = inner_result.avg_color();
+            if(min_y >= max_y || min_x >= max_x) {
+              // not visible
+              if(print_debug_info) {
+                cout << endl;
+                cout << endl;
+                cout << "NOT VISIBLE" << endl;
+              }
+              // XXX maybe don't forget about it completely?
             }
             
-            Vector3d inner_color_guess = Color_to_vec(goal.sphere_color);
-            Vector3d outer_color_guess = Color_to_vec(goal.sphere_background_color);
+            ArrayXXd subweight = weight.block(min_y, min_x, max_y-min_y, max_x-min_x);
             
-            Vector3d inner_color = inner_result.avg_color().normalized();
-            Vector3d outer_color = outer_result.avg_color().normalized();
-            Vector3d far_color = far_result.avg_color().normalized();
-            //double P2 = (inner_color - outer_color).norm();
-            //double P = P2* pow(far_color.dot(outer_color), 5);
-            double P = 1;
-            {
-                if(results[fg_region].count < 100) {
-                    if(print_debug_info) {
-                        cout << "TOO SMALL FG" << endl;
-                    }
-                    P *= 0.5;
-                } else {
-                    Vector3d this_color = results[fg_region].avg_color_assuming_unseen_is(
-                        outer_color).normalized();
-                    if(outer_color_guess == inner_color_guess) {
-                        P *= exp(10*(
-                            (this_color - outer_color).norm() -
-                            ( far_color - outer_color).norm() - .05
-                        ));
-                    } else {
-                        Vector3d dir = (inner_color_guess.normalized() - outer_color_guess.normalized()).normalized();
-                        P *= exp(10*(
-                            (this_color - outer_color).dot(dir) -
-                            ( far_color - outer_color).norm() - .05
-                        ));
-                    }
-                }
+            ArrayXXd acc;
+            for(int i = 0; i < 3; i++) {
+              ArrayXXd res;
+              fft::calc_pcc(img.image[i],
+                            planes[i].block(min_y, min_x, max_y-min_y, max_x-min_x),
+                            subweight,
+                            0,
+                            0,
+                            img.image[0].rows() - subweight.rows() + 1,
+                            img.image[0].cols() - subweight.cols() + 1,
+                            &res);
+              res = res.max(0);
+              if(i == 0) {
+                acc = res;
+              } else {
+                acc *= res;
+              }
             }
-            {
-                if(results[bg_region].count < 100) {
-                    if(print_debug_info) {
-                        cout << "TOO SMALL BG" << endl;
-                    }
-                    P *= 0.5;
-                } else {
-                    Vector3d this_color = results[bg_region].avg_color_assuming_unseen_is(
-                        inner_color).normalized();
-                    if(outer_color_guess == inner_color_guess) {
-                        P *= exp(10*(
-                            (inner_color - this_color).norm() -
-                            (  far_color - this_color).norm() - .05
-                        ));
-                    } else {
-                        Vector3d dir = (inner_color_guess.normalized() - outer_color_guess.normalized()).normalized();
-                        P *= exp(10*(
-                            (inner_color - this_color).dot(dir) -
-                            (  far_color - this_color).norm() - .05
-                        ));
-                    }
-                }
+            
+            for(int y = 0; y < img.image[0].rows() - subweight.rows() + 1; y++) {
+              for(int x = 0; x < img.image[0].cols() - subweight.cols() + 1; x++) {
+                int offset_y = y - min_y, offset_x = x - min_x;
+                
+                std::pair<Vector2d, double> old = img.get_point_pixel(pos);
+                Vector3d new_pos = img.get_pixel_point(old.first + Vector2d(offset_x, offset_y), old.second);
+                res->emplace_back(goal, new_pos, q, Vector3d(1, 2, 3));
+                
+                // XXX need to set last_color
+                // XXX need to set score
+                // XXX need to make sure particle isn't definitely eliminated next round ..
+              }
             }
-            return P;
+            
+            return;
         }
         
+        assert(false);
+        
+        /*
         typedef std::pair<const Component *, RenderBuffer::RegionType> Pair;
         static std::vector<Pair> regions; regions.clear();
         BOOST_FOREACH(const Component &component, goal.mesh.components) {
@@ -298,133 +306,18 @@ struct Particle {
             cout << "P " << P << endl;
         }
         
-        /*
-        
-        RenderBuffer::RegionType fg_region = rb.new_region();
-        if(!obj) {
-            sphere_draw(rb, fg_region, pos, goal.sphere_radius);
-        } else {
-            BOOST_FOREACH(const Component &component, obj->components) {
-                if(component.name.find("solid_") == 0) {
-                    component.draw(rb, fg_region, pos, q);
-                }
-            }
-        }
-        RenderBuffer::RegionType bg_region = rb.new_region();
-        if(!obj) {
-            sphere_draw(rb, bg_region, pos, 2*goal.sphere_radius);
-        } else {
-            BOOST_FOREACH(const Component &component, obj->components) {
-                if(component.name.find("background_") == 0) {
-                    component.draw(rb, bg_region, pos, q);
-                }
-            }
-        }
-        
-        Result inner_result = results[fg_region];
-        Result outer_result = results[bg_region];
-        Result far_result = img.total_result - inner_result; //- outer_result;
-        
-        if(inner_result.count < 100 || outer_result.count < 100 || far_result.count < 100) {
-            if(print_debug_info) {
-                cout << endl;
-                cout << endl;
-                cout << "NOT VISIBLE" << endl;
-            }
-            // not visible
-            return 0.001;
-        }
-        
-        if(last_color_dest) {
-            *last_color_dest = inner_result.avg_color();
-        }
-        
-        Vector3d inner_color_guess = Color_to_vec(goal.fg_color);
-        Vector3d outer_color_guess = Color_to_vec(goal.bg_color);
-        
-        Vector3d inner_color = inner_result.avg_color().normalized();
-        Vector3d outer_color = outer_result.avg_color().normalized();
-        Vector3d far_color = far_result.avg_color().normalized();
-        //double P2 = (inner_color - outer_color).norm();
-        //double P = P2* pow(far_color.dot(outer_color), 5);
-        double P = 1;
-        {
-            if(results[fg_region].count < 100) {
-                if(print_debug_info) {
-                    cout << "TOO SMALL FG" << endl;
-                }
-                P *= 0.5;
-            } else {
-                Vector3d this_color = results[fg_region].avg_color_assuming_unseen_is(
-                    outer_color).normalized();
-                if(outer_color_guess == inner_color_guess) {
-                    P *= exp(10*(
-                        (this_color - outer_color).norm() -
-                        ( far_color - outer_color).norm() - .05
-                    ));
-                } else {
-                    Vector3d dir = (inner_color_guess.normalized() - outer_color_guess.normalized()).normalized();
-                    P *= exp(10*(
-                        (this_color - outer_color).dot(dir) -
-                        ( far_color - outer_color).norm() - .05
-                    ));
-                }
-            }
-        }
-        {
-            if(results[bg_region].count < 100) {
-                if(print_debug_info) {
-                    cout << "TOO SMALL BG" << endl;
-                }
-                P *= 0.5;
-            } else {
-                Vector3d this_color = results[bg_region].avg_color_assuming_unseen_is(
-                    inner_color).normalized();
-                if(outer_color_guess == inner_color_guess) {
-                    P *= exp(10*(
-                        (inner_color - this_color).norm() -
-                        (  far_color - this_color).norm() - .05
-                    ));
-                } else {
-                    Vector3d dir = (inner_color_guess.normalized() - outer_color_guess.normalized()).normalized();
-                    P *= exp(10*(
-                        (inner_color - this_color).dot(dir) -
-                        (  far_color - this_color).norm() - .05
-                    ));
-                }
-            }
-        }
-        
-        if(print_debug_info) {
-            cout << endl;
-            cout << endl;
-            cout << "inner count" << inner_result.count << endl;
-            cout << "inner avg " << inner_color << endl;
-            cout << endl;
-            cout << "outer count" << outer_result.count << endl;
-            cout << "outer avg " << outer_color << endl;
-            cout << endl;
-            cout << "far count" << far_result.count << endl;
-            cout << "far avg " << far_color << endl;
-            cout << endl;
-            cout << "P " << P << endl;
-        }
-        */
         if(!(isfinite(P) && P >= 0)) {
             cout << "bad P: " << P << endl;
             throw std::runtime_error("bad P");
         }
         return P;
+        */
     }
-    void update(const TaggedImage &img, RenderBuffer &rb, bool print_debug_info=false) {
-        double P = this->P(img, rb, print_debug_info, &last_color);
-        
-        last_P = P;
-        
-        smoothed_last_P = pow(smoothed_last_P, 0.9) * pow(last_P, 0.1);
+    void update(std::vector<Particle> &res, const TaggedImage &img, RenderBuffer &rb, bool print_debug_info=false) const {
+        this->P(img, rb, print_debug_info, &res);
     }
-    void accumulate_successors(std::vector<Particle> &res, const TaggedImage &img, double N, const std::vector<Particle> &particles, double total_last_P) const {
-        int count = N * last_P/total_last_P + uniform();
+    void accumulate_successors(std::vector<Particle> &res, const TaggedImage &img, double N, const std::vector<Particle> &particles, double total_past_Ps_sum) const {
+        int count = N * past_Ps_sum/total_past_Ps_sum + uniform();
         for(int i = 0; i < count; i++) {
             res.push_back(i==0 ?
                 *this :
@@ -439,47 +332,60 @@ struct Particle {
 struct ParticleFilter {
     TargetDesc targetdesc;
     std::vector<Particle> particles;
-    double total_last_P;
+    double total_past_Ps_sum;
     RenderBuffer myrb;
     
     ParticleFilter(const TargetDesc &targetdesc, const TaggedImage &img, double N) :
         targetdesc(targetdesc) {
         for(int i = 0; i < N; i++)
-            particles.push_back(Particle(targetdesc, img));
+            particles.push_back(Particle::random(targetdesc, img));
     }
     
     void update(const TaggedImage &img, const RenderBuffer &rb, double N) {
-        double original_total_last_P = 0;
-        BOOST_FOREACH(const Particle &particle, particles) original_total_last_P += particle.last_P;
+        double original_total_past_Ps_sum = 0;
+        BOOST_FOREACH(const Particle &particle, particles) original_total_past_Ps_sum += particle.past_Ps_sum;
         
-        // residual resampling
-        std::vector<Particle> new_particles;
-        BOOST_FOREACH(const Particle &particle, particles) {
-            particle.accumulate_successors(new_particles, img, N*2/3., particles, original_total_last_P);
+        {
+          // residual resampling
+          std::vector<Particle> new_particles;
+          BOOST_FOREACH(const Particle &particle, particles) {
+              particle.accumulate_successors(new_particles, img, N*2/3., particles, original_total_past_Ps_sum);
+          }
+          for(unsigned int i = 0; i < N/3; i++) {
+              new_particles.push_back(Particle::random(targetdesc, img));
+          }
+          
+          // update particles
+          std::vector<Particle> new_particles2;
+          BOOST_FOREACH(Particle &particle, new_particles) {
+              myrb.reset(img, rb);
+              particle.update(new_particles2, img, myrb);
+          }
+          
+          particles.swap(new_particles2);
         }
-        for(unsigned int i = 0; i < N/3; i++) {
-            new_particles.push_back(Particle(targetdesc, img));
-        }
-        particles.swap(new_particles);
         
-        // update particles
-        BOOST_FOREACH(Particle &particle, particles) {
-            myrb.reset(img, rb);
-            particle.update(img, myrb);
-        }
-        
-        total_last_P = 0;
-        BOOST_FOREACH(Particle &particle, particles) total_last_P += particle.last_P;
+        total_past_Ps_sum = 0;
+        BOOST_FOREACH(Particle &particle, particles) total_past_Ps_sum += particle.past_Ps_sum;
     }
     
     Particle get_best() const {
-        // find mode
-        boost::optional<Particle> maybe_max_p;
-        BOOST_FOREACH(const Particle &particle, particles)
-            if(!maybe_max_p || particle.smoothed_last_P > maybe_max_p->smoothed_last_P)
-              maybe_max_p = particle;
-        assert(maybe_max_p->smoothed_last_P >= 0);
-        return *maybe_max_p;
+      Particle const * res = NULL;
+      BOOST_FOREACH(const Particle &particle, particles) {
+        if(particle.past_Ps.size() < 10) continue;
+        if(!res || particle.past_Ps_sum > res->past_Ps_sum) {
+          res = &particle;
+        }
+      }
+      if(res) {
+        return *res;
+      }
+      BOOST_FOREACH(const Particle &particle, particles) {
+        if(!res || particle.past_Ps_sum > res->past_Ps_sum) {
+          res = &particle;
+        }
+      }
+      return *res;
     }
 };
 
@@ -535,7 +441,7 @@ struct GoalExecutor {
     }
     
     void init(ros::Time t, const TaggedImage &img) {
-        N = 300;
+        N = 10;
         
         particle_filters.clear();
         BOOST_FOREACH(const TargetDesc &targetdesc, goal.targetdescs) {
@@ -600,7 +506,7 @@ struct GoalExecutor {
             BOOST_FOREACH(ParticleFilter &particle_filter, particle_filters) {
                 RenderBuffer rb(img);
                 BOOST_FOREACH(const Particle &p, prev_max_ps) {
-                    if(p.smoothed_last_P > particle_filter.get_best().smoothed_last_P) {
+                    if(p.past_Ps_sum > particle_filter.get_best().past_Ps_sum) {
                         p.P(img, rb);
                     }
                 }
@@ -624,7 +530,7 @@ struct GoalExecutor {
                 BOOST_FOREACH(const Particle &particle, particle_filter.particles) {
                     msg.points.push_back(vec2xyz<Point>(particle.pos));
                     msg.colors.push_back(make_rgba<std_msgs::ColorRGBA>(
-                        particle.smoothed_last_P/max_ps[i].smoothed_last_P, 0, 1-particle.smoothed_last_P/max_ps[i].smoothed_last_P, 1));
+                        particle.past_Ps_sum/max_ps[i].past_Ps_sum, 0, 1-particle.past_Ps_sum/max_ps[i].past_Ps_sum, 1));
                 }
              i++; }
             particles_pub.publish(msg);
@@ -647,20 +553,20 @@ struct GoalExecutor {
                 targetres.pose.position = vec2xyz<Point>(particle.pos);
                 targetres.pose.orientation =
                      quat2xyzw<geometry_msgs::Quaternion>(particle.q);
-                targetres.color = make_rgb<Color>(particle.last_color[0],
-                    particle.last_color[1], particle.last_color[2]);
-                targetres.P = particle.last_P;
-                targetres.smoothed_last_P = particle.smoothed_last_P;
+                targetres.color = make_rgb<Color>((*particle.last_color)[0],
+                    (*particle.last_color)[1], (*particle.last_color)[2]);
+                targetres.P = particle.past_Ps.size() ? particle.past_Ps[0] : -1.;
+                targetres.smoothed_last_P = particle.past_Ps_sum;
                 targetres.P_within_10cm = 0;
                 targetres.P_within_10cm_xy = 0;
                 ParticleFilter &particle_filter = particle_filters[&particle-max_ps.data()];
                 Vector3d c = img.transform * Vector3d::Zero();
                 BOOST_FOREACH(Particle &particle2, particle_filter.particles) {
                     if(particle2.dist(particle) <= .2)
-                        targetres.P_within_10cm += particle2.last_P/particle_filter.total_last_P;
+                        targetres.P_within_10cm += particle2.past_Ps_sum/particle_filter.total_past_Ps_sum;
                     double dist = sqrt((particle.pos-c).norm() * (particle2.pos-c).norm());
                     if(((particle2.pos-c).normalized() - (particle.pos-c).normalized()).norm()*dist <= .2)
-                        targetres.P_within_10cm_xy += particle2.last_P/particle_filter.total_last_P;
+                        targetres.P_within_10cm_xy += particle2.past_Ps_sum/particle_filter.total_past_Ps_sum;
                 }
                 feedback.targetreses.push_back(targetres);
             }
@@ -668,7 +574,7 @@ struct GoalExecutor {
         }
         
         ros::WallTime end_time = ros::WallTime::now();
-        if(end_time - start_time > ros::WallDuration(.1)) {
+        if(end_time - start_time > ros::WallDuration(5)) {
             N *= .9;
         } else {
             N /= .9;

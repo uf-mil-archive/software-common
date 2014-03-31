@@ -179,11 +179,12 @@ struct RenderBuffer {
         }
         return results2;
     }
-    void draw_debug_regions(std::vector<int> &dbg_image) {
+    std::vector<Result> draw_debug_regions(std::vector<int> &dbg_image) {
         std::vector<Result> results(areas.size(), Result::Zero());
         for(unsigned int Y = 0; Y < img->cam_info.height; Y++) {
             scanlines[Y].accumulate_results(results, *img, Y, &dbg_image);
         }
+        return results;
     }
 };
 
