@@ -101,8 +101,9 @@ struct Particle {
     Quaterniond const q;
     
     boost::optional<Vector3d> const last_color;
-    std::vector<double> const past_Ps;
+    std::vector<double> const past_Ps; // most recent to least recent
     double const past_Ps_sum;
+    bool mature;
     
     Particle(TargetDesc const &goal,
              Vector3d pos,
@@ -110,7 +111,8 @@ struct Particle {
              boost::optional<Vector3d> last_color=boost::none,
              std::vector<double> past_Ps=std::vector<double>()) :
       goal(goal), pos(pos), q(q), last_color(last_color), past_Ps(past_Ps),
-      past_Ps_sum(std::accumulate(past_Ps.begin(), past_Ps.end(), 0.)) {
+      past_Ps_sum(std::accumulate(past_Ps.begin(), past_Ps.end(), 0.)),
+      mature(past_Ps.size() == 10) {
       assert(past_Ps.size() <= 10);
     }
     static Particle random(TargetDesc const &goal,
@@ -160,6 +162,8 @@ struct Particle {
             RenderBuffer::RegionType bg_region = rb.new_region();
             sphere_draw(rb, bg_region, pos, 2*goal.sphere_radius);
             
+            if(!res) return;
+            
             std::vector<Vector4d> colors(10 + bg_region + 1);
             colors[0] << 0, 0, 0, 0;
             colors[10 + fg_region] << Color_to_vec(goal.sphere_color), 1;
@@ -202,6 +206,7 @@ struct Particle {
             }
             
             ArrayXXd subweight = weight.block(min_y, min_x, max_y-min_y, max_x-min_x);
+            std::cout << subweight << std::endl << std::endl;
             
             ArrayXXd acc;
             for(int i = 0; i < 3; i++) {
@@ -222,13 +227,60 @@ struct Particle {
               }
             }
             
+            std::vector<double> new_past_Ps;
+            new_past_Ps.push_back(0); // filled in later
+            new_past_Ps.insert(new_past_Ps.end(), past_Ps.begin(), past_Ps.end());
+            while(new_past_Ps.size() > 10) {
+              new_past_Ps.pop_back();
+            }
+            
+            double total_corr = 0;
             for(int y = 0; y < img.image[0].rows() - subweight.rows() + 1; y++) {
               for(int x = 0; x < img.image[0].cols() - subweight.cols() + 1; x++) {
+                double corr = acc(y, x);
+                
+                if(!std::isfinite(corr)) continue;
+                
+                total_corr += corr;
+              }
+            }
+            
+            assert(std::isfinite(total_corr));
+            if(total_corr == 0) return;
+            
+            std::vector<double> chosen_cumulative_corr;
+            for(int i = 0; i < 100; i++) {
+              chosen_cumulative_corr.push_back(uniform() * total_corr);
+            }
+            std::sort(chosen_cumulative_corr.begin(), chosen_cumulative_corr.end(), std::greater<int>());
+            
+            double total_corr_so_far = 0;
+            for(int y = 0; y < img.image[0].rows() - subweight.rows() + 1; y++) {
+              for(int x = 0; x < img.image[0].cols() - subweight.cols() + 1; x++) {
+                double corr = acc(y, x);
+                
+                if(!std::isfinite(corr)) continue;
+                
+                total_corr_so_far += corr;
+                
+                if(chosen_cumulative_corr.empty()) return;
+                if(total_corr_so_far <= chosen_cumulative_corr.back()) {
+                  continue;
+                } else {
+                  chosen_cumulative_corr.pop_back();
+                }
+                
                 int offset_y = y - min_y, offset_x = x - min_x;
                 
                 std::pair<Vector2d, double> old = img.get_point_pixel(pos);
                 Vector3d new_pos = img.get_pixel_point(old.first + Vector2d(offset_x, offset_y), old.second);
-                res->emplace_back(goal, new_pos, q, Vector3d(1, 2, 3));
+                
+                if(hypot(offset_y, offset_x) < 10) {
+                  new_past_Ps[0] = corr;
+                  res->emplace_back(goal, new_pos, q, Vector3d(1, 2, 3), new_past_Ps);
+                } else {
+                  res->emplace_back(goal, new_pos, q, Vector3d(1, 2, 3), std::vector<double>{corr});
+                }
                 
                 // XXX need to set last_color
                 // XXX need to set score
@@ -342,17 +394,32 @@ struct ParticleFilter {
     }
     
     void update(const TaggedImage &img, const RenderBuffer &rb, double N) {
-        double original_total_past_Ps_sum = 0;
-        BOOST_FOREACH(const Particle &particle, particles) original_total_past_Ps_sum += particle.past_Ps_sum;
+        double original_total_immature_past_Ps_sum = 0;
+        BOOST_FOREACH(const Particle &particle, particles)
+          if(!particle.mature)
+            original_total_immature_past_Ps_sum += particle.past_Ps_sum;
+        
+        double original_total_mature_past_Ps_sum = 0;
+        BOOST_FOREACH(const Particle &particle, particles)
+          if(particle.mature)
+            original_total_mature_past_Ps_sum += particle.past_Ps_sum;
         
         {
           // residual resampling
           std::vector<Particle> new_particles;
-          BOOST_FOREACH(const Particle &particle, particles) {
-              particle.accumulate_successors(new_particles, img, N*2/3., particles, original_total_past_Ps_sum);
-          }
-          for(unsigned int i = 0; i < N/3; i++) {
+          // add new immature
+          for(unsigned int i = 0; i < N/3.; i++) {
               new_particles.push_back(Particle::random(targetdesc, img));
+          }
+          BOOST_FOREACH(const Particle &particle, particles) {
+            if(!particle.mature) {
+              particle.accumulate_successors(new_particles, img, N/3., particles, original_total_immature_past_Ps_sum); // XXX use mean instead of total for immature
+            }
+          }
+          BOOST_FOREACH(const Particle &particle, particles) {
+            if(particle.mature) {
+              particle.accumulate_successors(new_particles, img, N/3., particles, original_total_mature_past_Ps_sum);
+            }
           }
           
           // update particles
@@ -360,6 +427,10 @@ struct ParticleFilter {
           BOOST_FOREACH(Particle &particle, new_particles) {
               myrb.reset(img, rb);
               particle.update(new_particles2, img, myrb);
+          }
+          
+          if(new_particles2.empty()) {
+            new_particles2.push_back(Particle::random(targetdesc, img));
           }
           
           particles.swap(new_particles2);
@@ -372,7 +443,7 @@ struct ParticleFilter {
     Particle get_best() const {
       Particle const * res = NULL;
       BOOST_FOREACH(const Particle &particle, particles) {
-        if(particle.past_Ps.size() < 10) continue;
+        if(!particle.mature) continue;
         if(!res || particle.past_Ps_sum > res->past_Ps_sum) {
           res = &particle;
         }
@@ -385,6 +456,7 @@ struct ParticleFilter {
           res = &particle;
         }
       }
+      assert(res);
       return *res;
     }
 };
@@ -574,7 +646,7 @@ struct GoalExecutor {
         }
         
         ros::WallTime end_time = ros::WallTime::now();
-        if(end_time - start_time > ros::WallDuration(5)) {
+        if(end_time - start_time > ros::WallDuration(0.5)) {
             N *= .9;
         } else {
             N /= .9;
