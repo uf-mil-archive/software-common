@@ -127,8 +127,8 @@ struct Particle {
         if(goal.max_dist) {
             pos = image.get_pixel_point(
                 Vector2d(
-                    uniform()*image.cam_info.width,
-                    uniform()*image.cam_info.height),
+                    uniform()*image.width,
+                    uniform()*image.height),
                 uniform()*(goal.max_dist-goal.min_dist)+goal.min_dist);
         }
         
@@ -169,20 +169,20 @@ struct Particle {
             colors[10 + fg_region] << Color_to_vec(goal.sphere_color), 1;
             colors[10 + bg_region] << Color_to_vec(goal.sphere_background_color), 1;
             
-            vector<int> dbg_image(img.cam_info.width*img.cam_info.height, 0);
+            vector<int> dbg_image(img.width*img.height, 0);
             vector<Result> x = rb.draw_debug_regions(dbg_image);
             
             ArrayXXd planes[3];
             for(int i = 0; i < 3; i++) {
-              planes[i] = ArrayXXd::Zero(img.cam_info.height, img.cam_info.width);
+              planes[i] = ArrayXXd::Zero(img.height, img.width);
             }
-            ArrayXXd weight = ArrayXXd::Zero(img.cam_info.height, img.cam_info.width);
+            ArrayXXd weight = ArrayXXd::Zero(img.height, img.width);
             
-            int min_y = img.cam_info.height, max_y = 0;
-            int min_x = img.cam_info.height, max_x = 0;
-            for(int y = 0; y < img.cam_info.height; y++) {
-              for(int x = 0; x < img.cam_info.width; x++) {
-                Vector4d color = colors[dbg_image[y * img.cam_info.width + x]];
+            int min_y = img.height, max_y = 0;
+            int min_x = img.height, max_x = 0;
+            for(int y = 0; y < img.height; y++) {
+              for(int x = 0; x < img.width; x++) {
+                Vector4d color = colors[dbg_image[y * img.width + x]];
                 if(!color(3)) continue;
                 min_y = std::min(min_y, y);
                 max_y = std::max(max_y, y);
@@ -545,11 +545,11 @@ struct GoalExecutor {
         
         img.reset(*image, *cam_info, eigen_from_tf(transform));
         int corner_cut = 0; camera_nh.getParam("corner_cut", corner_cut);
-        for(unsigned int i = 0; i < img.cam_info.height; i++) {
-            int dist_from_edge = min(i, img.cam_info.height-1-i);
+        for(unsigned int i = 0; i < img.height; i++) {
+            int dist_from_edge = min(i, img.height-1-i);
             int amt = max(0, corner_cut - dist_from_edge);
             img.left[i] = amt;
-            img.right[i] = img.cam_info.width - amt;
+            img.right[i] = img.width - amt;
         }
         
         if(particle_filters.size() == 0) {
@@ -726,7 +726,7 @@ struct GoalExecutor {
                         Vector2d c0 = c0_homo.hnormalized();
                         
                         int orig_x = c0(0) + .5, orig_y = c0(1) + .5;
-                        if(orig_x >= 0 && orig_x < (int)img.cam_info.width && orig_y >= 0 && orig_y < (int)img.cam_info.height) {
+                        if(orig_x >= 0 && orig_x < (int)img.width && orig_y >= 0 && orig_y < (int)img.height) {
                             orig_color = img.get_pixel(orig_y, orig_x);
                         }
                     }

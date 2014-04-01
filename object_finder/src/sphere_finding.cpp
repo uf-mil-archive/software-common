@@ -73,11 +73,11 @@ bool _accumulate_sphere_scanline(RenderBuffer &renderbuffer, RenderBuffer::Regio
     // solution space of project((X, Y, Z)) = (x, y, z) with y fixed
     Vector3d plane1(
         0,
-        -((image.cam_info.P[7] + image.cam_info.P[6]) - y*(image.cam_info.P[11] + image.cam_info.P[10]))/(image.cam_info.P[ 5] - y*image.cam_info.P[9]),
+        -((image.proj(1, 3) + image.proj(1, 2)) - y*(image.proj(2, 3) + image.proj(2, 2)))/(image.proj(1, 1) - y*image.proj(2, 1)),
         1);
     Vector3d plane2(
         1,
-        (y*image.cam_info.P[8] - image.cam_info.P[4])/(image.cam_info.P[5] - y*image.cam_info.P[9]),
+        (y*image.proj(2, 0) - image.proj(1, 0))/(image.proj(1, 1) - y*image.proj(2, 1)),
         0);
     
     double hit1_axis1, hit1_axis2;
@@ -129,13 +129,13 @@ void sphere_draw(RenderBuffer &renderbuffer, RenderBuffer::RegionType region, Ei
     Vector3d pos_camera = image.transform_inverse * pos;
     
     Vector2d center_screen = (image.proj * pos_camera.homogeneous()).eval().hnormalized();
-    int32_t y_center_hint = max(min(center_screen(1), (double)image.cam_info.height-1), 0.) + .5;
+    int32_t y_center_hint = max(min(center_screen(1), (double)image.height-1), 0.) + .5;
     
     for(int32_t yy = y_center_hint; yy >= 0; yy--) {
         if(!_accumulate_sphere_scanline(renderbuffer, region, pos_camera, radius, yy))
             break;
     }
-    for(int32_t yy = y_center_hint + 1; yy < (int32_t)image.cam_info.height; yy++) {
+    for(int32_t yy = y_center_hint + 1; yy < (int32_t)image.height; yy++) {
         if(!_accumulate_sphere_scanline(renderbuffer, region, pos_camera, radius, yy))
             break;
     }

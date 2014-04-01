@@ -71,7 +71,7 @@ void draw(Component const & component, RenderBuffer &renderbuffer, int region, V
             }
             
             // draw region between c0->c2 and ca->cb edges
-            for(int Y = max(0, (int)ceil(ca[1] - 0.5)); Y + 0.5 < cb[1] && Y < (int)renderbuffer.img->cam_info.height; Y++) {
+            for(int Y = max(0, (int)ceil(ca[1] - 0.5)); Y + 0.5 < cb[1] && Y < (int)renderbuffer.img->height; Y++) {
                 double y = Y + 0.5;
                 double x1 = (y - c0[1])*(c2[0] - c0[0])/(c2[1] - c0[1]) + c0[0];
                 double x2 = (y - ca[1])*(cb[0] - ca[0])/(cb[1] - ca[1]) + ca[0];

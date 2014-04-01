@@ -103,7 +103,7 @@ struct ScanLine {
                 results[segment.region] += img.get_line_sum(Y, start_x, end_x);
                 if(dbg_image) {
                     for(int X = start_x; X < end_x; X++) {
-                        (*dbg_image)[Y * img.cam_info.width + X] = segment.region + 10;
+                        (*dbg_image)[Y * img.width + X] = segment.region + 10;
                     }
                 }
             }
@@ -141,7 +141,7 @@ struct RenderBuffer {
     RenderBuffer(const TaggedImage &img) { reset(img); }
     void reset(const TaggedImage &img) {
         this->img = &img;
-        scanlines.resize(img.cam_info.height);
+        scanlines.resize(img.height);
         BOOST_FOREACH(ScanLine &scanline, scanlines) {
             scanline.reset();
         }
@@ -150,8 +150,8 @@ struct RenderBuffer {
     void reset(const TaggedImage &img, const RenderBuffer &orig) {
         this->img = &img;
         
-        assert(orig.scanlines.size() == img.cam_info.height);
-        scanlines.resize(img.cam_info.height);
+        assert(orig.scanlines.size() == img.height);
+        scanlines.resize(img.height);
         
         int i = 0; BOOST_FOREACH(ScanLine &scanline, scanlines) {
             scanline.reset(orig.scanlines[i]);
@@ -169,7 +169,7 @@ struct RenderBuffer {
     }
     std::vector<ResultWithArea> get_results() {
         std::vector<Result> results(areas.size(), Result::Zero());
-        for(unsigned int Y = 0; Y < img->cam_info.height; Y++) {
+        for(unsigned int Y = 0; Y < img->height; Y++) {
             scanlines[Y].accumulate_results(results, *img, Y);
         }
         
@@ -181,7 +181,7 @@ struct RenderBuffer {
     }
     std::vector<Result> draw_debug_regions(std::vector<int> &dbg_image) {
         std::vector<Result> results(areas.size(), Result::Zero());
-        for(unsigned int Y = 0; Y < img->cam_info.height; Y++) {
+        for(unsigned int Y = 0; Y < img->height; Y++) {
             scanlines[Y].accumulate_results(results, *img, Y, &dbg_image);
         }
         return results;

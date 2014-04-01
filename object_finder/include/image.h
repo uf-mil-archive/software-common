@@ -66,7 +66,7 @@ struct ResultWithArea : public Result {
 };
 
 struct TaggedImage {
-    sensor_msgs::CameraInfo cam_info;
+    int width, height;
     Eigen::ArrayXXd image[3];
     Eigen::Affine3d transform;
     Eigen::Affine3d transform_inverse;
@@ -82,7 +82,8 @@ struct TaggedImage {
         reset(image, cam_info, transform);
     }
     void reset(const sensor_msgs::Image &image, const sensor_msgs::CameraInfo &cam_info, const Eigen::Affine3d &transform) {
-        this->cam_info = cam_info;
+        this->width = cam_info.width;
+        this->height = cam_info.height;
         this->transform = transform;
         this->transform_inverse = transform.inverse();
         
@@ -140,13 +141,13 @@ struct TaggedImage {
     }
     
     inline Eigen::Vector3d get_pixel(int Y, int X) const {
-        return sumimage[Y * (cam_info.width+1) + X + 1] - sumimage[Y * (cam_info.width+1) + X];
+        return sumimage[Y * (width+1) + X + 1] - sumimage[Y * (width+1) + X];
     }
     
     inline Result get_line_sum(int Y, int X1, int X2) const {
         return Result(
-            sumimage [Y * (cam_info.width+1) + X2] - sumimage [Y * (cam_info.width+1) + X1],
-            sumimage2[Y * (cam_info.width+1) + X2] - sumimage2[Y * (cam_info.width+1) + X1],
+            sumimage [Y * (width+1) + X2] - sumimage [Y * (width+1) + X1],
+            sumimage2[Y * (width+1) + X2] - sumimage2[Y * (width+1) + X1],
             X2 - X1);
     }
     
