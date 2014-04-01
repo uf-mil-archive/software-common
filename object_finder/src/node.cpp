@@ -203,10 +203,11 @@ struct Particle {
                 cout << "NOT VISIBLE" << endl;
               }
               // XXX maybe don't forget about it completely?
+              return;
             }
             
             ArrayXXd subweight = weight.block(min_y, min_x, max_y-min_y, max_x-min_x);
-            std::cout << subweight << std::endl << std::endl;
+            //std::cout << subweight << std::endl << std::endl;
             
             ArrayXXd acc;
             for(int i = 0; i < 3; i++) {
@@ -249,7 +250,7 @@ struct Particle {
             if(total_corr == 0) return;
             
             std::vector<double> chosen_cumulative_corr;
-            for(int i = 0; i < 100; i++) {
+            for(int i = 0; i < 1000; i++) {
               chosen_cumulative_corr.push_back(uniform() * total_corr);
             }
             std::sort(chosen_cumulative_corr.begin(), chosen_cumulative_corr.end(), std::greater<int>());
@@ -513,7 +514,7 @@ struct GoalExecutor {
     }
     
     void init(ros::Time t, const TaggedImage &img) {
-        N = 10;
+        N = 5;
         
         particle_filters.clear();
         BOOST_FOREACH(const TargetDesc &targetdesc, goal.targetdescs) {
@@ -646,12 +647,14 @@ struct GoalExecutor {
         }
         
         ros::WallTime end_time = ros::WallTime::now();
+        cout << "took " << (end_time - start_time).toSec()/1e-3 << " ms. N: " << N;
         if(end_time - start_time > ros::WallDuration(0.5)) {
             N *= .9;
         } else {
             N /= .9;
         }
-        cout << "N = " << N << endl;
+        if(N < 5) N = 5;
+        cout << " -> " << N << endl;
         
         if(image_pub.getNumSubscribers()) { // send debug image
             RenderBuffer rb(img);
