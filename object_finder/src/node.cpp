@@ -28,7 +28,6 @@
 #include "image.h"
 #include "fft.h"
 
-using namespace std;
 using namespace sensor_msgs;
 using namespace geometry_msgs;
 using namespace message_filters;
@@ -164,13 +163,13 @@ struct Particle {
             
             if(!res) return;
             
-            std::vector<Vector4d> colors(10 + bg_region + 1);
+            std::vector<Vector4d> colors(10 + std::max(fg_region, bg_region) + 1);
             colors[0] << 0, 0, 0, 0;
             colors[10 + fg_region] << Color_to_vec(goal.sphere_color), 1;
             colors[10 + bg_region] << Color_to_vec(goal.sphere_background_color), 1;
             
-            vector<int> dbg_image(img.width*img.height, 0);
-            vector<Result> x = rb.draw_debug_regions(dbg_image);
+            std::vector<int> dbg_image(img.width*img.height, 0);
+            std::vector<Result> x = rb.draw_debug_regions(dbg_image);
             
             ArrayXXd planes[3];
             for(int i = 0; i < 3; i++) {
@@ -178,10 +177,10 @@ struct Particle {
             }
             ArrayXXd weight = ArrayXXd::Zero(img.height, img.width);
             
-            int min_y = img.height, max_y = 0;
-            int min_x = img.height, max_x = 0;
-            for(int y = 0; y < img.height; y++) {
-              for(int x = 0; x < img.width; x++) {
+            unsigned int min_y = img.height, max_y = 0;
+            unsigned int min_x = img.height, max_x = 0;
+            for(unsigned int y = 0; y < img.height; y++) {
+              for(unsigned int x = 0; x < img.width; x++) {
                 Vector4d color = colors[dbg_image[y * img.width + x]];
                 if(!color(3)) continue;
                 min_y = std::min(min_y, y);
@@ -198,9 +197,9 @@ struct Particle {
             if(min_y >= max_y || min_x >= max_x) {
               // not visible
               if(print_debug_info) {
-                cout << endl;
-                cout << endl;
-                cout << "NOT VISIBLE" << endl;
+                std::cout << std::endl;
+                std::cout << std::endl;
+                std::cout << "NOT VISIBLE" << std::endl;
               }
               // XXX maybe don't forget about it completely?
               return;
@@ -305,7 +304,7 @@ struct Particle {
         }
         
         
-        vector<ResultWithArea> results = rb.get_results();
+        std::vector<ResultWithArea> results = rb.get_results();
         
         double P = 1;
         BOOST_FOREACH(const Pair &p1, regions) {
@@ -351,16 +350,16 @@ struct Particle {
                 }
                 P *= exp(-1e3*var);
                 if(print_debug_info) {
-                    cout << "var " << var << " " << p1_result.total_color2.transpose() << " / " << p1_result.total_color.transpose() << " count " << p1_result.count << endl;
+                    std::cout << "var " << var << " " << p1_result.total_color2.transpose() << " / " << p1_result.total_color.transpose() << " count " << p1_result.count << std::endl;
                 }
             }
         }
         if(print_debug_info) {
-            cout << "P " << P << endl;
+            std::cout << "P " << P << std::endl;
         }
         
         if(!(isfinite(P) && P >= 0)) {
-            cout << "bad P: " << P << endl;
+            std::cout << "bad P: " << P << std::endl;
             throw std::runtime_error("bad P");
         }
         return P;
@@ -498,7 +497,7 @@ struct GoalExecutor {
         feedback_callback(feedback_callback) {
         
         BOOST_FOREACH(const TargetDesc &targetdesc, goal.targetdescs) {
-            ostringstream tmp; tmp << "extracted_images/" << &targetdesc - goal.targetdescs.data();
+            std::ostringstream tmp; tmp << "extracted_images/" << &targetdesc - goal.targetdescs.data();
             extracted_image_pubs.push_back(private_nh.advertise<sensor_msgs::Image>(tmp.str(), 1));
         }
         
@@ -546,8 +545,8 @@ struct GoalExecutor {
         img.reset(*image, *cam_info, eigen_from_tf(transform));
         int corner_cut = 0; camera_nh.getParam("corner_cut", corner_cut);
         for(unsigned int i = 0; i < img.height; i++) {
-            int dist_from_edge = min(i, img.height-1-i);
-            int amt = max(0, corner_cut - dist_from_edge);
+            int dist_from_edge = std::min(i, img.height-1-i);
+            int amt = std::max(0, corner_cut - dist_from_edge);
             img.left[i] = amt;
             img.right[i] = img.width - amt;
         }
@@ -565,7 +564,7 @@ struct GoalExecutor {
             return;
         }
         
-        ros::WallTime start_time = ros::WallTime::now();
+        ros::Time start_time = ros::Time::now();
         
         //double total_smoothed_last_P = 0;
         //BOOST_FOREACH(Particle &particle, particles) total_smoothed_last_P += particle.smoothed_last_P;
@@ -576,14 +575,16 @@ struct GoalExecutor {
         }
         
         {
+            TaggedImage small_img = img.decimateBy2();
+            
             BOOST_FOREACH(ParticleFilter &particle_filter, particle_filters) {
-                RenderBuffer rb(img);
+                RenderBuffer rb(small_img);
                 BOOST_FOREACH(const Particle &p, prev_max_ps) {
                     if(p.past_Ps_sum > particle_filter.get_best().past_Ps_sum) {
-                        p.P(img, rb);
+                        p.P(small_img, rb);
                     }
                 }
-                particle_filter.update(img, rb, N);
+                particle_filter.update(small_img, rb, N);
             }
         }
         
@@ -646,15 +647,15 @@ struct GoalExecutor {
             feedback_callback(feedback);
         }
         
-        ros::WallTime end_time = ros::WallTime::now();
-        cout << "took " << (end_time - start_time).toSec()/1e-3 << " ms. N: " << N;
-        if(end_time - start_time > ros::WallDuration(0.5)) {
+        ros::Time end_time = ros::Time::now();
+        std::cout << "took " << (end_time - start_time).toSec()/1e-3 << " ms. N: " << N;
+        if(end_time - start_time > ros::Duration(0.5)) {
             N *= .9;
         } else {
             N /= .9;
         }
         if(N < 5) N = 5;
-        cout << " -> " << N << endl;
+        std::cout << " -> " << N << std::endl;
         
         if(image_pub.getNumSubscribers()) { // send debug image
             RenderBuffer rb(img);
@@ -662,7 +663,7 @@ struct GoalExecutor {
                 max_p.P(img, rb, true);
             }
             
-            vector<int> dbg_image(image->width*image->height, 0);
+            std::vector<int> dbg_image(image->width*image->height, 0);
             rb.draw_debug_regions(dbg_image);
             
             Image msg;

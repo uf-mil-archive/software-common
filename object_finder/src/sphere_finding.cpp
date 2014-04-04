@@ -1,6 +1,5 @@
 #include "sphere_finding.h"
 
-using namespace std;
 using namespace Eigen;
 using namespace sensor_msgs;
 
@@ -103,11 +102,11 @@ bool _accumulate_sphere_scanline(RenderBuffer &renderbuffer, RenderBuffer::Regio
     Vector2d point2_screen = point2_homo.hnormalized();
     assert(abs(point2_screen(1) - y) < 1e-3);
     
-    double minx = min(point1_screen(0), point2_screen(0));
-    double maxx = max(point1_screen(0), point2_screen(0));
+    double minx = std::min(point1_screen(0), point2_screen(0));
+    double maxx = std::max(point1_screen(0), point2_screen(0));
     
-    int xstart = max(renderbuffer.img->left[yy], min(renderbuffer.img->right[yy], (int)ceil(minx)));
-    int xend   = max(renderbuffer.img->left[yy], min(renderbuffer.img->right[yy], (int)ceil(maxx))); // not inclusive
+    int xstart = std::max(renderbuffer.img->left[yy], std::min(renderbuffer.img->right[yy], (int)ceil(minx)));
+    int xend   = std::max(renderbuffer.img->left[yy], std::min(renderbuffer.img->right[yy], (int)ceil(maxx))); // not inclusive
     double z_0 = 0; // XXX
     double z_slope = 0; // XXX
     renderbuffer.scanlines[yy].add_segment(Segment(xstart, xend, z_0, z_slope, region));
@@ -129,7 +128,7 @@ void sphere_draw(RenderBuffer &renderbuffer, RenderBuffer::RegionType region, Ei
     Vector3d pos_camera = image.transform_inverse * pos;
     
     Vector2d center_screen = (image.proj * pos_camera.homogeneous()).eval().hnormalized();
-    int32_t y_center_hint = max(min(center_screen(1), (double)image.height-1), 0.) + .5;
+    int32_t y_center_hint = std::max(std::min(center_screen(1), (double)image.height-1), 0.) + .5;
     
     for(int32_t yy = y_center_hint; yy >= 0; yy--) {
         if(!_accumulate_sphere_scanline(renderbuffer, region, pos_camera, radius, yy))

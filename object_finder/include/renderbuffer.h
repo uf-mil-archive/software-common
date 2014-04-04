@@ -76,7 +76,7 @@ struct ScanLine {
             segment.z_slope = 0;
         }
     }
-    void accumulate_results(std::vector<Result> &results, const TaggedImage &img, unsigned int Y, std::vector<int> *dbg_image=NULL) {
+    void accumulate_results(std::vector<Result> &results, const TaggedImage &img, unsigned int Y, std::vector<int> *dbg_image=NULL) const {
         unsigned int segs = segments.size();
         if(!segs)
             return;

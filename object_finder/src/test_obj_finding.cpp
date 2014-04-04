@@ -6,12 +6,11 @@
 #include "obj_finding.h"
 #include "sphere_finding.h"
 
-using namespace std;
 using namespace Eigen;
 
-void write(const vector<int> &dbg_image, int width, int height, string filename) {
-    ofstream f(filename.c_str());
-    int max_val = 0; for(int i = 0; i < width*height; i++) max_val = max(max_val, dbg_image[i]);
+void write(const std::vector<int> &dbg_image, int width, int height, std::string filename) {
+    std::ofstream f(filename.c_str());
+    int max_val = 0; for(int i = 0; i < width*height; i++) max_val = std::max(max_val, dbg_image[i]);
     f << "P2 " << width << " " << height << " " << max_val << "\n";
     for(int Y = 0; Y < height; Y++) {
         for(int X = 0; X < width; X++) {
@@ -20,39 +19,39 @@ void write(const vector<int> &dbg_image, int width, int height, string filename)
         f << "\n";
     }
     f.close();
-    cout << "Wrote to " << filename << endl;
+    std::cout << "Wrote to " << filename << std::endl;
 }
 
-object_finder::Mesh load_mesh(string const & filename) {
-    vector<geometry_msgs::Point> vertices;
-    vector<object_finder::Component> components;
+object_finder::Mesh load_mesh(std::string const & filename) {
+    std::vector<geometry_msgs::Point> vertices;
+    std::vector<object_finder::Component> components;
     
-    ifstream f(filename.c_str());
+    std::ifstream f(filename.c_str());
     if(!f.is_open()) {
-        throw runtime_error("couldn't open file");
+        throw std::runtime_error("couldn't open file");
     }
     
     bool ignore_faces = true;
     while(!f.eof()) {
-        string line; getline(f, line);
+        std::string line; getline(f, line);
         
         size_t hash_pos = line.find("#");
-        if(hash_pos != string::npos) {
+        if(hash_pos != std::string::npos) {
             line = line.substr(0, hash_pos);
         }
         
         size_t content_pos = line.find_first_not_of("\t ");
-        if(content_pos == string::npos) {
+        if(content_pos == std::string::npos) {
             continue;
         }
         line = line.substr(content_pos);
         
-        stringstream ss(line);
+        std::stringstream ss(line);
         
-        string command; ss >> command;
+        std::string command; ss >> command;
         
         if(command == "o") {
-            string name; ss >> name;
+            std::string name; ss >> name;
             replace(name.begin(), name.end(), '_', ' ');
             if(name.find("ignore ") != 0) {
                 components.push_back(object_finder::Component());
@@ -117,13 +116,13 @@ int main() {
     sphere_draw(rb, rb.new_region(), Vector3d(1.5, 0, 2), .2);
     sphere_draw(rb, rb.new_region(), Vector3d(1.5, 0, 2), .3);
     
-    vector<int> dbg_image(width*height, 0);
+    std::vector<int> dbg_image(width*height, 0);
     rb.draw_debug_regions(dbg_image);
     
-    vector<ResultWithArea> results = rb.get_results();
+    std::vector<ResultWithArea> results = rb.get_results();
     
     BOOST_FOREACH(const Result &result, results) {
-        cout << "region area: " << result.count << endl;
+        std::cout << "region area: " << result.count << std::endl;
     }
     
     write(dbg_image, width, height, "out.pgm");

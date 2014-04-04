@@ -9,7 +9,6 @@
 #include "obj_finding.h"
 
 
-using namespace std;
 using namespace Eigen;
 using namespace sensor_msgs;
 
@@ -53,9 +52,9 @@ void draw(Component const & component, RenderBuffer &renderbuffer, int region, V
         renderbuffer.areas[region] += triangle_area(flat_vector(c0), flat_vector(c1), flat_vector(c2));
         
         // sort corners by y coordinate
-        if(c1[1] < c0[1]) swap(c1, c0);
-        if(c2[1] < c1[1]) swap(c2, c1);
-        if(c1[1] < c0[1]) swap(c1, c0);
+        if(c1[1] < c0[1]) std::swap(c1, c0);
+        if(c2[1] < c1[1]) std::swap(c2, c1);
+        if(c1[1] < c0[1]) std::swap(c1, c0);
         
         for(int i = 0; i < 2; i++) {
             // i == 0 means between c0->c2 and c0->c1 edges
@@ -71,13 +70,13 @@ void draw(Component const & component, RenderBuffer &renderbuffer, int region, V
             }
             
             // draw region between c0->c2 and ca->cb edges
-            for(int Y = max(0, (int)ceil(ca[1] - 0.5)); Y + 0.5 < cb[1] && Y < (int)renderbuffer.img->height; Y++) {
+            for(int Y = std::max(0, (int)ceil(ca[1] - 0.5)); Y + 0.5 < cb[1] && Y < (int)renderbuffer.img->height; Y++) {
                 double y = Y + 0.5;
                 double x1 = (y - c0[1])*(c2[0] - c0[0])/(c2[1] - c0[1]) + c0[0];
                 double x2 = (y - ca[1])*(cb[0] - ca[0])/(cb[1] - ca[1]) + ca[0];
-                if(x2 < x1) swap(x2, x1); // sort x's
-                int X1 = max(renderbuffer.img->left[Y], min(renderbuffer.img->right[Y]-1, (int)ceil(x1 - 0.5)));
-                int X2 = max(renderbuffer.img->left[Y], min(renderbuffer.img->right[Y]-1, (int)ceil(x2 - 0.5)));
+                if(x2 < x1) std::swap(x2, x1); // sort x's
+                int X1 = std::max(renderbuffer.img->left[Y], std::min(renderbuffer.img->right[Y]-1, (int)ceil(x1 - 0.5)));
+                int X2 = std::max(renderbuffer.img->left[Y], std::min(renderbuffer.img->right[Y]-1, (int)ceil(x2 - 0.5)));
                 
                 double z_0 = 0; // XXX
                 double z_slope = 0; // XXX

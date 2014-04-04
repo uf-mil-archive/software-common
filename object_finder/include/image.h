@@ -66,7 +66,7 @@ struct ResultWithArea : public Result {
 };
 
 struct TaggedImage {
-    int width, height;
+    unsigned int width, height;
     Eigen::ArrayXXd image[3];
     Eigen::Affine3d transform;
     Eigen::Affine3d transform_inverse;
@@ -169,6 +169,62 @@ struct TaggedImage {
         Eigen::Vector3d camera = transform_inverse * point;
         Eigen::Vector3d homo = proj * camera.homogeneous();
         return std::make_pair(homo.hnormalized(), camera.norm());
+    }
+    
+    inline TaggedImage decimateBy2() const {
+        TaggedImage res;
+        
+        res.width = width/2;
+        res.height = height/2;
+        for(int i = 0; i < 3; i++) {
+            res.image[i].resize(res.height, res.width);
+        }
+        res.transform = transform;
+        res.transform_inverse = transform_inverse;
+        res.proj = (Eigen::Matrix3d() <<
+            0.5, 0, -0.25,
+            0, 0.5, -0.25,
+            0, 0, 1.).finished() * proj;
+        res.left.resize(res.height);
+        res.right.resize(res.height);
+        res.sumimage.resize((res.width+1) * res.height);
+        res.sumimage2.resize((res.width+1) * res.height);
+        res.total_result = total_result;
+        
+        for(uint32_t row = 0; row < res.height; row++) {
+            Eigen::Vector3d row_cumulative_sum(0, 0, 0);
+            Eigen::Vector3d row2_cumulative_sum(0, 0, 0);
+            res.sumimage[(res.width+1) * row + 0] = row_cumulative_sum;
+            res.sumimage2[(res.width+1) * row + 0] = row2_cumulative_sum;
+            for(uint32_t col = 0; col < res.width; col++) {
+                Eigen::Vector3d color = 1/4.*(
+                    get_pixel(2*row+0, 2*col+0) +
+                    get_pixel(2*row+0, 2*col+1) +
+                    get_pixel(2*row+1, 2*col+0) +
+                    get_pixel(2*row+1, 2*col+1));
+                double sum = color[0] + color[1] + color[2];
+                if(sum == 0) {
+                    color = Eigen::Vector3d(1/3., 1/3., 1/3.);
+                } else {
+                    color /= sum;
+                }
+                
+                row_cumulative_sum += color;
+                res.sumimage[(res.width+1) * row + col+1] = row_cumulative_sum;
+                
+                row2_cumulative_sum += color.cwiseProduct(color);
+                res.sumimage2[(res.width+1) * row + col+1] = row2_cumulative_sum;
+                
+                for(int i = 0; i < 3; i++) {
+                    res.image[i](row, col) = color(i);
+                }
+            }
+            
+            res.left [row] = (std::max(left [2*row], left [2*row+1])+1)/2;
+            res.right[row] =  std::min(right[2*row], right[2*row+1])   /2;
+        }
+        
+        return res;
     }
 };
 
