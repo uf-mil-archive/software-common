@@ -95,13 +95,13 @@ T make_rgb(float r, float g, float b) {
 
 
 struct Particle {
-    TargetDesc const goal;
-    Vector3d const pos;
-    Quaterniond const q;
+    TargetDesc goal;
+    Vector3d pos;
+    Quaterniond q;
     
-    boost::optional<Vector3d> const last_color;
-    std::vector<double> const past_Ps; // most recent to least recent
-    double const past_Ps_sum;
+    boost::optional<Vector3d> last_color;
+    std::vector<double> past_Ps; // most recent to least recent
+    double past_Ps_sum;
     bool mature;
     
     Particle(TargetDesc const &goal,
@@ -255,37 +255,46 @@ struct Particle {
             std::sort(chosen_cumulative_corr.begin(), chosen_cumulative_corr.end(), std::greater<int>());
             
             double total_corr_so_far = 0;
+            boost::optional<Particle> maybe_best;
             for(int y = 0; y < img.image[0].rows() - subweight.rows() + 1; y++) {
               for(int x = 0; x < img.image[0].cols() - subweight.cols() + 1; x++) {
                 double corr = acc(y, x);
                 
-                if(!std::isfinite(corr)) continue;
-                
-                total_corr_so_far += corr;
-                
-                if(chosen_cumulative_corr.empty()) return;
-                if(total_corr_so_far <= chosen_cumulative_corr.back()) {
-                  continue;
-                } else {
-                  chosen_cumulative_corr.pop_back();
-                }
+                if(!std::isfinite(corr) || corr == 0) continue;
                 
                 int offset_y = y - min_y, offset_x = x - min_x;
                 
                 std::pair<Vector2d, double> old = img.get_point_pixel(pos);
                 Vector3d new_pos = img.get_pixel_point(old.first + Vector2d(offset_x, offset_y), old.second);
                 
-                if(hypot(offset_y, offset_x) < 10) {
-                  new_past_Ps[0] = corr;
-                  res->emplace_back(goal, new_pos, q, Vector3d(1, 2, 3), new_past_Ps);
-                } else {
-                  res->emplace_back(goal, new_pos, q, Vector3d(1, 2, 3), std::vector<double>{corr});
+                total_corr_so_far += corr;
+                
+                if(!chosen_cumulative_corr.empty() && total_corr_so_far > chosen_cumulative_corr.back()) {
+                  chosen_cumulative_corr.pop_back();
+                  
+                  if((new_pos - pos).norm() < 0.5) {
+                    new_past_Ps[0] = corr;
+                    res->emplace_back(goal, new_pos, q, Vector3d(1, 2, 3), new_past_Ps);
+                  } else {
+                    res->emplace_back(goal, new_pos, q, Vector3d(1, 2, 3), std::vector<double>{corr});
+                  }
+                  
+                  // XXX need to set last_color
+                  // XXX need to set score
+                  // XXX need to make sure particle isn't definitely eliminated next round ..
                 }
                 
-                // XXX need to set last_color
-                // XXX need to set score
-                // XXX need to make sure particle isn't definitely eliminated next round ..
+                if((new_pos - pos).norm() < 0.5) {
+                  if(!maybe_best || corr > maybe_best->past_Ps[0]) {
+                    new_past_Ps[0] = corr;
+                    maybe_best = Particle(goal, new_pos, q, Vector3d(1, 2, 3), new_past_Ps);
+                  }
+                }
               }
+            }
+            
+            if(maybe_best) {
+              res->push_back(*maybe_best);
             }
             
             return;
@@ -421,6 +430,7 @@ struct ParticleFilter {
               particle.accumulate_successors(new_particles, img, N/3., particles, original_total_mature_past_Ps_sum);
             }
           }
+          new_particles.push_back(get_best());
           
           // update particles
           std::vector<Particle> new_particles2;
@@ -649,7 +659,7 @@ struct GoalExecutor {
         
         ros::Time end_time = ros::Time::now();
         std::cout << "took " << (end_time - start_time).toSec()/1e-3 << " ms. N: " << N;
-        if(end_time - start_time > ros::Duration(0.5)) {
+        if(end_time - start_time > ros::Duration(0.25)) {
             N *= .9;
         } else {
             N /= .9;
