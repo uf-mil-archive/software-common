@@ -150,22 +150,36 @@ struct Particle {
             return realpredict(.06);
         }
     }
-    void P(const TaggedImage &img, RenderBuffer &rb, bool print_debug_info=false, std::vector<Particle> * res=NULL) const {
+    double P(const TaggedImage &img, RenderBuffer &rb, RenderBuffer const &orig_rb, bool print_debug_info=false, std::vector<Particle> * res=NULL) const {
         if(goal.type == TargetDesc::TYPE_SPHERE) {
             RenderBuffer::RegionType fg_region = rb.new_region();
             sphere_draw(rb, fg_region, pos, goal.sphere_radius);
             RenderBuffer::RegionType bg_region = rb.new_region();
             sphere_draw(rb, bg_region, pos, 2*goal.sphere_radius);
             
-            if(!res) return;
+            std::vector<int> dbg_image(img.width*img.height, 0);
+            std::vector<Result> results = rb.draw_debug_regions(dbg_image);
+            
+            double calculated_corr = 1;
+            for(int i = 0; i < 3; i++) {
+              double fg_color = Color_to_vec(goal.sphere_color)(i);
+              double bg_color = Color_to_vec(goal.sphere_background_color)(i);
+              double n = results[fg_region].count + results[bg_region].count;
+              double sum_x = results[fg_region].total_color(i) + results[bg_region].total_color(i);
+              double sum_x2 = results[fg_region].total_color2(i) + results[bg_region].total_color2(i);
+              double sum_y = results[fg_region].count*fg_color + results[bg_region].count*bg_color;
+              double sum_y2 = results[fg_region].count*fg_color*fg_color + results[bg_region].count*bg_color*bg_color;
+              double sum_xy = results[fg_region].total_color(i)*fg_color + results[bg_region].total_color(i)*bg_color;
+              double r = (n*sum_xy - sum_x*sum_y)/sqrt((n*sum_x2 - sum_x*sum_x)*(n*sum_y2 - sum_y*sum_y));
+              double r2 = std::max(r, 0.);
+              calculated_corr *= r2;
+            }
+            if(!res) return calculated_corr;
             
             std::vector<Vector4d> colors(10 + std::max(fg_region, bg_region) + 1);
             colors[0] << 0, 0, 0, 0;
             colors[10 + fg_region] << Color_to_vec(goal.sphere_color), 1;
             colors[10 + bg_region] << Color_to_vec(goal.sphere_background_color), 1;
-            
-            std::vector<int> dbg_image(img.width*img.height, 0);
-            std::vector<Result> x = rb.draw_debug_regions(dbg_image);
             
             ArrayXXd planes[3];
             for(int i = 0; i < 3; i++) {
@@ -198,7 +212,7 @@ struct Particle {
                 std::cout << "NOT VISIBLE" << std::endl;
               }
               // XXX maybe don't forget about it completely?
-              return;
+              return calculated_corr;
             }
             
             ArrayXXd subweight = weight.block(min_y, min_x, max_y-min_y, max_x-min_x);
@@ -228,7 +242,21 @@ struct Particle {
               for(int x = 0; x < img.image[0].cols() - subweight.cols() + 1; x++) {
                 double corr = acc(y, x);
                 
-                if(!std::isfinite(corr)) continue;
+                if(!std::isfinite(corr)) {
+                  //std::cout << "invalid corr: " << corr << std::endl;
+                  continue;
+                }
+                
+                {
+                  int offset_y = y - min_y, offset_x = x - min_x;
+                  if(offset_y == 0 && offset_x == 0) {
+                    std::cout << std::endl;
+                    std::cout << "fft corr: " << corr << std::endl;
+                    std::cout << "real corr: " << calculated_corr << std::endl;
+                    std::cout << std::endl;
+                  }
+                }
+                
                 
                 if(!maybe_best || corr > maybe_best->last_corr) {
                   int offset_y = y - min_y, offset_x = x - min_x;
@@ -237,7 +265,10 @@ struct Particle {
                   Vector3d new_pos = img.get_pixel_point(old.first + Vector2d(offset_x, offset_y), old.second);
                   
                   if(new_pos(2) < 0) { // XXX make configurable
-                    maybe_best = Particle(goal, new_pos, q, Vector3d(1, 2, 3), corr);
+                    rb.reset(img, orig_rb);
+                    
+                    maybe_best = Particle(goal, new_pos, q, Vector3d(1, 2, 3), -1);
+                    maybe_best->last_corr = maybe_best->P(img, rb, rb);
                   }
                 }
               }
@@ -247,7 +278,15 @@ struct Particle {
               res->push_back(*maybe_best);
             }
             
-            return;
+            {
+              rb.reset(img, orig_rb);
+              RenderBuffer::RegionType fg_region = rb.new_region();
+              sphere_draw(rb, fg_region, pos, goal.sphere_radius);
+              RenderBuffer::RegionType bg_region = rb.new_region();
+              sphere_draw(rb, bg_region, pos, 2*goal.sphere_radius);
+            }
+            
+            return calculated_corr;
         }
         
         assert(false);
@@ -324,8 +363,8 @@ struct Particle {
         return P;
         */
     }
-    void update(std::vector<Particle> &res, const TaggedImage &img, RenderBuffer &rb, bool print_debug_info=false) const {
-        this->P(img, rb, print_debug_info, &res);
+    void update(std::vector<Particle> &res, const TaggedImage &img, RenderBuffer &rb, RenderBuffer const &orig_rb, bool print_debug_info=false) const {
+        this->P(img, rb, orig_rb, print_debug_info, &res);
     }
     void accumulate_successors(std::vector<Particle> &res, const TaggedImage &img, double N, const std::vector<Particle> &particles, double total_last_corr) const {
         int count = N * last_corr/total_last_corr + uniform();
@@ -376,7 +415,7 @@ struct ParticleFilter {
           std::vector<Particle> new_particles2;
           BOOST_FOREACH(Particle &particle, new_particles) {
               myrb.reset(img, rb);
-              particle.update(new_particles2, img, myrb);
+              particle.update(new_particles2, img, myrb, rb);
           }
           
           if(new_particles2.empty()) {
@@ -524,7 +563,7 @@ struct GoalExecutor {
                 RenderBuffer rb(small_img);
                 BOOST_FOREACH(const Particle &p, prev_max_ps) {
                     if(p.last_corr > particle_filter.get_best().last_corr) {
-                        p.P(small_img, rb);
+                        p.P(small_img, rb, rb);
                     }
                 }
                 particle_filter.update(small_img, rb, N);
@@ -603,7 +642,7 @@ struct GoalExecutor {
         if(image_pub.getNumSubscribers()) { // send debug image
             RenderBuffer rb(img);
             BOOST_FOREACH(const Particle &max_p, max_ps) {
-                max_p.P(img, rb, true);
+                max_p.P(img, rb, RenderBuffer(img), true);
             }
             
             std::vector<int> dbg_image(image->width*image->height, 0);
