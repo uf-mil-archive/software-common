@@ -100,19 +100,15 @@ struct Particle {
     Quaterniond q;
     
     boost::optional<Vector3d> last_color;
-    std::vector<double> past_Ps; // most recent to least recent
-    double past_Ps_sum;
-    bool mature;
+    double last_corr;
     
     Particle(TargetDesc const &goal,
              Vector3d pos,
              Quaterniond q,
              boost::optional<Vector3d> last_color=boost::none,
-             std::vector<double> past_Ps=std::vector<double>()) :
-      goal(goal), pos(pos), q(q), last_color(last_color), past_Ps(past_Ps),
-      past_Ps_sum(std::accumulate(past_Ps.begin(), past_Ps.end(), 0.)),
-      mature(past_Ps.size() == 10) {
-      assert(past_Ps.size() <= 10);
+             double last_corr=nan("")) :
+      goal(goal), pos(pos), q(q),
+      last_color(last_color), last_corr(last_corr) {
     }
     static Particle random(TargetDesc const &goal,
                            TaggedImage const &image) {
@@ -227,67 +223,21 @@ struct Particle {
               }
             }
             
-            std::vector<double> new_past_Ps;
-            new_past_Ps.push_back(0); // filled in later
-            new_past_Ps.insert(new_past_Ps.end(), past_Ps.begin(), past_Ps.end());
-            while(new_past_Ps.size() > 10) {
-              new_past_Ps.pop_back();
-            }
-            
-            double total_corr = 0;
+            boost::optional<Particle> maybe_best;
             for(int y = 0; y < img.image[0].rows() - subweight.rows() + 1; y++) {
               for(int x = 0; x < img.image[0].cols() - subweight.cols() + 1; x++) {
                 double corr = acc(y, x);
                 
                 if(!std::isfinite(corr)) continue;
                 
-                total_corr += corr;
-              }
-            }
-            
-            assert(std::isfinite(total_corr));
-            if(total_corr == 0) return;
-            
-            std::vector<double> chosen_cumulative_corr;
-            for(int i = 0; i < 1000; i++) {
-              chosen_cumulative_corr.push_back(uniform() * total_corr);
-            }
-            std::sort(chosen_cumulative_corr.begin(), chosen_cumulative_corr.end(), std::greater<int>());
-            
-            double total_corr_so_far = 0;
-            boost::optional<Particle> maybe_best;
-            for(int y = 0; y < img.image[0].rows() - subweight.rows() + 1; y++) {
-              for(int x = 0; x < img.image[0].cols() - subweight.cols() + 1; x++) {
-                double corr = acc(y, x);
-                
-                if(!std::isfinite(corr) || corr == 0) continue;
-                
-                int offset_y = y - min_y, offset_x = x - min_x;
-                
-                std::pair<Vector2d, double> old = img.get_point_pixel(pos);
-                Vector3d new_pos = img.get_pixel_point(old.first + Vector2d(offset_x, offset_y), old.second);
-                
-                total_corr_so_far += corr;
-                
-                if(!chosen_cumulative_corr.empty() && total_corr_so_far > chosen_cumulative_corr.back()) {
-                  chosen_cumulative_corr.pop_back();
+                if(!maybe_best || corr > maybe_best->last_corr) {
+                  int offset_y = y - min_y, offset_x = x - min_x;
                   
-                  if((new_pos - pos).norm() < 0.5) {
-                    new_past_Ps[0] = corr;
-                    res->emplace_back(goal, new_pos, q, Vector3d(1, 2, 3), new_past_Ps);
-                  } else {
-                    res->emplace_back(goal, new_pos, q, Vector3d(1, 2, 3), std::vector<double>{corr});
-                  }
+                  std::pair<Vector2d, double> old = img.get_point_pixel(pos);
+                  Vector3d new_pos = img.get_pixel_point(old.first + Vector2d(offset_x, offset_y), old.second);
                   
-                  // XXX need to set last_color
-                  // XXX need to set score
-                  // XXX need to make sure particle isn't definitely eliminated next round ..
-                }
-                
-                if((new_pos - pos).norm() < 0.5) {
-                  if(!maybe_best || corr > maybe_best->past_Ps[0]) {
-                    new_past_Ps[0] = corr;
-                    maybe_best = Particle(goal, new_pos, q, Vector3d(1, 2, 3), new_past_Ps);
+                  if(new_pos(2) < 0) { // XXX make configurable
+                    maybe_best = Particle(goal, new_pos, q, Vector3d(1, 2, 3), corr);
                   }
                 }
               }
@@ -377,8 +327,8 @@ struct Particle {
     void update(std::vector<Particle> &res, const TaggedImage &img, RenderBuffer &rb, bool print_debug_info=false) const {
         this->P(img, rb, print_debug_info, &res);
     }
-    void accumulate_successors(std::vector<Particle> &res, const TaggedImage &img, double N, const std::vector<Particle> &particles, double total_past_Ps_sum) const {
-        int count = N * past_Ps_sum/total_past_Ps_sum + uniform();
+    void accumulate_successors(std::vector<Particle> &res, const TaggedImage &img, double N, const std::vector<Particle> &particles, double total_last_corr) const {
+        int count = N * last_corr/total_last_corr + uniform();
         for(int i = 0; i < count; i++) {
             res.push_back(i==0 ?
                 *this :
@@ -393,7 +343,8 @@ struct Particle {
 struct ParticleFilter {
     TargetDesc targetdesc;
     std::vector<Particle> particles;
-    double total_past_Ps_sum;
+    boost::optional<Particle> previous_best;
+    double total_last_corr;
     RenderBuffer myrb;
     
     ParticleFilter(const TargetDesc &targetdesc, const TaggedImage &img, double N) :
@@ -403,34 +354,23 @@ struct ParticleFilter {
     }
     
     void update(const TaggedImage &img, const RenderBuffer &rb, double N) {
-        double original_total_immature_past_Ps_sum = 0;
-        BOOST_FOREACH(const Particle &particle, particles)
-          if(!particle.mature)
-            original_total_immature_past_Ps_sum += particle.past_Ps_sum;
-        
-        double original_total_mature_past_Ps_sum = 0;
-        BOOST_FOREACH(const Particle &particle, particles)
-          if(particle.mature)
-            original_total_mature_past_Ps_sum += particle.past_Ps_sum;
-        
         {
           // residual resampling
           std::vector<Particle> new_particles;
-          // add new immature
-          for(unsigned int i = 0; i < N/3.; i++) {
-              new_particles.push_back(Particle::random(targetdesc, img));
+          if(previous_best) {
+            new_particles.push_back(*previous_best);
           }
-          BOOST_FOREACH(const Particle &particle, particles) {
-            if(!particle.mature) {
-              particle.accumulate_successors(new_particles, img, N/3., particles, original_total_immature_past_Ps_sum); // XXX use mean instead of total for immature
+          if(!particles.empty()) {
+            Particle best = get_best();
+            new_particles.push_back(best);
+            for(unsigned int i = 0; i < (N-new_particles.size())/2; i++) {
+              new_particles.push_back(best.predict());
             }
+            previous_best = best;
           }
-          BOOST_FOREACH(const Particle &particle, particles) {
-            if(particle.mature) {
-              particle.accumulate_successors(new_particles, img, N/3., particles, original_total_mature_past_Ps_sum);
-            }
+          while(new_particles.size() < N) {
+            new_particles.push_back(Particle::random(targetdesc, img));
           }
-          new_particles.push_back(get_best());
           
           // update particles
           std::vector<Particle> new_particles2;
@@ -446,23 +386,14 @@ struct ParticleFilter {
           particles.swap(new_particles2);
         }
         
-        total_past_Ps_sum = 0;
-        BOOST_FOREACH(Particle &particle, particles) total_past_Ps_sum += particle.past_Ps_sum;
+        total_last_corr = 0;
+        BOOST_FOREACH(Particle &particle, particles) total_last_corr += particle.last_corr;
     }
     
     Particle get_best() const {
       Particle const * res = NULL;
       BOOST_FOREACH(const Particle &particle, particles) {
-        if(!particle.mature) continue;
-        if(!res || particle.past_Ps_sum > res->past_Ps_sum) {
-          res = &particle;
-        }
-      }
-      if(res) {
-        return *res;
-      }
-      BOOST_FOREACH(const Particle &particle, particles) {
-        if(!res || particle.past_Ps_sum > res->past_Ps_sum) {
+        if(!res || particle.last_corr > res->last_corr) {
           res = &particle;
         }
       }
@@ -472,6 +403,8 @@ struct ParticleFilter {
 };
 
 struct GoalExecutor {
+    static constexpr double min_N = 6;
+    
     ros::NodeHandle nh;
     ros::NodeHandle camera_nh;
     ros::NodeHandle private_nh;
@@ -523,7 +456,7 @@ struct GoalExecutor {
     }
     
     void init(ros::Time t, const TaggedImage &img) {
-        N = 5;
+        N = min_N;
         
         particle_filters.clear();
         BOOST_FOREACH(const TargetDesc &targetdesc, goal.targetdescs) {
@@ -590,7 +523,7 @@ struct GoalExecutor {
             BOOST_FOREACH(ParticleFilter &particle_filter, particle_filters) {
                 RenderBuffer rb(small_img);
                 BOOST_FOREACH(const Particle &p, prev_max_ps) {
-                    if(p.past_Ps_sum > particle_filter.get_best().past_Ps_sum) {
+                    if(p.last_corr > particle_filter.get_best().last_corr) {
                         p.P(small_img, rb);
                     }
                 }
@@ -614,7 +547,7 @@ struct GoalExecutor {
                 BOOST_FOREACH(const Particle &particle, particle_filter.particles) {
                     msg.points.push_back(vec2xyz<Point>(particle.pos));
                     msg.colors.push_back(make_rgba<std_msgs::ColorRGBA>(
-                        particle.past_Ps_sum/max_ps[i].past_Ps_sum, 0, 1-particle.past_Ps_sum/max_ps[i].past_Ps_sum, 1));
+                        particle.last_corr/max_ps[i].last_corr, 0, 1-particle.last_corr/max_ps[i].last_corr, 1));
                 }
              i++; }
             particles_pub.publish(msg);
@@ -639,18 +572,18 @@ struct GoalExecutor {
                      quat2xyzw<geometry_msgs::Quaternion>(particle.q);
                 targetres.color = make_rgb<Color>((*particle.last_color)[0],
                     (*particle.last_color)[1], (*particle.last_color)[2]);
-                targetres.P = particle.past_Ps.size() ? particle.past_Ps[0] : -1.;
-                targetres.smoothed_last_P = particle.past_Ps_sum;
+                targetres.P = particle.last_corr;
+                targetres.smoothed_last_P = particle.last_corr;
                 targetres.P_within_10cm = 0;
                 targetres.P_within_10cm_xy = 0;
                 ParticleFilter &particle_filter = particle_filters[&particle-max_ps.data()];
                 Vector3d c = img.transform * Vector3d::Zero();
                 BOOST_FOREACH(Particle &particle2, particle_filter.particles) {
                     if(particle2.dist(particle) <= .2)
-                        targetres.P_within_10cm += particle2.past_Ps_sum/particle_filter.total_past_Ps_sum;
+                        targetres.P_within_10cm += particle2.last_corr/particle_filter.total_last_corr;
                     double dist = sqrt((particle.pos-c).norm() * (particle2.pos-c).norm());
                     if(((particle2.pos-c).normalized() - (particle.pos-c).normalized()).norm()*dist <= .2)
-                        targetres.P_within_10cm_xy += particle2.past_Ps_sum/particle_filter.total_past_Ps_sum;
+                        targetres.P_within_10cm_xy += particle2.last_corr/particle_filter.total_last_corr;
                 }
                 feedback.targetreses.push_back(targetres);
             }
@@ -664,7 +597,7 @@ struct GoalExecutor {
         } else {
             N /= .9;
         }
-        if(N < 5) N = 5;
+        if(N < min_N) N = min_N;
         std::cout << " -> " << N << std::endl;
         
         if(image_pub.getNumSubscribers()) { // send debug image
