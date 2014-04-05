@@ -518,7 +518,7 @@ struct GoalExecutor {
         }
         
         {
-            TaggedImage small_img = img.decimateBy2();
+            TaggedImage small_img = img.decimateBy2().decimateBy2();
             
             BOOST_FOREACH(ParticleFilter &particle_filter, particle_filters) {
                 RenderBuffer rb(small_img);
