@@ -128,8 +128,8 @@ class Mesh(object):
                 for vert_index, tex_index, normal_index in triangle:
                     vecs.append([
                         self.vertices[vert_index],
-                        self.texcoords[tex_index] if tex_index is not None else (0, 0, 0),
                         self.normals[normal_index] if normal_index is not None else (0, 0, 0),
+                        self.texcoords[tex_index] if tex_index is not None else (0, 0, 0),
                     ])
             _vbo = vbo.VBO(numpy.array(vecs, 'f'))
             vbo_count = len(vecs)
