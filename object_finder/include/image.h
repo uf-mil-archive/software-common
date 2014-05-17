@@ -115,6 +115,11 @@ struct TaggedImage {
                 const uint8_t *pixel = image.data.data() + image.step * row + step * col;
                 Eigen::Vector3d color = Eigen::Vector3d(pixel[0] / 255., pixel[1] / 255., pixel[2] / 255.);
                 if(reversed) std::swap(color[0], color[2]);
+                
+                for(int i = 0; i < 3; i++) {
+                    color[i] += 0.01 * (static_cast<double>(rand())/RAND_MAX);
+                }
+                
                 double sum = color[0] + color[1] + color[2];
                 if(sum == 0) {
                     color = Eigen::Vector3d(1/3., 1/3., 1/3.);
