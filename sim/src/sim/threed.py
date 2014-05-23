@@ -53,7 +53,18 @@ def rotate_vec(vec, m):
 class Material(object):
     pass # no defaults
     def apply(self):
-        glColor3f(*self.Kd)
+        assert self.illum == [2]
+        
+        assert len(self.Ns) == 1
+        glMaterialfv(GL_FRONT_AND_BACK, GL_SPECULAR, self.Ks + [1])
+        glMaterialfv(GL_FRONT_AND_BACK, GL_SHININESS, self.Ns*3 + [1])
+        
+        assert len(self.Kd) == 3
+        assert len(self.d) == 1
+        glColor4f(*self.Kd + self.d)
+        
+        # ignoring Ka because of blender weirdness
+        # ignoring Ni (index of refraction)
 def parse_mtl(filename):
     current_mtl = None
     res = {}
@@ -152,6 +163,7 @@ class Mesh(object):
                 glDisableClientState(GL_TEXTURE_COORD_ARRAY)
                 vbo.unbind()
             glEnable(GL_CULL_FACE)
+            glMaterialfv(GL_FRONT_AND_BACK, GL_SPECULAR, [0, 0, 0, 1])
         return draw
     
     def draw(self):
@@ -237,6 +249,7 @@ class World(object):
         glLightfv(GL_LIGHT0, GL_POSITION, [math.sin(t/5)*100, math.cos(t/5)*100, 100, 1])
         glLightfv(GL_LIGHT0, GL_AMBIENT, [0, 0, 0, 1])
         glLightfv(GL_LIGHT0, GL_DIFFUSE, [.5, .5, .5, 1])
+        glLightfv(GL_LIGHT0, GL_SPECULAR, [.5, .5, .5, 1])
         glLightModelfv(GL_LIGHT_MODEL_AMBIENT, [.5, .5, .5])
         
         glEnable(GL_DEPTH_TEST)
