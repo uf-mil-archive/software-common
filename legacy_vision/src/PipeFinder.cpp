@@ -17,9 +17,9 @@ IFinder::FinderResult PipeFinder::find(const subjugator::ImageSource::Image &img
 
 	// call to thresholder here
 	Mat orange = Thresholder(normalized).orange();
-	erode(orange, orange, cv::Mat::ones(13,13,CV_8UC1)); // -2
-	dilate(orange, orange, cv::Mat::ones(7,7,CV_8UC1)); // +3
-	//erode(orange, orange, cv::Mat::ones(7,7,CV_8UC1)); // -1
+	erode(orange, orange, cv::Mat::ones(13,13,CV_8UC1)); // -6
+	dilate(orange, orange, cv::Mat::ones(15,15,CV_8UC1)); // +7
+	erode(orange, orange, cv::Mat::ones(3,3,CV_8UC1)); // -1
 
         Blob blob(orange, 1000, 1e10, 1e10);
 
