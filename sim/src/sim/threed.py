@@ -78,6 +78,7 @@ def parse_mtl(filename):
         if line[0] == "newmtl":
             current_mtl = line[1]
             res[current_mtl] = Material()
+            res[current_mtl].name = current_mtl
         else:
             setattr(res[current_mtl], line[0], map(float, line[1:]))
     return res

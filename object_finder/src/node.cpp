@@ -287,81 +287,156 @@ struct Particle {
             }
             
             return calculated_corr;
-        }
-        
-        assert(false);
-        
-        /*
-        typedef std::pair<const Component *, RenderBuffer::RegionType> Pair;
-        static std::vector<Pair> regions; regions.clear();
-        BOOST_FOREACH(const Component &component, goal.mesh.components) {
-            if(component.name.find("marker ") == 0 || component.name.find("ignore ") == 0) continue;
+        } else if (goal.type == TargetDesc::TYPE_MESH) {
+          const Mesh & mesh = goal.mesh;
+          
+          std::vector<RenderBuffer::RegionType> regions;
+          BOOST_FOREACH(const Component & component, mesh.components) {
             RenderBuffer::RegionType region = rb.new_region();
             obj_finding::draw(component, rb, region, pos, q);
-            regions.push_back(make_pair(&component, region));
-        }
-        
-        
-        std::vector<ResultWithArea> results = rb.get_results();
-        
-        double P = 1;
-        BOOST_FOREACH(const Pair &p1, regions) {
-            const ResultWithArea &p1_result = results[p1.second];
-            BOOST_FOREACH(const Pair &p2, regions) {
-                if(&p2 >= &p1) continue;
-                const ResultWithArea &p2_result = results[p2.second];
-                
-                istringstream p1_ss(p1.first->name);
-                string p1_prefix; p1_ss >> p1_prefix;
-                string p1_op; p1_ss >> p1_op;
-                Vector3d p1_dcolor; p1_ss >> p1_dcolor[0] >> p1_dcolor[1] >> p1_dcolor[2];
-                
-                istringstream p2_ss(p2.first->name);
-                string p2_prefix; p2_ss >> p2_prefix;
-                string p2_op; p2_ss >> p2_op;
-                Vector3d p2_dcolor; p2_ss >> p2_dcolor[0] >> p2_dcolor[1] >> p2_dcolor[2];
-                
-                if(p2_dcolor == p1_dcolor) continue;
-                Vector3d dir = (p2_dcolor - p1_dcolor).normalized();
-                
-                if(p1_result.count < 10 || p2_result.count < 10) {
-                    P *= 0;
-                    continue;
-                }
-                
-                P *= exp(30*(p2_result.avg_color_assuming_unseen_is(p1_result.avg_color()) - p1_result.avg_color_assuming_unseen_is(p2_result.avg_color())).dot(dir));
+            regions.push_back(region);
+          }
+          
+          std::vector<int> dbg_image(img.width*img.height, 0);
+          std::vector<Result> results = rb.draw_debug_regions(dbg_image);
+          
+          double calculated_corr = 1;
+          for(int i = 0; i < 3; i++) {
+            double n = 0, sum_x = 0, sum_x2 = 0, sum_y = 0, sum_y2 = 0, sum_xy = 0;
+            for(unsigned int c = 0; c < mesh.components.size(); c++) {
+              RenderBuffer::RegionType region = regions[c];
+              
+              double color = Color_to_vec(mesh.components[c].color)(i);
+              n      += results[region].count;
+              sum_x  += results[region].total_color(i);
+              sum_x2 += results[region].total_color2(i);
+              sum_y  += results[region].count*color;
+              sum_y2 += results[region].count*color*color;
+              sum_xy += results[region].total_color(i)*color;
             }
-        }
-        BOOST_FOREACH(const Pair &p1, regions) {
-            const ResultWithArea &p1_result = results[p1.second];
-            istringstream p1_ss(p1.first->name);
-            string p1_prefix; p1_ss >> p1_prefix;
-            string p1_op; p1_ss >> p1_op;
-            if(p1_op == "colornovar") {
-                if(p1_result.count == 0) {
-                    P *= 1e-3;
-                    continue;
-                }
-                double var = 0;
-                for(int i = 0; i < 3; i++) {
-                    var += p1_result.total_color2[i]/p1_result.count - pow(p1_result.total_color[i]/p1_result.count, 2);
-                }
-                P *= exp(-1e3*var);
-                if(print_debug_info) {
-                    std::cout << "var " << var << " " << p1_result.total_color2.transpose() << " / " << p1_result.total_color.transpose() << " count " << p1_result.count << std::endl;
-                }
+            double r = (n*sum_xy - sum_x*sum_y)/sqrt((n*sum_x2 - sum_x*sum_x)*(n*sum_y2 - sum_y*sum_y));
+            double r2 = std::max(r, 0.);
+            calculated_corr *= r2;
+          }
+          if(!res) return calculated_corr;
+          
+          std::vector<Vector4d> colors(10 + *std::max_element(regions.begin(), regions.end()) + 1);
+          colors[0] << 0, 0, 0, 0;
+          for(unsigned int c = 0; c < mesh.components.size(); c++) {
+            RenderBuffer::RegionType region = regions[c];
+            
+            colors[10 + region] << Color_to_vec(mesh.components[c].color), 1;
+          }
+          
+          ArrayXXd planes[3];
+          for(int i = 0; i < 3; i++) {
+            planes[i] = ArrayXXd::Zero(img.height, img.width);
+          }
+          ArrayXXd weight = ArrayXXd::Zero(img.height, img.width);
+          
+          unsigned int min_y = img.height, max_y = 0;
+          unsigned int min_x = img.height, max_x = 0;
+          for(unsigned int y = 0; y < img.height; y++) {
+            for(unsigned int x = 0; x < img.width; x++) {
+              Vector4d color = colors[dbg_image[y * img.width + x]];
+              if(!color(3)) continue;
+              min_y = std::min(min_y, y);
+              max_y = std::max(max_y, y);
+              min_x = std::min(min_x, x);
+              max_x = std::max(max_x, x);
+              for(int i = 0; i < 3; i++) {
+                planes[i](y, x) = color(i);
+              }
+              weight(y, x) = color(3);
             }
+          }
+          
+          if(min_y >= max_y || min_x >= max_x) {
+            // not visible
+            if(print_debug_info) {
+              std::cout << std::endl;
+              std::cout << std::endl;
+              std::cout << "NOT VISIBLE" << std::endl;
+            }
+            // XXX maybe don't forget about it completely?
+            return calculated_corr;
+          }
+          
+          ArrayXXd subweight = weight.block(min_y, min_x, max_y-min_y, max_x-min_x);
+          //std::cout << subweight << std::endl << std::endl;
+          
+          ArrayXXd acc;
+          for(int i = 0; i < 3; i++) {
+            ArrayXXd res;
+            fft::calc_pcc(img.image[i],
+                          planes[i].block(min_y, min_x, max_y-min_y, max_x-min_x),
+                          subweight,
+                          0,
+                          0,
+                          img.image[0].rows() - subweight.rows() + 1,
+                          img.image[0].cols() - subweight.cols() + 1,
+                          &res);
+            res = res.max(0);
+            if(i == 0) {
+              acc = res;
+            } else {
+              acc *= res;
+            }
+          }
+          
+          boost::optional<Particle> maybe_best;
+          for(int y = 0; y < img.image[0].rows() - subweight.rows() + 1; y++) {
+            for(int x = 0; x < img.image[0].cols() - subweight.cols() + 1; x++) {
+              double corr = acc(y, x);
+              
+              if(!std::isfinite(corr)) {
+                //std::cout << "invalid corr: " << corr << std::endl;
+                continue;
+              }
+              
+              {
+                int offset_y = y - min_y, offset_x = x - min_x;
+                if(offset_y == 0 && offset_x == 0) {
+                  std::cout << std::endl;
+                  std::cout << "fft corr: " << corr << std::endl;
+                  std::cout << "real corr: " << calculated_corr << std::endl;
+                  std::cout << std::endl;
+                }
+              }
+              
+              
+              if(!maybe_best || corr > maybe_best->last_corr) {
+                int offset_y = y - min_y, offset_x = x - min_x;
+                
+                std::pair<Vector2d, double> old = img.get_point_pixel(pos);
+                Vector3d new_pos = img.get_pixel_point(old.first + Vector2d(offset_x, offset_y), old.second);
+                
+                if(new_pos(2) < 0) { // XXX make configurable
+                  rb.reset(img, orig_rb);
+                  
+                  maybe_best = Particle(goal, new_pos, q, Vector3d(1, 2, 3), -1);
+                  maybe_best->last_corr = maybe_best->P(img, rb, rb);
+                }
+              }
+            }
+          }
+          
+          if(maybe_best) {
+            res->push_back(*maybe_best);
+          }
+          
+          {
+            rb.reset(img, orig_rb);
+            BOOST_FOREACH(const Component & component, mesh.components) {
+              RenderBuffer::RegionType region = rb.new_region();
+              obj_finding::draw(component, rb, region, pos, q);
+            }
+          }
+          
+          return calculated_corr;
+        } else {
+          assert(false);
         }
-        if(print_debug_info) {
-            std::cout << "P " << P << std::endl;
-        }
-        
-        if(!(isfinite(P) && P >= 0)) {
-            std::cout << "bad P: " << P << std::endl;
-            throw std::runtime_error("bad P");
-        }
-        return P;
-        */
     }
     void update(std::vector<Particle> &res, const TaggedImage &img, RenderBuffer &rb, RenderBuffer const &orig_rb, bool print_debug_info=false) const {
         this->P(img, rb, orig_rb, print_debug_info, &res);
