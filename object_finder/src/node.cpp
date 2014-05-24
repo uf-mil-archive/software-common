@@ -300,8 +300,22 @@ struct Particle {
           std::vector<int> dbg_image(img.width*img.height, 0);
           std::vector<Result> results = rb.draw_debug_regions(dbg_image);
           
+          bool skip_channels[3] = {false, false, false};
+          for(int i = 0; i < 3; i++) {
+            std::vector<double> colors;
+            for(unsigned int c = 0; c < mesh.components.size(); c++) {
+              double color = Color_to_vec(mesh.components[c].color)(i);
+              colors.push_back(color);
+            }
+            if(*std::min_element(colors.begin(), colors.end()) ==
+               *std::max_element(colors.begin(), colors.end())) {
+              skip_channels[i] = true;
+            }
+          }
+          
           double calculated_corr = 1;
           for(int i = 0; i < 3; i++) {
+            if(skip_channels[i]) continue;
             double n = 0, sum_x = 0, sum_x2 = 0, sum_y = 0, sum_y2 = 0, sum_xy = 0;
             for(unsigned int c = 0; c < mesh.components.size(); c++) {
               RenderBuffer::RegionType region = regions[c];
@@ -367,6 +381,7 @@ struct Particle {
           
           ArrayXXd acc;
           for(int i = 0; i < 3; i++) {
+            if(skip_channels[i]) continue;
             ArrayXXd res;
             fft::calc_pcc(img.image[i],
                           planes[i].block(min_y, min_x, max_y-min_y, max_x-min_x),
