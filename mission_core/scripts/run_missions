@@ -13,12 +13,18 @@ def main():
     
     missions = [(arg, __import__(arg, fromlist=['main']).main) for arg in sys.argv[1:]]
     
-    for name, func in missions:
-        print
-        print 'Starting', name
-        yield func(nh)
-        print 'Finished', name
-        print
+    try:
+        for name, func in missions:
+            print
+            print 'Starting', name
+            yield func(nh)
+            print 'Finished', name
+            print
+    finally:
+        import sub_scripting
+        sub = yield sub_scripting.get_sub(nh)
+        yield sub.move.go()
+
 
 def run():
     def stopper(result):
