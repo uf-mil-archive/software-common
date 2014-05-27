@@ -32,7 +32,7 @@ class Node(object):
         self.setup_markers()
 
     def setup_markers(self):
-        while True:
+        while not rospy.is_shutdown():
             try:
                 self._tf_listener.waitForTransform('map', 'base_link',
                                                    rospy.Time(0), rospy.Duration(1))
