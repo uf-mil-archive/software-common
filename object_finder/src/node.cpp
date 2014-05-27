@@ -23,6 +23,7 @@
 #include <uf_common/msg_helpers.h>
 
 #include "object_finder/FindAction.h"
+#include "object_finder/TestPose.h"
 #include "sphere_finding.h"
 #include "obj_finding.h"
 #include "image.h"
@@ -71,6 +72,9 @@ Quaterniond quat_from_rotvec(Vector3d r) {
 
 Vector3d Color_to_vec(Color c) {
     return Vector3d(c.r, c.g, c.b);
+}
+Vector3d normalize_color(Vector3d color) {
+  return color/color.sum();
 }
 
 template<int N>
@@ -134,21 +138,15 @@ struct Particle {
         
         return Particle(goal, pos, q);
     }
-    Particle realpredict(double amount) const {
-        return Particle(
-          goal,
-          pos + amount * gaussvec(),
-          (!goal.disallow_yawing ? quat_from_rotvec(Vector3d(0, 0, amount * gauss())) : Quaterniond::Identity()) *
-          q *
-          (goal.allow_pitching ? quat_from_rotvec(Vector3d(0, amount * gauss(), 0)) : Quaterniond::Identity()) *
-          (goal.allow_rolling ? quat_from_rotvec(Vector3d(amount * gauss(), 0, 0)) : Quaterniond::Identity()));
-    }
     Particle predict() const {
-        if(uniform() < .5) {
-            return realpredict(.02);
-        } else {
-            return realpredict(.06);
-        }
+      double amount = 1; //uniform() < .5 ? 1 : 0.2;
+      return Particle(
+        goal,
+        pos + amount * gaussvec(),
+        (!goal.disallow_yawing ? quat_from_rotvec(Vector3d(0, 0, amount * gauss())) : Quaterniond::Identity()) *
+        q *
+        (goal.allow_pitching ? quat_from_rotvec(Vector3d(0, amount * gauss(), 0)) : Quaterniond::Identity()) *
+        (goal.allow_rolling ? quat_from_rotvec(Vector3d(amount * gauss(), 0, 0)) : Quaterniond::Identity()));
     }
     double P(const TaggedImage &img, RenderBuffer &rb, RenderBuffer const &orig_rb, bool print_debug_info=false, std::vector<Particle> * res=NULL) const {
         if(goal.type == TargetDesc::TYPE_SPHERE) {
@@ -304,7 +302,7 @@ struct Particle {
           for(int i = 0; i < 3; i++) {
             std::vector<double> colors;
             for(unsigned int c = 0; c < mesh.components.size(); c++) {
-              double color = Color_to_vec(mesh.components[c].color)(i);
+              double color = normalize_color(Color_to_vec(mesh.components[c].color))(i);
               colors.push_back(color);
             }
             if(*std::min_element(colors.begin(), colors.end()) ==
@@ -318,15 +316,15 @@ struct Particle {
             if(skip_channels[i]) continue;
             double n = 0, sum_x = 0, sum_x2 = 0, sum_y = 0, sum_y2 = 0, sum_xy = 0;
             for(unsigned int c = 0; c < mesh.components.size(); c++) {
-              RenderBuffer::RegionType region = regions[c];
+              Result const & result = results[regions[c]];
               
-              double color = Color_to_vec(mesh.components[c].color)(i);
-              n      += results[region].count;
-              sum_x  += results[region].total_color(i);
-              sum_x2 += results[region].total_color2(i);
-              sum_y  += results[region].count*color;
-              sum_y2 += results[region].count*color*color;
-              sum_xy += results[region].total_color(i)*color;
+              double color = normalize_color(Color_to_vec(mesh.components[c].color))(i);
+              n      += result.count;
+              sum_x  += result.total_color(i);
+              sum_x2 += result.total_color2(i);
+              sum_y  += result.count*color;
+              sum_y2 += result.count*color*color;
+              sum_xy += result.total_color(i)*color;
             }
             double r = (n*sum_xy - sum_x*sum_y)/sqrt((n*sum_x2 - sum_x*sum_x)*(n*sum_y2 - sum_y*sum_y));
             double r2 = std::max(r, 0.);
@@ -339,7 +337,7 @@ struct Particle {
           for(unsigned int c = 0; c < mesh.components.size(); c++) {
             RenderBuffer::RegionType region = regions[c];
             
-            colors[10 + region] << Color_to_vec(mesh.components[c].color), 1;
+            colors[10 + region] << normalize_color(Color_to_vec(mesh.components[c].color)), 1;
           }
           
           ArrayXXd planes[3];
@@ -379,7 +377,7 @@ struct Particle {
           ArrayXXd subweight = weight.block(min_y, min_x, max_y-min_y, max_x-min_x);
           //std::cout << subweight << std::endl << std::endl;
           
-          ArrayXXd acc;
+          boost::optional<ArrayXXd> acc;
           for(int i = 0; i < 3; i++) {
             if(skip_channels[i]) continue;
             ArrayXXd res;
@@ -392,17 +390,17 @@ struct Particle {
                           img.image[0].cols() - subweight.cols() + 1,
                           &res);
             res = res.max(0);
-            if(i == 0) {
+            if(!acc) {
               acc = res;
             } else {
-              acc *= res;
+              *acc *= res;
             }
           }
           
           boost::optional<Particle> maybe_best;
           for(int y = 0; y < img.image[0].rows() - subweight.rows() + 1; y++) {
             for(int x = 0; x < img.image[0].cols() - subweight.cols() + 1; x++) {
-              double corr = acc(y, x);
+              double corr = (*acc)(y, x);
               
               if(!std::isfinite(corr)) {
                 //std::cout << "invalid corr: " << corr << std::endl;
@@ -550,6 +548,7 @@ struct GoalExecutor {
     ros::Publisher image_pub2;
     std::vector<ros::Publisher> extracted_image_pubs;
     boost::function1<void, const FindFeedback&> feedback_callback;
+    ros::ServiceServer test_pose_srv;
     
     double N;
     TaggedImage img;
@@ -566,7 +565,8 @@ struct GoalExecutor {
         info_sub(camera_nh, "camera_info", 1),
         info_tf_filter(info_sub, listener, goal.header.frame_id, 10),
         sync(image_sub, info_tf_filter, 10),
-        feedback_callback(feedback_callback) {
+        feedback_callback(feedback_callback),
+        test_pose_srv(private_nh.advertiseService("test_pose", boost::function<bool(TestPose::Request&, TestPose::Response&)>(boost::bind(&GoalExecutor::test_pose_callback, this, _1, _2)))) {
         
         BOOST_FOREACH(const TargetDesc &targetdesc, goal.targetdescs) {
             std::ostringstream tmp; tmp << "extracted_images/" << &targetdesc - goal.targetdescs.data();
@@ -615,6 +615,7 @@ struct GoalExecutor {
         ROS_INFO("good");
         
         img.reset(*image, *cam_info, eigen_from_tf(transform));
+        img = img.decimateBy2().decimateBy2();
         int corner_cut = 0; camera_nh.getParam("corner_cut", corner_cut);
         for(unsigned int i = 0; i < img.height; i++) {
             int dist_from_edge = std::min(i, img.height-1-i);
@@ -647,7 +648,7 @@ struct GoalExecutor {
         }
         
         {
-            TaggedImage small_img = img.decimateBy2().decimateBy2();
+            TaggedImage small_img = img; //.decimateBy2().decimateBy2();
             
             BOOST_FOREACH(ParticleFilter &particle_filter, particle_filters) {
                 RenderBuffer rb(small_img);
@@ -735,22 +736,22 @@ struct GoalExecutor {
                 max_p.P(img, rb, RenderBuffer(img), true);
             }
             
-            std::vector<int> dbg_image(image->width*image->height, 0);
+            std::vector<int> dbg_image(img.width*img.height, 0);
             rb.draw_debug_regions(dbg_image);
             
             Image msg;
             msg.header = image->header;
-            msg.height = image->height;
-            msg.width = image->width;
+            msg.height = img.height;
+            msg.width = img.width;
             msg.encoding = "rgb8";
             msg.is_bigendian = 0;
-            msg.step = image->width*3;
-            msg.data.resize(image->width*image->height*3);
-            for(unsigned int y = 0; y < image->height; y++) {
+            msg.step = img.width*3;
+            msg.data.resize(img.width*img.height*3);
+            for(unsigned int y = 0; y < img.height; y++) {
                 for(int x = img.left[y]; x < img.right[y]; x++) {
                     Vector3d orig_color = img.get_pixel(y, x);
                     msg.data[msg.step*y + 3*x + 0] =
-                        255.*dbg_image[image->width*y + x]/(rb.areas.size() + 10);
+                        255.*dbg_image[img.width*y + x]/(rb.areas.size() + 10);
                     msg.data[msg.step*y + 3*x + 1] = 255*orig_color[1];
                     msg.data[msg.step*y + 3*x + 2] = 255*orig_color[2];
                 }
@@ -760,13 +761,13 @@ struct GoalExecutor {
         if(image_pub2.getNumSubscribers()) { // send debug image
             Image msg;
             msg.header = image->header;
-            msg.height = image->height;
-            msg.width = image->width;
+            msg.height = img.height;
+            msg.width = img.width;
             msg.encoding = "rgb8";
             msg.is_bigendian = 0;
-            msg.step = image->width*3;
-            msg.data.resize(image->width*image->height*3);
-            for(unsigned int y = 0; y < image->height; y++) {
+            msg.step = img.width*3;
+            msg.data.resize(img.width*img.height*3);
+            for(unsigned int y = 0; y < img.height; y++) {
                 for(int x = img.left[y]; x < img.right[y]; x++) {
                     Vector3d orig_color = img.get_pixel(y, x);
                     msg.data[msg.step*y + 3*x + 0] = 255*orig_color[0];
@@ -811,6 +812,37 @@ struct GoalExecutor {
             }
             pub.publish(msg);
         }
+    }
+    
+    bool test_pose_callback(TestPose::Request &req, TestPose::Response &res) {
+      Particle p(goal.targetdescs[0], xyz2vec(req.pose.position), xyzw2quat(req.pose.orientation));
+      
+      RenderBuffer rb(img);
+      res.correlation = p.P(img, rb, RenderBuffer(img), true);
+      
+      std::vector<int> dbg_image(img.width*img.height, 0);
+      rb.draw_debug_regions(dbg_image);
+      
+      Image msg;
+      //msg.header = img.header;
+      msg.height = img.height;
+      msg.width = img.width;
+      msg.encoding = "rgb8";
+      msg.is_bigendian = 0;
+      msg.step = img.width*3;
+      msg.data.resize(img.width*img.height*3);
+      for(unsigned int y = 0; y < img.height; y++) {
+          for(int x = img.left[y]; x < img.right[y]; x++) {
+              Vector3d orig_color = img.get_pixel(y, x);
+              msg.data[msg.step*y + 3*x + 0] =
+                  255.*dbg_image[img.width*y + x]/(rb.areas.size() + 10);
+              msg.data[msg.step*y + 3*x + 1] = 255*orig_color[1];
+              msg.data[msg.step*y + 3*x + 2] = 255*orig_color[2];
+          }
+      }
+      image_pub.publish(msg);
+      
+      return true;
     }
 };
 

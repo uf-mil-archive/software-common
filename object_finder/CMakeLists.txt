@@ -30,6 +30,11 @@ add_action_files(
   Find.action
 )
 
+add_service_files(
+  FILES
+  TestPose.srv
+)
+
 
 # CATKIN_MIGRATION: removed during catkin migration
 # rosbuild_init()
