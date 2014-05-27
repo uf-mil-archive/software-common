@@ -15,13 +15,21 @@ bool radius_comparator(const Blob::BlobData &blob1, const Blob::BlobData &blob2)
     return blob1.radius < blob2.radius;
 }
 
-Blob::Blob(const Mat &img, float minContour, float maxContour, float maxPerimeter, bool sortByRadius) {
+Blob::Blob(const Mat &img, float minContour, float maxContour, float maxPerimeter, bool sortByRadius, bool allowInternal) {
 	Mat dbg_temp = img.clone();
 	std::vector<std::vector<cv::Point> > contours;
 	std::vector<cv::Vec4i> hierarchy;
-	findContours(dbg_temp,contours,hierarchy,RETR_EXTERNAL,CHAIN_APPROX_SIMPLE);
+	findContours(dbg_temp,contours,hierarchy,allowInternal ? RETR_TREE : RETR_EXTERNAL,CHAIN_APPROX_SIMPLE);
 
-	BOOST_FOREACH(const std::vector<cv::Point> &contour, contours) {
+	int i = -1;
+	BOOST_FOREACH(const std::vector<cv::Point> &contour, contours) { i += 1;
+                // only process positive contours
+                int nparents = 0;
+                for(int j = hierarchy[i][3]; j >= 0; j = hierarchy[j][3]) // for every parent up to root
+                        nparents++;
+                if(nparents % 2) // if this node has an odd number of parents
+                        continue; // skip it
+
 		float area_holder = fabs(contourArea(Mat(contour)));
 		vector<Point> convex_hull; convexHull(Mat(contour), convex_hull);
 		float convex_area_holder = contourArea(Mat(convex_hull));

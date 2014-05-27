@@ -130,30 +130,23 @@ Mat Thresholder::forrest(Vec3b bg, Vec3b fg, double radius, double inclusion) {
 	return result;
 }
 
-Mat Thresholder::simpleRGB(Vec3b bg, Vec3b fg, double radius, double inclusion) {
-	Mat blurred; GaussianBlur(img, blurred, Size(0, 0), radius, radius);
+Mat Thresholder::simpleRGB(Vec3b bg, Vec3b fg) {
+	Vec3f v = Vec3f(fg) - Vec3f(bg);
+        std::vector<Vec3f> corners;
+	corners.push_back(Vec3f(255, 0, 0));
+	corners.push_back(Vec3f(0, 255, 0));
+	corners.push_back(Vec3f(0, 0, 255));
+        double inf = std::min(std::min(corners[0].dot(v), corners[1].dot(v)), corners[2].dot(v));
+        double sup = std::max(std::max(corners[0].dot(v), corners[1].dot(v)), corners[2].dot(v));
 	
 	Mat result = channelsRGB[0].clone(); // XXX
 	for(int i = 0; i < img.rows; i++) {
 		for(int j = 0; j < img.cols; j++) {
-			Vec3f sample = blurred.at<Vec3b>(i, j);
-			
-			Vec3f offset = sample - (.5*Vec3f(bg) + .5*Vec3f(fg)); // assuming near border of foreground and background
-			Vec3f predicted_sample_if_bg = offset + Vec3f(bg);
-			Vec3f predicted_sample_if_fg = offset + Vec3f(fg);
-			
-			Vec3f sample2 = img.at<Vec3b>(i, j);
-			Vec3f vec = (predicted_sample_if_fg - predicted_sample_if_bg);
-			vec /= pow(norm(vec), 2);
-			double score = (sample2 - predicted_sample_if_bg).dot(vec);
-			if(score >= inclusion) {
-				result.at<uint8_t>(i, j) = 255;
-			} else {
-				result.at<uint8_t>(i, j) = 0;
-			}
-			//result.at<uint8_t>(i, j) = norm(sample - predicted_sample_if_bg)/(norm(sample - predicted_sample_if_bg) + norm(sample - predicted_sample_if_fg))*255+.5;
+			Vec3f sample = img.at<Vec3b>(i, j);
+                        result.at<uint8_t>(i, j) = (sample.dot(v) - inf) / (sup - inf) * 255 + 0.5;
 		}
 	}
+	adaptiveThreshold(result,result,255,0,THRESH_BINARY,11,3);
 	return result;
 }
 

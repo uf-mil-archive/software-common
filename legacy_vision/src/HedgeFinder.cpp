@@ -25,6 +25,8 @@ IFinder::FinderResult HedgeFinder::find(const subjugator::ImageSource::Image &im
   Blob blob(thresholded, 1000, 1e10, 1e10);
 
   Mat res = img.image.clone();
+  while(blob.data.size() && !blob.data[0].is_vertical)
+    blob.data.erase(blob.data.begin());
   if(blob.data.size() > 1)
     blob.data.resize(1);
   blob.drawResult(res, CV_RGB(0, 255, 0));

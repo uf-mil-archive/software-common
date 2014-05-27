@@ -33,7 +33,7 @@ class Blob
 		};
 
 		std::vector<BlobData> data;
-		Blob(const cv::Mat &img, float minContour, float maxContour, float maxPerimeter, bool sortByRadius=false);
+		Blob(const cv::Mat &img, float minContour, float maxContour, float maxPerimeter, bool sortByRadius=false, bool allowInternal=false);
 		void drawResult(cv::Mat &img, const cv::Scalar &color);
 };
 
