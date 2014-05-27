@@ -37,6 +37,12 @@ Blob::Blob(const Mat &img, float minContour, float maxContour, float maxPerimete
 
 		if(center_holder.x == 0 || center_holder.y == 0)
 			continue; // ???
+		
+		bool touches_edge = false;
+		BOOST_FOREACH(const Point& p, contour)
+			if(p.x <= 1 || p.x >= img.cols-2 || p.y <= 1 || p.y >= img.rows-2)
+				touches_edge = true;
+		if(touches_edge) continue;
 
 		RotatedRect rr = minAreaRect(Mat(contour));
         if(rr.size.width < rr.size.height) { // force width > height
@@ -52,7 +58,7 @@ Blob::Blob(const Mat &img, float minContour, float maxContour, float maxPerimete
 		bdata.centroid.x = (int)center_holder.x;
 		bdata.centroid.y = (int)center_holder.y;
 		bdata.radius = radius_holder;
-                bdata.direction = cv::Point2f(cos(rr_angle_rad), sin(rr_angle_rad));
+                bdata.direction = radius_holder * cv::Point2f(cos(rr_angle_rad), sin(rr_angle_rad));
 		bdata.circularity = convex_area_holder/(pi<double>()*pow(radius_holder, 2));
 		bdata.contour = contour;
 		bdata.rect_center = rr.center;
@@ -77,7 +83,7 @@ void Blob::drawResult(Mat &img, const Scalar &color) {
 	BOOST_FOREACH(const BlobData &item, data) {
 		circle(img, item.centroid, (int)item.radius,color, 2, 8, 0);
 		line(img, item.centroid,
-		     item.centroid + item.direction*item.radius, CV_RGB(255,0,0),2,8);
+		     item.centroid + item.direction, CV_RGB(255,0,0),2,8);
 
 		std::ostringstream os;
 		os << "A " << (int)item.area << " "
