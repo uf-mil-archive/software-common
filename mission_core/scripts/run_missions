@@ -7,17 +7,22 @@ from twisted.internet import defer, reactor
 import txros
 
 
+def parse_arg(arg):
+    x = arg.split(',')
+    return x[0], x[1:]
+
 @defer.inlineCallbacks
 def main():
     nh = txros.NodeHandle.from_argv('run_missions')
     
-    missions = [(arg, __import__(arg, fromlist=['main']).main) for arg in sys.argv[1:]]
+    missions = [(name, __import__(name, fromlist=['main']).main, args)
+        for name, args in map(parse_arg, sys.argv[1:])]
     
     try:
-        for name, func in missions:
+        for name, func, args in missions:
             print
             print 'Starting', name
-            yield func(nh)
+            yield func(nh, *args)
             print 'Finished', name
             print
     finally:
