@@ -15,23 +15,36 @@ using namespace cv;
 using namespace std;
 
 IFinder::FinderResult GrapesFinder::find(const subjugator::ImageSource::Image &img) {
-        Mat blurred; GaussianBlur(img.image, blurred, Size(0, 0), 3);
+        Mat blurred; //GaussianBlur(img.image, blurred, Size(0, 0), 0);
+        blurred = img.image;
 
         Mat normalized = Normalizer::normRGB(blurred);
 
         // call to thresholder here
-        Mat thresholded = Thresholder(normalized).simpleRGB(Vec3b(0, 255, 255), Vec3b(255, 0, 0));
+        Mat thresholded;
+        if(objectPath[0] == "board") {
+                thresholded = Thresholder(normalized).simpleRGB(Vec3b(255, 0, 0), Vec3b(0, 255, 255));
+        } else if(objectPath[0] == "empty_cell") {
+                thresholded = Thresholder(normalized).simpleRGB(Vec3b(0, 255, 255), Vec3b(255, 0, 0));
+        } else if(objectPath[0] == "peg") {
+                thresholded = Thresholder(normalized).simpleRGB(Vec3b(255, 0, 0), Vec3b(0, 0, 255));
+        } else {
+                throw std::runtime_error("Invalid object path");
+        }
+        /*
         erode(thresholded, thresholded, cv::Mat::ones(13,13,CV_8UC1)); // -6
         dilate(thresholded, thresholded, cv::Mat::ones(15,15,CV_8UC1)); // +7
         erode(thresholded, thresholded, cv::Mat::ones(3,3,CV_8UC1)); // -1
-
+        */
         Blob blob(thresholded, 300, 1e10, 1e10, false, true);
-        for(unsigned int i = 0; i < blob.data.size(); )
+        
+        if(objectPath[0] != "board") {
+            for(unsigned int i = 0; i < blob.data.size(); )
                 if(blob.data[i].circularity < .8)
                         blob.data.erase(blob.data.begin()+i);
                 else
                         i++;
-
+        }
 
         Mat res = img.image.clone();
         //if(blob.data.size() > 2)
@@ -45,6 +58,10 @@ IFinder::FinderResult GrapesFinder::find(const subjugator::ImageSource::Image &i
                 fResult.put_child("center", Point_to_ptree(item.rect_center, img));
                 fResult.put_child("direction", Direction_to_ptree(item.rect_center, item.direction, img));
                 fResult.put("direction_symmetry", 2);
+        
+		        Mat tempMask = Mat::zeros(img.image.rows, img.image.cols, CV_8UC1);
+		        drawContours(tempMask, std::vector<std::vector<cv::Point> >(1, item.contour), 0, Scalar(255), CV_FILLED, 1, vector<Vec4i>(), 5);
+		        fResult.put("redness", mean(img.image, tempMask)[2]);
                 resultVector.push_back(fResult);
         }
 
