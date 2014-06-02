@@ -67,7 +67,7 @@ IFinder::FinderResult GrapesFinder::find(const subjugator::ImageSource::Image &i
         
 		        Mat tempMask = Mat::zeros(img.image.rows, img.image.cols, CV_8UC1);
 		        drawContours(tempMask, std::vector<std::vector<cv::Point> >(1, item.contour), 0, Scalar(255), CV_FILLED, 1, vector<Vec4i>(), 5);
-		        fResult.put("redness", mean(img.image, tempMask)[2]);
+		        fResult.put("redness", mean(normalized, tempMask)[2]);
                 resultVector.push_back(fResult);
         }
 
