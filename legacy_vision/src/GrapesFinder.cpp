@@ -23,7 +23,7 @@ IFinder::FinderResult GrapesFinder::find(const subjugator::ImageSource::Image &i
         Mat thresholded;
         if(objectPath[0] == "board") {
                 thresholded = Thresholder(normalized).simpleRGB(Vec3b(85, 85, 85), Vec3b(0, 128, 128));
-	        erode(thresholded, thresholded, cv::Mat::ones(3,3,CV_8UC1));
+	        erode(thresholded, thresholded, cv::Mat::ones(5,5,CV_8UC1));
         } else if(objectPath[0] == "empty_cell") {
                 thresholded = Thresholder(normalized).simpleRGB(Vec3b(0, 255, 255), Vec3b(255, 0, 0));
         } else if(objectPath[0] == "peg") {
@@ -47,8 +47,9 @@ IFinder::FinderResult GrapesFinder::find(const subjugator::ImageSource::Image &i
             for(unsigned int i = 0; i < blob.data.size(); i++) {
 		drawContours(thresholded2, std::vector<std::vector<cv::Point> >(1, blob.data[i].contour), 0, Scalar(255), CV_FILLED, 1, vector<Vec4i>(), 5);
             }
-            dilate(thresholded2, thresholded2, cv::Mat::ones(15,15,CV_8UC1));
-            erode(thresholded2, thresholded2, cv::Mat::ones(15,15,CV_8UC1));
+            thresholded = thresholded2.clone();
+            dilate(thresholded2, thresholded2, cv::Mat::ones(25,25,CV_8UC1));
+            erode(thresholded2, thresholded2, cv::Mat::ones(25,25,CV_8UC1));
             blob = Blob(thresholded2, 300, 1e10, 1e10, false, true);
         }
 
