@@ -1,6 +1,7 @@
 #include "NavigationComputer.h"
 #include "indirect_kalman_6dof/Debug.h"
 #include "indirect_kalman_6dof/SetPosition.h"
+#include "indirect_kalman_6dof/SetIgnoreMagnetometer.h"
 
 #include <uf_common/param_helpers.h>
 #include <uf_common/msg_helpers.h>
@@ -31,11 +32,13 @@ struct Node {
     ros::Publisher pose_pub;
     ros::Publisher debug_pub;
     ros::ServiceServer set_position_srv;
+    ros::ServiceServer set_ignore_magnetometer_srv;
+    bool ignoreMagnetometer;
 
     boost::scoped_ptr<NavigationComputer> navcomp;
 
     Node() :
-        private_nh("~")
+        private_nh("~"), ignoreMagnetometer(false)
     {
         NavigationComputer::Config config;
 
@@ -103,6 +106,7 @@ struct Node {
         pose_pub = nh.advertise<geometry_msgs::PoseStamped>("pose", 1);
         debug_pub = private_nh.advertise<indirect_kalman_6dof::Debug>("debug", 1);
         set_position_srv = private_nh.advertiseService("set_position", &Node::onSetPosition, this);
+        set_ignore_magnetometer_srv = private_nh.advertiseService("set_ignore_magnetometer", &Node::onSetIgnoreMagnetometer, this);
     }
 
     void onImu(sensor_msgs::ImuConstPtr imu) {
@@ -116,6 +120,7 @@ struct Node {
     }
 
     void onMag(sensor_msgs::MagneticFieldConstPtr mag) {
+        if(ignoreMagnetometer) return;
         Eigen::Vector3d y_m = uf_common::xyz2vec(mag->magnetic_field);
         navcomp->updateMag(y_m, mag->header.stamp.toSec());
     }
@@ -190,6 +195,12 @@ struct Node {
     bool onSetPosition(indirect_kalman_6dof::SetPosition::Request &request,
                        indirect_kalman_6dof::SetPosition::Response &response) {
         return navcomp->setPosition(uf_common::xyz2vec(request.position));
+    }
+    
+    bool onSetIgnoreMagnetometer(indirect_kalman_6dof::SetIgnoreMagnetometer::Request &request,
+                                 indirect_kalman_6dof::SetIgnoreMagnetometer::Response &response) {
+        ignoreMagnetometer = request.ignore;
+        return true;
     }
 };
 
