@@ -1,40 +1,42 @@
 #!/usr/bin/python
 
 import sys
+import traceback
+import signal
 
 from twisted.internet import defer, reactor
 
 import txros
+from txros import util
 
 
 def parse_arg(arg):
     x = arg.split(',')
     return x[0], x[1:]
 
-@defer.inlineCallbacks
+@util.cancellableInlineCallbacks
 def main():
-    nh = txros.NodeHandle.from_argv('run_missions')
-    
-    missions = [(name, __import__(name, fromlist=['main']).main, args)
-        for name, args in map(parse_arg, sys.argv[1:])]
-    
     try:
+        nh = txros.NodeHandle.from_argv('run_missions')
+        
+        missions = [(name, __import__(name, fromlist=['main']).main, args)
+            for name, args in map(parse_arg, sys.argv[1:])]
+        
         for name, func, args in missions:
             print
             print 'Starting', name
+            print
             yield func(nh, *args)
+            print
             print 'Finished', name
             print
+    except Exception:
+        traceback.print_exc()
     finally:
-        import sub_scripting
-        sub = yield sub_scripting.get_sub(nh)
-        yield sub.move.go()
-
-
-def run():
-    def stopper(result):
         reactor.stop()
-        return result
-    main().addBoth(stopper)
-reactor.callWhenRunning(run)
+
+def _start():
+    signal.signal(signal.SIGINT, lambda signum, frame: reactor.callFromThread(task.cancel))
+    task = main().addErrback(lambda fail: fail.trap(defer.CancelledError))
+reactor.callWhenRunning(_start)
 reactor.run()
