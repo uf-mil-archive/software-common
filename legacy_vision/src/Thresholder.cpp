@@ -130,7 +130,7 @@ Mat Thresholder::forrest(Vec3b bg, Vec3b fg, double radius, double inclusion) {
 	return result;
 }
 
-Mat Thresholder::simpleRGB(Vec3b bg, Vec3b fg) {
+Mat Thresholder::simpleRGB(Vec3b bg, Vec3b fg, int window, int cutoff) {
 	Vec3f v = Vec3f(fg) - Vec3f(bg);
         std::vector<Vec3f> corners;
 	corners.push_back(Vec3f(255, 0, 0));
@@ -146,7 +146,7 @@ Mat Thresholder::simpleRGB(Vec3b bg, Vec3b fg) {
                         result.at<uint8_t>(i, j) = (sample.dot(v) - inf) / (sup - inf) * 255 + 0.5;
 		}
 	}
-	adaptiveThreshold(result,result,255,0,THRESH_BINARY,11,3);
+	adaptiveThreshold(result,result,255,0,THRESH_BINARY,window,cutoff);
 	return result;
 }
 

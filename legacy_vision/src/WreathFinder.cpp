@@ -12,19 +12,19 @@ using namespace cv;
 using namespace std;
 
 IFinder::FinderResult WreathFinder::find(const subjugator::ImageSource::Image &img) {
-	Mat blurred; GaussianBlur(img.image, blurred, Size(3,3), 10, 15, BORDER_DEFAULT);
+	Mat blurred; GaussianBlur(img.image, blurred, Size(0, 0), 3);
 
-	Mat normalized = Normalizer::normRGB(blurred);
+	Mat normalized = Normalizer::normRGB(img.image);
 
 	vector<property_tree::ptree> resultVector;
 	Mat dbg;
-	dbg = Thresholder(normalized).orange();
-	erode(dbg, dbg, cv::Mat::ones(5,5,CV_8UC1));
-	dilate(dbg, dbg, cv::Mat::ones(7,7,CV_8UC1));
+	dbg = Thresholder(normalized).simpleRGB(Vec3b(85, 85, 85), Vec3b(0, 0, 255), 11, -5);
+	//erode(dbg, dbg, cv::Mat::ones(5,5,CV_8UC1));
+	//dilate(dbg, dbg, cv::Mat::ones(7,7,CV_8UC1));
 
 	Blob blob(dbg, 1000, 1000000, 1000000);
 
-	Mat res = img.image.clone();
+	Mat res = normalized.clone();
 	blob.drawResult(res, CV_RGB(255, 0, 0));
 
 	BOOST_FOREACH(const Blob::BlobData &data, blob.data) {
