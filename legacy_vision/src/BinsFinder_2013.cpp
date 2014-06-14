@@ -1,3 +1,4 @@
+/*
 #include <boost/foreach.hpp>
 
 #include "Contours.h"
@@ -174,3 +175,4 @@ IFinder::FinderResult BinsFinder::find(const subjugator::ImageSource::Image &img
     }
     return FinderResult(resultVector, res, dbg);
 }
+*/

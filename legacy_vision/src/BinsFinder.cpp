@@ -11,7 +11,7 @@ using namespace boost;
 using namespace cv;
 using namespace std;
 
-const std::string BinsFinder::potential_names[7] = {"01a", "01b", "02a", "02b", "03a", "03b", "04"}
+const std::string BinsFinder::potential_names[7] = {"01a", "01b", "02a", "02b", "03a", "03b", "04"};
 const std::string BinsFinder::names[4] = {"01a", "02a", "03a", "04"}; //I'm fairly confident they'll tell us which silhouettes will be in thre, they are telling us which silhouette is primary so we need somehow to set those 
 
 optional<Mat> extract_bottom(const Mat bin) {

@@ -30,6 +30,7 @@ class BinsFinder : public IFinder
 	private:
         cv::Mat templates[4];
         static const std::string names[4];
+	static const std::string potential_names[7];
 };
 
 #endif
