@@ -16,13 +16,51 @@ IFinder::FinderResult WreathFinder::find(const subjugator::ImageSource::Image &i
 
 	Mat normalized = Normalizer::normRGB(img.image);
 
-	vector<property_tree::ptree> resultVector;
-	Mat dbg;
-	dbg = Thresholder(normalized).simpleRGB(Vec3b(85, 85, 85), Vec3b(0, 0, 255), 11, -5);
-	//erode(dbg, dbg, cv::Mat::ones(5,5,CV_8UC1));
-	//dilate(dbg, dbg, cv::Mat::ones(7,7,CV_8UC1));
+vector<property_tree::ptree> resultVector;
+        Mat dbg;
+        if(objectPath[0] == "moonrock") {
+            dbg = Thresholder(normalized).simpleRGB(Vec3b(85, 85, 85), Vec3b(0, 0, 255), 11, -10);
+        } else if(objectPath[0] == "cheese") {
+            dbg = Thresholder(normalized).simpleRGB(Vec3b(85, 85, 85), Vec3b(0, 255, 0), 11, -7);
+        } else {
+            throw std::runtime_error("Invalid object path");
+        }
+        dilate(dbg, dbg, cv::Mat::ones(3,3,CV_8UC1));
+        erode(dbg, dbg, cv::Mat::ones(3,3,CV_8UC1));
+        //dilate(dbg, dbg, cv::Mat::ones(3,3,CV_8UC1));
 
-	Blob blob(dbg, 1000, 1000000, 1000000);
+        Blob blob(dbg, 100, 1000000, 1000000);
+
+        for(unsigned int i = 0; i < blob.data.size(); ) {
+            if(objectPath[0] == "moonrock") {
+                if(blob.data[i].circularity < .35 || blob.data[i].circularity > .65)
+                    blob.data.erase(blob.data.begin()+i);
+                else
+                    i++;;
+            } else if(objectPath[0] == "cheese") {
+                if(blob.data[i].circularity < .35 || blob.data[i].circularity > .6)
+                    blob.data.erase(blob.data.begin()+i);
+                else
+                    i++;
+            } else {
+            throw std::runtime_error("Invalid object path");
+            }
+	}
+	/*vector<property_tree::ptree> resultVector;
+	Mat dbg;
+	dbg = Thresholder(normalized).simpleRGB(Vec3b(85, 85, 85), Vec3b(0, 0, 255), 11, -10);
+	dilate(dbg, dbg, cv::Mat::ones(3,3,CV_8UC1));
+	erode(dbg, dbg, cv::Mat::ones(3,3,CV_8UC1));
+	//dilate(dbg, dbg, cv::Mat::ones(3,3,CV_8UC1));
+
+	Blob blob(dbg, 100, 1000000, 1000000);
+
+        for(unsigned int i = 0; i < blob.data.size(); )
+            if(blob.data[i].circularity < .64 - .1 || blob.data[i].circularity > .64 + .1)
+                blob.data.erase(blob.data.begin()+i);
+            else
+                i++;*/
+
 
 	Mat res = normalized.clone();
 	blob.drawResult(res, CV_RGB(255, 0, 0));
