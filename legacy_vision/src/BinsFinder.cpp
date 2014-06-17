@@ -22,11 +22,11 @@ optional<Mat> extract_bottom(const Mat bin) {
 	Blob::BlobData &blob = blobs.data[0];
 	Size bottom_size(300, 150);
 	Point2f bottom_src[4];
-	Point2f perp_dir(-blob.direction.y, blob.direction.x);
+	Point2f perp_dir(1/blob.radius*-blob.direction.y, 1/blob.radius*blob.direction.x);
 	for(int i = 0; i < 4; i++) {
 	    double a = i==1||i==2 ? 0.5 : -0.5;
 	    double b = i==2||i==3 ? 0.5 : -0.5;
-	    bottom_src[i] = blob.rect_center + a*blob.direction*blob.long_length + b*perp_dir*blob.short_length;
+	    bottom_src[i] = blob.rect_center + a*1/blob.radius*blob.direction*blob.long_length + b*perp_dir*blob.short_length;
     }
     Point2f bottom_dst[4];
     bottom_dst[0] = Point2f(0, 0);
