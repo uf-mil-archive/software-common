@@ -22,6 +22,7 @@ class BinsFinder : public IFinder
                 for(int box_index = 0; box_index < 4; box_index++) {
                     std::ostringstream ss;
                     ss << config.get<std::string>("imagePath") << "/" << names[box_index] << ".png";
+		    std::cout << ss.str();
                     templates[box_index] = cv::imread(ss.str());
                 }
             }

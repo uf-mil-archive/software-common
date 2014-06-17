@@ -11,8 +11,8 @@ using namespace boost;
 using namespace cv;
 using namespace std;
 
-const std::string BinsFinder::potential_names[7] = {"01a", "01b", "02a", "02b", "03a", "03b", "04"};
-const std::string BinsFinder::names[4] = {"01a", "02a", "03a", "04"}; //I'm fairly confident they'll tell us which silhouettes will be in thre, they are telling us which silhouette is primary so we need somehow to set those 
+const std::string BinsFinder::potential_names[7] = {"01a", "01b", "02a", "02b", "03a", "03b", "04a"};
+const std::string BinsFinder::names[4] = {"01b", "02a", "03b", "04a"}; //I'm fairly confident they'll tell us which silhouettes will be in thre, they are telling us which silhouette is primary so we need somehow to set those 
 
 optional<Mat> extract_bottom(const Mat bin) {
     Mat normalized = Normalizer::normRGB(bin);
@@ -100,7 +100,7 @@ IFinder::FinderResult BinsFinder::find(const subjugator::ImageSource::Image &img
             Mat normalized = Normalizer::normRGB(bin);
             warpPerspective(normalized, res, t, img.image.size(), WARP_INVERSE_MAP, BORDER_TRANSPARENT);
             
-            optional<Mat> bottom = extract_bottom(bin);
+            optional<Mat> bottom = bin; //extract_bottom(bin);
             if(!bottom) continue;
             bins.push_back(*bottom);
             centroids.push_back(box.centroid);
@@ -109,6 +109,8 @@ IFinder::FinderResult BinsFinder::find(const subjugator::ImageSource::Image &img
             property_tree::ptree fResult;
             fResult.put_child("center", Point_to_ptree(box.centroid, img));
             fResult.put_child("direction", Direction_to_ptree(box.centroid, src[1] - src[0], img));
+            //fResult.put("direction_symmetry", 2);
+
             fResult.put("angle", box.angle);
             fResult.put("scale", box.area);
             resultVector.push_back(fResult);
