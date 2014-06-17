@@ -36,7 +36,11 @@ Contours::Contours(const Mat &img, float minContour, float maxContour, float max
 		if(nparents % 2) // if this node has an odd number of parents
 			continue; // skip it
 
+		vector<Point> convex_hull; convexHull(Mat(contours[i]), convex_hull);
+
 		float area_holder = fabs(contourArea(Mat(contours[i])));
+		float convex_area_holder = fabs(contourArea(Mat(convex_hull)));
+		if(convex_area_holder > 2 * area_holder) continue;
 		float perimeter_holder = arcLength(Mat(contours[i]), true);
 		if(area_holder < minContour || area_holder > maxContour || perimeter_holder > maxPerimeter)
 			continue;
@@ -73,7 +77,7 @@ Contours::Contours(const Mat &img, float minContour, float maxContour, float max
 
 		// approximate contour with accuracy proportional to the contour perimeter
 		vector<Point> approx;
-		approxPolyDP(Mat(contours[i]), approx, perimeter_holder*0.03, true);
+		approxPolyDP(Mat(convex_hull), approx, perimeter_holder*0.03, true);
 
 		// square contours should have 4 vertices after approximation and be convex.
 		if(approx.size() != 4 || !isContourConvex(Mat(approx)))
