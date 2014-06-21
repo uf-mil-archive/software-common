@@ -11,8 +11,28 @@ using namespace boost;
 using namespace cv;
 using namespace std;
 
-const std::string BinsFinder::potential_names[7] = {"01a", "01b", "02a", "02b", "03a", "03b", "04a"};
-const std::string BinsFinder::names[4] = {"01b", "02a", "03b", "04a"}; //I'm fairly confident they'll tell us which silhouettes will be in thre, they are telling us which silhouette is primary so we need somehow to set those 
+template<typename T>
+vector<vector<T> > cartesian_product(vector<vector<T> > & x) {
+    vector<vector<T> > result;
+    vector<int> indices(x.size(), 0);
+    while(true) {
+        for(int i = 0; i < x.size(); i++) {
+            indices[i]++;
+            if(indices[i] == x[i].size()) {
+                indices[i] = 0;
+            } else {
+                break;
+            }
+            if(i == x.size() - 1) {
+                return result;
+            }
+        }
+        result.push_back(vector<T>());
+        for(int i = 0; i < x.size(); i++) {
+            result[result.size()-1].push_back(x[i][indices[i]]);
+        }
+    }
+}
 
 optional<Mat> extract_bottom(const Mat bin) {
     Mat normalized = Normalizer::normRGB(bin);
@@ -116,21 +136,25 @@ IFinder::FinderResult BinsFinder::find(const subjugator::ImageSource::Image &img
             resultVector.push_back(fResult);
         }
         
-        if(objectPath[0] == "single_save" && resultVector.size() == 4 ) {
-            for(int bin_index = 0; bin_index < 4; bin_index++) {
+        if(objectPath[0] == "single_save" && resultVector.size() == names.size() ) {
+            for(int bin_index = 0; bin_index < names.size(); bin_index++) {
                 ostringstream ss;
                 ss << config.get<string>("imagePath") << "/sample" << bin_index << ".png";
                 imwrite(ss.str(), bins[bin_index]);
             }
-        } else if(objectPath[0] == "single" && resultVector.size() == 4) {
-            double distances[4][4][2]; // bin_index, template_index, flipped
-            for(int template_index = 0; template_index < 4; template_index++) {
-                Mat b = Normalizer::normRGB(templates[template_index]);
+        } else if(objectPath[0] == "single" && resultVector.size() == names.size()) {
+            vector<vector<vector<vector<double> > > > distances; // template_index, template_index2, flipped, bin_index
+            for(int template_index = 0; template_index < templates.size(); template_index++) {
+            distances.push_back(vector<vector<vector<double> > >());
+            for(int template_index2 = 0; template_index2 < templates[template_index].size(); template_index2++) {
+                distances[template_index].push_back(vector<vector<double> >());
+                Mat b = Normalizer::normRGB(templates[template_index][template_index2]);
                 for(int flipped = 0; flipped < 2; flipped++) {
+                    distances[template_index][template_index2].push_back(vector<double>());
                     if(flipped) {
                         flip(b, b, -1);
                     }
-                    for(int bin_index = 0; bin_index < 4; bin_index++) {
+                    for(int bin_index = 0; bin_index < names.size(); bin_index++) {
                         Mat a = Normalizer::normRGB(bins[bin_index]);
                         
                         double distance = 0;
@@ -145,32 +169,44 @@ IFinder::FinderResult BinsFinder::find(const subjugator::ImageSource::Image &img
                             }
                         }
                         
-                        distances[bin_index][template_index][flipped] = distance;
+                        distances[template_index][template_index2][flipped].push_back(distance);
                     }
                     if(flipped) {
                         flip(b, b, -1);
                     }
                 }
             }
+            }
             
-            int indices[4] = {0, 1, 2, 3};
-            int best_indices[4];
-            optional<double> best_score;
-            do {
-                for(int rotate_mask = 0; rotate_mask < 16; rotate_mask++) {
-                    double dist = 0;
-                    for(int bin_index = 0; bin_index < 4; bin_index++) {
-                        dist += distances[bin_index][indices[bin_index]][rotate_mask & (1<<bin_index) ? 1 : 0];
-                    }
-                    if(!best_score || dist < *best_score) {
-                        best_score = dist;
-                        for(int i = 0; i < 4; i++) best_indices[i] = indices[i];
-                    }
+            typedef pair<int, int> Index;
+            
+            vector<vector<Index> > indices_all;
+            int i = 0; BOOST_FOREACH(const vector<string> & subnames, names) {
+                indices_all.push_back(vector<Index>());
+                for(int j = 0; j < subnames.size(); j++) {
+                    indices_all[indices_all.size()-1].push_back(make_pair(i, j));
                 }
-            } while(next_permutation(indices, indices+4));
-            for(int i = 0; i < 4; i++) {
-                resultVector[i].put("image_text", names[best_indices[i]]);
-                ostringstream ss; ss << names[best_indices[i]];
+            i++; }
+            
+            std::vector<Index> best_indices;
+            optional<double> best_score;
+            BOOST_FOREACH(std::vector<Index> indices, cartesian_product(indices_all)) {
+                do {
+                    for(int rotate_mask = 0; rotate_mask < 16; rotate_mask++) {
+                        double dist = 0;
+                        for(int bin_index = 0; bin_index < names.size(); bin_index++) {
+                            dist += distances[indices[bin_index].first][indices[bin_index].second][rotate_mask & (1<<bin_index) ? 1 : 0][bin_index];
+                        }
+                        if(!best_score || dist < *best_score) {
+                            best_score = dist;
+                            best_indices = indices;
+                        }
+                    }
+                } while(next_permutation(indices.begin(), indices.end()));
+            }
+            for(int i = 0; i < names.size(); i++) {
+                resultVector[i].put("image_text", names[best_indices[i].first][best_indices[i].second]);
+                ostringstream ss; ss << names[best_indices[i].first][best_indices[i].second];
                 putText(res,ss.str().c_str(),centroids[i],FONT_HERSHEY_SIMPLEX,1,CV_RGB(0,0,255),3);
             }
         }
