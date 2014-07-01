@@ -3,6 +3,8 @@
 
 #include <vector>
 
+#include <boost/optional.hpp>
+
 #include <opencv/cv.h>
 
 
@@ -22,6 +24,7 @@ class Blob
 			float short_length;
 			float long_length;
 			std::vector<cv::Point> contour;
+			cv::Mat intrusions;
 
 			bool operator==(const BlobData &bdata) const {
 				return area == bdata.area;
@@ -32,8 +35,12 @@ class Blob
 			}
 		};
 
+		enum IntrusionMode {
+			INTRUSION_DEFAULT,
+			INTRUSION_IGNORE,
+			INTRUSION_SELECT};
 		std::vector<BlobData> data;
-		Blob(const cv::Mat &img, float minContour, float maxContour, float maxPerimeter, bool sortByRadius=false, bool allowInternal=false);
+		Blob(const cv::Mat &img, float minContour, float maxContour, float maxPerimeter, bool sortByRadius=false, bool allowInternal=false, IntrusionMode intrusionMode=INTRUSION_DEFAULT);
 		void drawResult(cv::Mat &img, const cv::Scalar &color);
 };
 

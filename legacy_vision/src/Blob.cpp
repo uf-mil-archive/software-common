@@ -15,20 +15,29 @@ bool radius_comparator(const Blob::BlobData &blob1, const Blob::BlobData &blob2)
     return blob1.radius < blob2.radius;
 }
 
-Blob::Blob(const Mat &img, float minContour, float maxContour, float maxPerimeter, bool sortByRadius, bool allowInternal) {
+Blob::Blob(const Mat &img, float minContour, float maxContour, float maxPerimeter, bool sortByRadius, bool allowInternal, Blob::IntrusionMode intrusionMode) {
 	Mat dbg_temp = img.clone();
 	std::vector<std::vector<cv::Point> > contours;
 	std::vector<cv::Vec4i> hierarchy;
 	findContours(dbg_temp,contours,hierarchy,allowInternal ? RETR_TREE : RETR_EXTERNAL,CHAIN_APPROX_SIMPLE);
 
 	int i = -1;
-	BOOST_FOREACH(const std::vector<cv::Point> &contour, contours) { i += 1;
+	BOOST_FOREACH(std::vector<cv::Point> contour, contours) { i += 1;
                 // only process positive contours
                 int nparents = 0;
                 for(int j = hierarchy[i][3]; j >= 0; j = hierarchy[j][3]) // for every parent up to root
                         nparents++;
                 if(nparents % 2) // if this node has an odd number of parents
                         continue; // skip it
+		
+		if(intrusionMode == INTRUSION_DEFAULT) {
+		} else if(intrusionMode == INTRUSION_IGNORE) {
+			vector<Point> convex_hull; convexHull(Mat(contour), convex_hull);
+			contour = convex_hull;
+		} else if(intrusionMode == INTRUSION_SELECT) {
+		} else {
+			assert(false);
+		}
 
 		float area_holder = fabs(contourArea(Mat(contour)));
 		vector<Point> convex_hull; convexHull(Mat(contour), convex_hull);
@@ -75,6 +84,16 @@ Blob::Blob(const Mat &img, float minContour, float maxContour, float maxPerimete
                 bdata.is_vertical = pow(sin(rr_angle_rad), 2) > pow(cos(rr_angle_rad), 2);
         bdata.short_length = rr.size.height;
         bdata.long_length = rr.size.width;
+
+		if(intrusionMode == INTRUSION_SELECT) {
+			Mat img2;
+			vector<Point> convex_hull; convexHull(Mat(contour), convex_hull);
+			
+            Mat thresholded2 = Mat::zeros(img.rows, img.cols, CV_8UC1);
+			drawContours(thresholded2, std::vector<std::vector<cv::Point> >(1, convex_hull), 0, Scalar(255), CV_FILLED, 1, vector<Vec4i>(), 5);
+			thresholded2 -= img;
+			bdata.intrusions = thresholded2;
+		}
 
 		data.push_back(bdata);
 	}

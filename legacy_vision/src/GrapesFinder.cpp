@@ -21,31 +21,39 @@ IFinder::FinderResult GrapesFinder::find(const subjugator::ImageSource::Image &i
 
         // call to thresholder here
         Mat thresholded;
+        Blob::IntrusionMode intrusionMode = Blob::INTRUSION_DEFAULT;
         if(objectPath[0] == "board") {
                 thresholded = Thresholder(normalized).simpleRGB(Vec3b(85, 85, 85), Vec3b(0, 128, 128));
 	        erode(thresholded, thresholded, cv::Mat::ones(5,5,CV_8UC1));
         } else if(objectPath[0] == "empty_cell") {
-                thresholded = Thresholder(normalized).simpleRGB(Vec3b(0, 255, 255), Vec3b(255, 0, 0));
+                thresholded = Thresholder(normalized).simpleRGB(Vec3b(0, 0, 255), Vec3b(255, 0, 0), 21, -10);
+                intrusionMode = Blob::INTRUSION_IGNORE;
         } else if(objectPath[0] == "peg") {
-                thresholded = Thresholder(normalized).simpleRGB(Vec3b(255, 0, 0), Vec3b(0, 0, 255));
+                thresholded = Thresholder(normalized).simpleRGB(Vec3b(0, 0, 255), Vec3b(255, 0, 0), 21, -10);
+                intrusionMode = Blob::INTRUSION_SELECT;
         } else {
                 throw std::runtime_error("Invalid object path");
         }
         /*
         erode(thresholded, thresholded, cv::Mat::ones(3,3,CV_8UC1)); // -1
         */
-        Blob blob(thresholded, 300, 1e10, 1e10, false, true);
+        Blob blob(thresholded, 300, 1e10, 1e10, false, true, intrusionMode);
         
         if(objectPath[0] != "board") {
             for(unsigned int i = 0; i < blob.data.size(); )
-                if(blob.data[i].circularity < .8)
+                if(blob.data[i].circularity < .7)
                         blob.data.erase(blob.data.begin()+i);
                 else
                         i++;
+            
+            if(blob.data.size() > 8 && blob.data.front().radius > 2 * blob.data[4].radius) {
+                // get rid of pipes being found
+                blob.data.erase(blob.data.begin());
+            }
         } else {
             Mat thresholded2 = Mat::zeros(img.image.rows, img.image.cols, CV_8UC1);
             for(unsigned int i = 0; i < blob.data.size(); i++) {
-		drawContours(thresholded2, std::vector<std::vector<cv::Point> >(1, blob.data[i].contour), 0, Scalar(255), CV_FILLED, 1, vector<Vec4i>(), 5);
+		        drawContours(thresholded2, std::vector<std::vector<cv::Point> >(1, blob.data[i].contour), 0, Scalar(255), CV_FILLED, 1, vector<Vec4i>(), 5);
             }
             thresholded = thresholded2.clone();
             dilate(thresholded2, thresholded2, cv::Mat::ones(25,25,CV_8UC1));
@@ -56,11 +64,21 @@ IFinder::FinderResult GrapesFinder::find(const subjugator::ImageSource::Image &i
         Mat res = normalized.clone();
         //if(blob.data.size() > 2)
         //        blob.data.resize(2);
-        blob.drawResult(res, CV_RGB(0, 255, 0));
+        if(objectPath[0] != "peg") {
+            blob.drawResult(res, CV_RGB(0, 255, 0));
+        }
 
         // Prepare results
         vector<property_tree::ptree> resultVector;
-        BOOST_FOREACH(const Blob::BlobData &item, blob.data) {
+        BOOST_FOREACH(Blob::BlobData item, blob.data) {
+                if(objectPath[0] == "peg") {
+        	        erode(item.intrusions, item.intrusions, cv::Mat::ones(3,3,CV_8UC1));
+                    thresholded = item.intrusions;
+                    Blob blob(item.intrusions, 300, 1e10, 1e10, false, true);
+                    if(!blob.data.size()) continue;
+                    item = blob.data[0];
+                    blob.drawResult(res, CV_RGB(0, 255, 0));
+                }
                 property_tree::ptree fResult;
                 fResult.put_child("center", Point_to_ptree(item.rect_center, img));
                 fResult.put_child("direction", Direction_to_ptree(item.rect_center, item.direction, img));
