@@ -13,7 +13,7 @@ class Contours
 			float area;
 			float perimeter;
 			float radius;
-			float circularity; // ranges from 0 for a line to 1 for a perfect ellipse
+			float circularity; // ranges from 0 for a line to 1 for a perfect circle
 			float outer_area;
 			std::vector<std::vector<cv::Point> > contour;
 		};
