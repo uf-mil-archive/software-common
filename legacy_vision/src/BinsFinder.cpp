@@ -97,6 +97,8 @@ IFinder::FinderResult BinsFinder::find(const subjugator::ImageSource::Image &img
                     touches_edge = true;
             if(touches_edge)
                     continue;
+	    if(box.area > .9*((box.perimeter/4)*(box.perimeter/4)))
+	        continue;
 
             Point2f src[4];
             for(unsigned int n = 0; n < box.corners.size(); n++)
