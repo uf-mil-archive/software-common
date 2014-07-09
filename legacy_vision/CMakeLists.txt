@@ -53,7 +53,6 @@ add_message_files(
 #rosbuild_gensrv()
 
 #common commands for building c++ executables and libraries
-file(GLOB sources src/*.cpp)
 
 ## Generate added messages and services with any dependencies listed here
 generate_messages(
@@ -70,7 +69,7 @@ catkin_package(
 )
 
 include_directories(include ${Boost_INCLUDE_DIR} ${catkin_INCLUDE_DIRS})
-add_library(legacy_vision_nodelet ${sources})
+add_library(legacy_vision_nodelet src/AvgLine.cpp src/BinsFinder.cpp src/Blob.cpp src/BoatDockFinder.cpp src/BuoyFinder.cpp src/ButtonFinder.cpp src/Contours.cpp src/FinderGenerator.cpp src/GrapesFinder.cpp src/HedgeFinder.cpp src/Line.cpp src/nodelet.cpp src/Normalizer.cpp src/PipeFinder.cpp src/ShooterFinder.cpp src/ShooterFloodFinder.cpp src/Thresholder.cpp src/WreathFinder.cpp)
 target_link_libraries(legacy_vision_nodelet ${catkin_LIBRARIES})
 add_dependencies(legacy_vision_nodelet ${catkin_EXPORTED_TARGETS})
 add_dependencies(legacy_vision_nodelet ${PROJECT_NAME}_generate_messages_cpp)
