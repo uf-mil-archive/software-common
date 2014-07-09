@@ -85,7 +85,7 @@ Mat Thresholder::black() {
 	Mat v; channelsHSV[2].convertTo(v, CV_32FC1, 1/256., 1/256./2);
 	log(v, v);
 	v.convertTo(dbg, CV_8UC1, 40, 256);
-	adaptiveThreshold(dbg, dbg, 255, 0, THRESH_BINARY_INV, 21, 3);
+	adaptiveThreshold(dbg, dbg, 255, 0, THRESH_BINARY_INV, 21, 10);
 	erode(dbg,dbg,cv::Mat::ones(3,3,CV_8UC1));
 	dilate(dbg,dbg,cv::Mat::ones(5,5,CV_8UC1));
 	erode(dbg,dbg,cv::Mat::ones(3,3,CV_8UC1));

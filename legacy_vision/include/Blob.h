@@ -25,6 +25,7 @@ class Blob
 			float long_length;
 			std::vector<cv::Point> contour;
 			cv::Mat intrusions;
+			std::vector<cv::Point> approx_contour;
 
 			bool operator==(const BlobData &bdata) const {
 				return area == bdata.area;
