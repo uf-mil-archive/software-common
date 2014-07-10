@@ -20,7 +20,8 @@ IFinder::FinderResult BoatDockFinder::find(const subjugator::ImageSource::Image 
         vector<property_tree::ptree> resultVector;
         Mat res = blurred.clone();
         Mat dbg = Thresholder(blurred).black();
-        Blob blob(dbg, 100, 1e10, 1e10, false, true);
+        dilate(dbg,dbg,cv::Mat::ones(3,3,CV_8UC1));
+        Blob blob(dbg, 200, 1e10, 1e10, false, true);
         
         if(objectPath[0] == "circle") {
                 for(unsigned int i = 0; i < blob.data.size(); )
@@ -41,12 +42,12 @@ IFinder::FinderResult BoatDockFinder::find(const subjugator::ImageSource::Image 
                                 i++;
         } else if(objectPath[0] == "cruciform") {
                 for(unsigned int i = 0; i < blob.data.size(); )
-                        if(blob.data[i].approx_contour.size() < 10 || blob.data[i].approx_contour.size() > 12)
+                        if(blob.data[i].approx_contour.size() < 5 || blob.data[i].approx_contour.size() > 10)
                                 blob.data.erase(blob.data.begin()+i);
                         else
                                 i++;
                 for(unsigned int i = 0; i < blob.data.size(); )
-                        if(blob.data[i].circularity < .4)
+                        if(blob.data[i].circularity_not_hull < .3 || blob.data[i].circularity_not_hull > .7)
                                 blob.data.erase(blob.data.begin()+i);
                         else
                                 i++;

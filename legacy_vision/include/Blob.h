@@ -21,6 +21,7 @@ class Blob
 			float aspect_ratio;  // ratio of length along angle to length perpendicular to angle. guaranteed to be >= 1
 			bool is_vertical; // long axis is within 45deg of vertical
 			float circularity; // [0, 1]
+			float circularity_not_hull;
 			float short_length;
 			float long_length;
 			std::vector<cv::Point> contour;
