@@ -34,6 +34,7 @@ class Node(object):
                 assert len(x) == 6
                 processed_config[name] = x
             processed_config['use_rise'] = config['use_rise']
+            processed_config['two_d_mode'] = config['two_d_mode']
 
             self.config = config
             self.processed_config = processed_config
