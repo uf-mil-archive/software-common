@@ -207,6 +207,8 @@ class PoseEditor(object):
         return self.set_orientation(
             transformations.quaternion_about_axis(heading, [0, 0, 1])
         )
+    def heading_deg(self, heading_deg):
+        return self.heading(math.radians(heading_deg))
     
     def roll_right(self, angle):
         return self.set_orientation(transformations.quaternion_multiply(
