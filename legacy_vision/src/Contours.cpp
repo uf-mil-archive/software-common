@@ -24,7 +24,7 @@ class CornerComparator {
 		}
 };
 
-Contours::Contours(const Mat &img, float minContour, float maxContour, float maxPerimeter) {
+Contours::Contours(const Mat &img, float minContour, float maxContour, float maxPerimeter, image_geometry::PinholeCameraModel camera_model) {
 	Mat dbg_temp = img.clone();
 	cv::findContours(dbg_temp,contours,hierarchy,CV_RETR_TREE,CV_CHAIN_APPROX_SIMPLE);
 
@@ -105,8 +105,19 @@ Contours::Contours(const Mat &img, float minContour, float maxContour, float max
 
 		double right_line = norm(outerBox.corners[1] - outerBox.corners[0]);
 		double left_line = norm(outerBox.corners[3] - outerBox.corners[2]);
-		outerBox.orientationError = right_line - left_line;
-
+		
+		cv::Point right_line_center = (outerBox.corners[1] + outerBox.corners[0])*0.5;
+		cv::Point left_line_center = (outerBox.corners[3] + outerBox.corners[2])*0.5;
+		
+        cv::Point3d right_ray = camera_model.projectPixelTo3dRay(right_line_center);
+        right_ray *= 1/cv::norm(right_ray);
+        right_ray *= 1/right_line;
+        cv::Point3d left_ray = camera_model.projectPixelTo3dRay(left_line_center);
+        left_ray *= 1/cv::norm(left_ray);
+        left_ray *= 1/left_line;
+        
+        outerBox.orientationError = atan((right_ray.z - left_ray.z) / (right_ray.x - left_ray.x));
+        
 		double length1 = norm(outerBox.corners[1] - outerBox.corners[0]);
 		double length2 = norm(outerBox.corners[3] - outerBox.corners[0]);
 		if(length1 > length2) {

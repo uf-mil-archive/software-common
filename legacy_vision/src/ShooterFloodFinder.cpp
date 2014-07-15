@@ -53,7 +53,7 @@ IFinder::FinderResult ShooterFloodFinder::find(const subjugator::ImageSource::Im
 	erode(dbg,dbg,Mat::ones(5,5,CV_8UC1));
 
 	// call to specific member function here
-	Contours contours(dbg, 50, 7000000,1500000);
+	Contours contours(dbg, 50, 7000000,1500000, img.camera_model);
 
 	// Draw result
 	Mat res = img.image.clone();

@@ -64,6 +64,9 @@ IFinder::FinderResult GrapesFinder::find(const subjugator::ImageSource::Image &i
         Mat res = normalized.clone();
         //if(blob.data.size() > 2)
         //        blob.data.resize(2);
+        if(objectPath[0] == "peg") {
+            thresholded *= 0;
+        }
         if(objectPath[0] != "peg") {
             blob.drawResult(res, CV_RGB(0, 255, 0));
         }
@@ -73,7 +76,7 @@ IFinder::FinderResult GrapesFinder::find(const subjugator::ImageSource::Image &i
         BOOST_FOREACH(Blob::BlobData item, blob.data) {
                 if(objectPath[0] == "peg") {
         	        erode(item.intrusions, item.intrusions, cv::Mat::ones(3,3,CV_8UC1));
-                    thresholded = item.intrusions;
+                    thresholded |= item.intrusions;
                     Blob blob(item.intrusions, 300, 1e10, 1e10, false, true);
                     if(!blob.data.size()) continue;
                     item = blob.data[0];

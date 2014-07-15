@@ -4,6 +4,7 @@
 #include <vector>
 
 #include <opencv/cv.h>
+#include <image_geometry/pinhole_camera_model.h>
 
 class Contours
 {
@@ -34,7 +35,7 @@ class Contours
 		std::vector<InnerContour> shapes; // all inner contours
 		std::vector<OuterBox> boxes; // output holder
 
-		Contours(const cv::Mat &img, float minContour, float maxContour, float maxPerimeter);
+		Contours(const cv::Mat &img, float minContour, float maxContour, float maxPerimeter, image_geometry::PinholeCameraModel camera_model);
 		void drawResult(cv::Mat &img, const cv::Scalar &color);
 		double angle(cv::Point pt1, cv::Point pt2, cv::Point pt0);
 		InnerContour findLargestShape();

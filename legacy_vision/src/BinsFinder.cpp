@@ -67,7 +67,7 @@ IFinder::FinderResult BinsFinder::find(const subjugator::ImageSource::Image &img
     vector<property_tree::ptree> resultVector;
     Mat dbg = thresholder.black();
 
-    Contours contours(dbg, config.get<float>("minContour"), config.get<float>("maxContour"), config.get<float>("maxPerimeter"));
+    Contours contours(dbg, config.get<float>("minContour"), config.get<float>("maxContour"), config.get<float>("maxPerimeter"), img.camera_model);
 
     // Draw result
     Mat res = img.image.clone();
