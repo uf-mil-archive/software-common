@@ -19,33 +19,52 @@ IFinder::FinderResult WreathFinder::find(const subjugator::ImageSource::Image &i
 vector<property_tree::ptree> resultVector;
         Mat dbg;
         if(objectPath[0] == "moonrock") {
-            dbg = Thresholder(normalized).simpleRGB(Vec3b(85, 85, 85), Vec3b(0, 0, 255), 11, -10);
+            dbg = Thresholder(normalized).red();
+            //dilate(dbg, dbg, cv::Mat::ones(3,3,CV_8UC1));
+            //erode(dbg, dbg, cv::Mat::ones(3,3,CV_8UC1));
+            //dilate(dbg, dbg, cv::Mat::ones(5,5,CV_8UC1));
         } else if(objectPath[0] == "cheese") {
-            dbg = Thresholder(normalized).simpleRGB(Vec3b(85, 85, 85), Vec3b(0, 255, 0), 11, -7);
+            dbg = Thresholder(normalized).green();
+            dilate(dbg, dbg, cv::Mat::ones(3,3,CV_8UC1));
+            erode(dbg, dbg, cv::Mat::ones(3,3,CV_8UC1));
+            dilate(dbg, dbg, cv::Mat::ones(9,9,CV_8UC1));
         } else {
             throw std::runtime_error("Invalid object path");
         }
-        dilate(dbg, dbg, cv::Mat::ones(3,3,CV_8UC1));
-        erode(dbg, dbg, cv::Mat::ones(3,3,CV_8UC1));
-        //dilate(dbg, dbg, cv::Mat::ones(3,3,CV_8UC1));
 
         Blob blob(dbg, 100, 1000000, 1000000);
 
         for(unsigned int i = 0; i < blob.data.size(); ) {
             if(objectPath[0] == "moonrock") {
-                if(blob.data[i].circularity < .35 || blob.data[i].circularity > .65)
+                if(blob.data[i].circularity < .4 || blob.data[i].circularity > .8)
                     blob.data.erase(blob.data.begin()+i);
                 else
-                    i++;;
+                    i++;
             } else if(objectPath[0] == "cheese") {
-                if(blob.data[i].circularity < .35 || blob.data[i].circularity > .6)
+                if(blob.data[i].circularity < .35 || blob.data[i].circularity > .8)
                     blob.data.erase(blob.data.begin()+i);
                 else
                     i++;
             } else {
             throw std::runtime_error("Invalid object path");
             }
-	}
+	    }
+	    
+	    for(unsigned int i = 0; i < blob.data.size(); ) {
+            if(objectPath[0] == "moonrock") {
+                if(blob.data[i].radius < 30 || blob.data[i].radius > 90)
+                    blob.data.erase(blob.data.begin()+i);
+                else
+                    i++;;
+            } else if(objectPath[0] == "cheese") {
+                if(blob.data[i].radius < 25 || blob.data[i].radius > 80)
+                    blob.data.erase(blob.data.begin()+i);
+                else
+                    i++;
+            } else {
+            throw std::runtime_error("Invalid object path");
+            }
+	    }
 	/*vector<property_tree::ptree> resultVector;
 	Mat dbg;
 	dbg = Thresholder(normalized).simpleRGB(Vec3b(85, 85, 85), Vec3b(0, 0, 255), 11, -10);
@@ -71,10 +90,9 @@ vector<property_tree::ptree> resultVector;
 			fResult.put_child("center", Point_to_ptree(data.centroid, img));
 			fResult.put("scale", data.radius);
 			fResult.put_child("direction", Direction_to_ptree(data.centroid, data.direction, img));
-                        fResult.put("direction_symmetry", 4);
+            fResult.put("direction_symmetry", 4);
 			resultVector.push_back(fResult);
 //			}
-		break; // we only care about the largest blob
 	}
 	return FinderResult(resultVector, res, dbg);
 }

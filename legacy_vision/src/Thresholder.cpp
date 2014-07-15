@@ -44,6 +44,8 @@ Mat Thresholder::shooterRed() {
 }
 
 Mat Thresholder::red() {
+    //Mat dbg; inRange(channelsRGB[2],Scalar(155,0,0,0),Scalar(255,0,0,0),dbg);
+    //return dbg;
 	Mat x; addWeighted(channelsRGB[0], 1/2., channelsRGB[1], 1/2., 255/2., x);
 	Mat y; addWeighted(x, 1, channelsRGB[2], -1/2., 0, y);
 	Mat dbg; adaptiveThreshold(y,dbg,255,ADAPTIVE_THRESH_MEAN_C,THRESH_BINARY_INV,35,10);
@@ -65,9 +67,9 @@ Mat Thresholder::yellow() {
 }
 
 Mat Thresholder::green() {
-        Mat greenness; addWeighted(channelsRGB[1], 1, channelsRGB[0], -1, 128, greenness);
-	Mat dbg; adaptiveThreshold(greenness,dbg,255,0,THRESH_BINARY,101,-4);
-        return dbg;
+    //Mat greenness; addWeighted(channelsRGB[1], 1, channelsRGB[2], -1, 128, greenness);
+	Mat dbg; inRange(channelsRGB[1],Scalar(98,0,0,0),Scalar(255,0,0,0),dbg);
+    return dbg;
 }
 
 Mat Thresholder::blue() {
