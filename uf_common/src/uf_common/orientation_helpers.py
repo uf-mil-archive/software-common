@@ -201,12 +201,16 @@ class PoseEditor(object):
     def yaw_right(self, angle): return self.yaw_left(-angle)
     def yaw_left_deg(self, angle_degrees): return self.yaw_left(math.radians(angle_degrees))
     def yaw_right_deg(self, angle_degrees): return self.yaw_right(math.radians(angle_degrees))
+    turn_left = yaw_left
+    turn_right = yaw_right
     turn_left_deg = yaw_left_deg
     turn_right_deg = yaw_right_deg
     def heading(self, heading):
         return self.set_orientation(
             transformations.quaternion_about_axis(heading, [0, 0, 1])
         )
+    def heading_deg(self, heading_deg):
+        return self.heading(math.radians(heading_deg))
     
     def roll_right(self, angle):
         return self.set_orientation(transformations.quaternion_multiply(

@@ -77,6 +77,7 @@ Blob::Blob(const Mat &img, float minContour, float maxContour, float maxPerimete
 		bdata.radius = radius_holder;
                 bdata.direction = radius_holder * cv::Point2f(cos(rr_angle_rad), sin(rr_angle_rad));
 		bdata.circularity = convex_area_holder/(pi<double>()*pow(radius_holder, 2));
+		bdata.circularity_not_hull = area_holder/(pi<double>()*pow(radius_holder, 2));
 		bdata.contour = contour;
 		bdata.rect_center = rr.center;
 
@@ -84,6 +85,8 @@ Blob::Blob(const Mat &img, float minContour, float maxContour, float maxPerimete
                 bdata.is_vertical = pow(sin(rr_angle_rad), 2) > pow(cos(rr_angle_rad), 2);
         bdata.short_length = rr.size.height;
         bdata.long_length = rr.size.width;
+        
+		approxPolyDP(Mat(convex_hull), bdata.approx_contour, perimeter_holder*0.03, true);
 
 		if(intrusionMode == INTRUSION_SELECT) {
 			Mat img2;
@@ -108,17 +111,19 @@ Blob::Blob(const Mat &img, float minContour, float maxContour, float maxPerimete
 
 void Blob::drawResult(Mat &img, const Scalar &color) {
 	BOOST_FOREACH(const BlobData &item, data) {
+		drawContours(img, std::vector<std::vector<cv::Point> >(1, item.contour), 0, CV_RGB(255,0,0), 2, 8);
+		drawContours(img, std::vector<std::vector<cv::Point> >(1, item.approx_contour), 0, CV_RGB(0,255,0), 2, 8);
 		circle(img, item.centroid, (int)item.radius,color, 2, 8, 0);
 		line(img, item.centroid,
 		     item.centroid + item.direction, CV_RGB(255,0,0),2,8);
 
 		std::ostringstream os;
 		os << "A " << (int)item.area << " "
-		   << "R " << item.radius;
-		putText(img, os.str().c_str(), Point(item.centroid.x-30,item.centroid.y-10), FONT_HERSHEY_DUPLEX, 1, CV_RGB(0,0,0), 1.5);
+		   << "R " << std::setprecision(3) << item.radius;
+		putText(img, os.str().c_str(), Point(item.centroid.x-30,item.centroid.y-10), FONT_HERSHEY_DUPLEX, 1, CV_RGB(0,0,255), 1.5);
 		std::ostringstream os2;
-		os2 << item.circularity;
-		putText(img, os2.str().c_str(), Point(item.centroid.x-30,item.centroid.y+10), FONT_HERSHEY_DUPLEX, 1, CV_RGB(0,0,0), 1.5);
+		os2 << std::setprecision(3) << item.circularity_not_hull << " " << item.approx_contour.size();
+		putText(img, os2.str().c_str(), Point(item.centroid.x-30,item.centroid.y+10), FONT_HERSHEY_DUPLEX, 1, CV_RGB(0,0,255), 1.5);
 	}
 
 }

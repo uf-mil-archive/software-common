@@ -92,8 +92,9 @@ def preprocess(samples, sample_rate, desired_sample_rate):
 
 def bandpass(samples, sample_rate):
     """Applies a 20-30khz bandpass FIR filter"""
+    # 25-40KHz is the range of the pinger for the roboboat competition
     fir = scipy.signal.firwin(128,
-                              [19e3/(sample_rate/2), 31e3/(sample_rate/2)],
+                              [19e3/(sample_rate/2), 41e3/(sample_rate/2)],
                               window='hann',
                               pass_zero=False)
     return scipy.signal.lfilter(fir, 1, samples)

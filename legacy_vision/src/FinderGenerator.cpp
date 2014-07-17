@@ -7,6 +7,7 @@
 
 #include "FinderGenerator.h"
 
+#include "BoatDockFinder.h"
 #include "BuoyFinder.h"
 #include "GrapesFinder.h"
 #include "PipeFinder.h"
@@ -30,6 +31,7 @@ vector<pair<string, shared_ptr<IFinder> > > FinderGenerator::buildFinders(const 
 		vector<string> rest(objectPath.begin()+1, objectPath.end());
 		property_tree::ptree fconfig = config.get_child(objectPath[0], property_tree::ptree());
 		shared_ptr<IFinder> finder =
+			objectPath[0] == "boat_dock" ? make_shared<BoatDockFinder>(rest, fconfig) :
 			objectPath[0] == "buoy" ? make_shared<BuoyFinder>(rest, fconfig) :
 			objectPath[0] == "grapes" ? make_shared<GrapesFinder>(rest, fconfig) :
 			objectPath[0] == "pipe" ? make_shared<PipeFinder>(rest, fconfig) :

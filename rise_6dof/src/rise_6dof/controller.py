@@ -48,6 +48,8 @@ class Controller(object):
                 transformations.quaternion_inverse(o),
             )),
         ])
+        if self.config['two_d_mode']:
+            error_position_world = error_position_world * [1, 1, 0, 0, 0, 1]
         
         world_from_body2 = numpy.zeros((6, 6))
         world_from_body2[:3, :3] = world_from_body2[3:, 3:] = world_from_body
@@ -55,6 +57,8 @@ class Controller(object):
         
         
         error_velocity_world = (desired_x_dot + body_gain(numpy.diag(self.config['k'])).dot(error_position_world)) - x_dot
+        if self.config['two_d_mode']:
+            error_velocity_world = error_velocity_world * [1, 1, 0, 0, 0, 1]
         
         pd_output = body_gain(numpy.diag(self.config['ks'])).dot(error_velocity_world)
         
