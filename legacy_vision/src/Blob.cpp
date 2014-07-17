@@ -112,7 +112,7 @@ Blob::Blob(const Mat &img, float minContour, float maxContour, float maxPerimete
 void Blob::drawResult(Mat &img, const Scalar &color) {
 	BOOST_FOREACH(const BlobData &item, data) {
 		drawContours(img, std::vector<std::vector<cv::Point> >(1, item.contour), 0, CV_RGB(255,0,0), 2, 8);
-		drawContours(img, std::vector<std::vector<cv::Point> >(1, item.approx_contour), 0, CV_RGB(0,255,0), 2, 8);
+		//drawContours(img, std::vector<std::vector<cv::Point> >(1, item.approx_contour), 0, CV_RGB(0,255,0), 2, 8);
 		circle(img, item.centroid, (int)item.radius,color, 2, 8, 0);
 		line(img, item.centroid,
 		     item.centroid + item.direction, CV_RGB(255,0,0),2,8);
@@ -120,10 +120,10 @@ void Blob::drawResult(Mat &img, const Scalar &color) {
 		std::ostringstream os;
 		os << "A " << (int)item.area << " "
 		   << "R " << std::setprecision(3) << item.radius;
-		putText(img, os.str().c_str(), Point(item.centroid.x-30,item.centroid.y-10), FONT_HERSHEY_DUPLEX, 1, CV_RGB(0,0,255), 1.5);
+		putText(img, os.str().c_str(), Point(item.centroid.x-30,item.centroid.y-10), FONT_HERSHEY_DUPLEX, 1, CV_RGB(0,255,0), 1.5);
 		std::ostringstream os2;
 		os2 << std::setprecision(3) << item.circularity_not_hull << " " << item.approx_contour.size();
-		putText(img, os2.str().c_str(), Point(item.centroid.x-30,item.centroid.y+10), FONT_HERSHEY_DUPLEX, 1, CV_RGB(0,0,255), 1.5);
+		putText(img, os2.str().c_str(), Point(item.centroid.x-30,item.centroid.y+10), FONT_HERSHEY_DUPLEX, 1, CV_RGB(0,255,0), 1.5);
 	}
 
 }
