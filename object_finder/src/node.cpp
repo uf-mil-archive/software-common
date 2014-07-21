@@ -109,7 +109,7 @@ struct Particle {
     Particle(TargetDesc const &goal,
              Vector3d pos,
              Quaterniond q,
-             boost::optional<Vector3d> last_color=Vector3d(0,0,0),
+             boost::optional<Vector3d> last_color=boost::none,
              double last_corr=nan("")) :
       goal(goal), pos(pos), q(q),
       last_color(last_color), last_corr(last_corr) {
@@ -262,7 +262,7 @@ struct Particle {
                   std::pair<Vector2d, double> old = img.get_point_pixel(pos);
                   Vector3d new_pos = img.get_pixel_point(old.first + Vector2d(offset_x, offset_y), old.second);
                   
-                  if(true) { // XXX make configurable
+                  if(new_pos(2) < 0) { // XXX make configurable
                     rb.reset(img, orig_rb);
                     
                     maybe_best = Particle(goal, new_pos, q, Vector3d(1, 2, 3), -1);
@@ -302,7 +302,7 @@ struct Particle {
           for(int i = 0; i < 3; i++) {
             std::vector<double> colors;
             for(unsigned int c = 0; c < mesh.components.size(); c++) {
-              double color = (Color_to_vec(mesh.components[c].color))(i);
+              double color = normalize_color(Color_to_vec(mesh.components[c].color))(i);
               colors.push_back(color);
             }
             if(*std::min_element(colors.begin(), colors.end()) ==
@@ -318,7 +318,7 @@ struct Particle {
             for(unsigned int c = 0; c < mesh.components.size(); c++) {
               Result const & result = results[regions[c]];
               
-              double color = (Color_to_vec(mesh.components[c].color))(i);
+              double color = normalize_color(Color_to_vec(mesh.components[c].color))(i);
               n      += result.count;
               sum_x  += result.total_color(i);
               sum_x2 += result.total_color2(i);
@@ -337,7 +337,7 @@ struct Particle {
           for(unsigned int c = 0; c < mesh.components.size(); c++) {
             RenderBuffer::RegionType region = regions[c];
             
-            colors[10 + region] << (Color_to_vec(mesh.components[c].color)), 1;
+            colors[10 + region] << normalize_color(Color_to_vec(mesh.components[c].color)), 1;
           }
           
           ArrayXXd planes[3];
@@ -424,14 +424,11 @@ struct Particle {
                 std::pair<Vector2d, double> old = img.get_point_pixel(pos);
                 Vector3d new_pos = img.get_pixel_point(old.first + Vector2d(offset_x, offset_y), old.second);
                 
-                if(true) { // XXX make configurable
+                if(new_pos(2) < 0) { // XXX make configurable
                   rb.reset(img, orig_rb);
                   
-                  Particle x(goal, new_pos, q, Vector3d(1, 2, 3), -1);
-                  x.last_corr = x.P(img, rb, rb);
-                  if(std::isfinite(x.last_corr)) {
-                    maybe_best = x;
-                  }
+                  maybe_best = Particle(goal, new_pos, q, Vector3d(1, 2, 3), -1);
+                  maybe_best->last_corr = maybe_best->P(img, rb, rb);
                 }
               }
             }

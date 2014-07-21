@@ -120,12 +120,12 @@ struct TaggedImage {
                     color[i] += 0.01 * (static_cast<double>(rand())/RAND_MAX);
                 }
                 
-                /*double sum = color[0] + color[1] + color[2];
+                double sum = color[0] + color[1] + color[2];
                 if(sum == 0) {
                     color = Eigen::Vector3d(1/3., 1/3., 1/3.);
                 } else {
                     color /= sum;
-                }*/
+                }
                 
                 row_cumulative_sum += color;
                 sumimage[(image.width+1) * row + col+1] = row_cumulative_sum;
@@ -207,12 +207,12 @@ struct TaggedImage {
                     get_pixel(2*row+0, 2*col+1) +
                     get_pixel(2*row+1, 2*col+0) +
                     get_pixel(2*row+1, 2*col+1));
-                /*double sum = color[0] + color[1] + color[2];
+                double sum = color[0] + color[1] + color[2];
                 if(sum == 0) {
                     color = Eigen::Vector3d(1/3., 1/3., 1/3.);
                 } else {
                     color /= sum;
-                }*/
+                }
                 
                 row_cumulative_sum += color;
                 res.sumimage[(res.width+1) * row + col+1] = row_cumulative_sum;
