@@ -108,15 +108,19 @@ Contours::Contours(const Mat &img, float minContour, float maxContour, float max
 		
 		cv::Point right_line_center = (outerBox.corners[1] + outerBox.corners[0])*0.5;
 		cv::Point left_line_center = (outerBox.corners[3] + outerBox.corners[2])*0.5;
+
+std::cout << "lengths: " << left_line << " " << right_line << std::endl;
 		
         cv::Point3d right_ray = camera_model.projectPixelTo3dRay(right_line_center);
-        right_ray *= 1/cv::norm(right_ray);
+        right_ray *= 1/right_ray.z; //1/cv::norm(right_ray);
         right_ray *= 1/right_line;
         cv::Point3d left_ray = camera_model.projectPixelTo3dRay(left_line_center);
-        left_ray *= 1/cv::norm(left_ray);
+        left_ray *= 1/left_ray.z; //1/cv::norm(left_ray);
         left_ray *= 1/left_line;
         
         outerBox.orientationError = atan((right_ray.z - left_ray.z) / (right_ray.x - left_ray.x));
+std::cout << (right_ray.z - left_ray.z) << " " << (right_ray.x - left_ray.x) << std::endl;
+std::cout << "done: " << outerBox.orientationError << std::endl;
         
 		double length1 = norm(outerBox.corners[1] - outerBox.corners[0]);
 		double length2 = norm(outerBox.corners[3] - outerBox.corners[0]);
