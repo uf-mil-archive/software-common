@@ -1,6 +1,5 @@
 Header header
-float64 heading
-float64 declination
+geometry_msgs/Point position
 float64 freq
 float64 amplitude
 bool valid
