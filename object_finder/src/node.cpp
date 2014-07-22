@@ -700,8 +700,8 @@ struct GoalExecutor {
                 targetres.pose.position = vec2xyz<Point>(particle.pos);
                 targetres.pose.orientation =
                      quat2xyzw<geometry_msgs::Quaternion>(particle.q);
-                targetres.color = make_rgb<Color>((*particle.last_color)[0],
-                    (*particle.last_color)[1], (*particle.last_color)[2]);
+                //targetres.color = make_rgb<Color>((*particle.last_color)[0],
+                //    (*particle.last_color)[1], (*particle.last_color)[2]);
                 targetres.P = particle.last_corr;
                 targetres.smoothed_last_P = particle.last_corr;
                 targetres.P_within_10cm = 0;
