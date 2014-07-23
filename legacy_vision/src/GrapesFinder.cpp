@@ -24,35 +24,15 @@ IFinder::FinderResult GrapesFinder::find(const subjugator::ImageSource::Image &i
         Blob::IntrusionMode intrusionMode = Blob::INTRUSION_DEFAULT;
         if(objectPath[0] == "board") {
                 thresholded = Thresholder(normalized).simpleRGB(Vec3b(85, 85, 85), Vec3b(0, 128, 128));
-	            erode(thresholded, thresholded, cv::Mat::ones(5,5,CV_8UC1));
-	            dilate(dbg, dbg, cv::Mat::ones(5,5,CV_8UC1));
-	            erode(dbg, dbg, cv::Mat::ones(5,5,CV_8UC1));
-                Mat x = dbg.clone(); floodFill(x, Point(0, 0), CV_RGB(255, 255, 255));
-                bitwise_not(x, x);
-                dbg |= x;
-	            //dilate(dbg, dbg, cv::Mat::ones(11,11,CV_8UC1));
-	            //erode(dbg, dbg, cv::Mat::ones(11,11,CV_8UC1));
-                Contours contours(dbg, 100, 1e12, 1e12, img.camera_model);
-                contours.drawResult(res, CV_RGB(255, 255, 255));
-                
-                BOOST_FOREACH(const Contours::OuterBox &box, contours.boxes) {
-                        property_tree::ptree fResult;
-                        fResult.put_child("center", Point_to_ptree(box.centroid, img));
-                        //fResult.put_child("direction", Direction_to_ptree(box.centroid, src[1] - src[0], img));
-                        //fResult.put("direction_symmetry", 2);
-
-                        fResult.put("orientation_error", box.orientationError);
-                        fResult.put("angle", box.angle);
-                        fResult.put("scale", box.area);
-                        resultVector.push_back(fResult);
+	        erode(thresholded, thresholded, cv::Mat::ones(5,5,CV_8UC1));
         } else if(objectPath[0] == "empty_cell") {
-            thresholded = Thresholder(normalized).simpleRGB(Vec3b(0, 0, 255), Vec3b(255, 0, 0), 21, -10);
-            intrusionMode = Blob::INTRUSION_IGNORE;
+                thresholded = Thresholder(normalized).simpleRGB(Vec3b(0, 0, 255), Vec3b(255, 0, 0), 21, -10);
+                intrusionMode = Blob::INTRUSION_IGNORE;
         } else if(objectPath[0] == "peg") {
-            thresholded = Thresholder(normalized).simpleRGB(Vec3b(0, 0, 255), Vec3b(255, 0, 0), 21, -10);
-            intrusionMode = Blob::INTRUSION_SELECT;
+                thresholded = Thresholder(normalized).simpleRGB(Vec3b(0, 0, 255), Vec3b(255, 0, 0), 21, -10);
+                intrusionMode = Blob::INTRUSION_SELECT;
         } else {
-            throw std::runtime_error("Invalid object path");
+                throw std::runtime_error("Invalid object path");
         }
         /*
         erode(thresholded, thresholded, cv::Mat::ones(3,3,CV_8UC1)); // -1

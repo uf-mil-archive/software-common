@@ -25,26 +25,19 @@ IFinder::FinderResult ShooterFinder::find(const subjugator::ImageSource::Image &
                 dbg = Thresholder(normalized).simpleRGB(Vec3b(106, 106, 43), Vec3b(0, 255, 0), 21, -3);
 	        dilate(dbg, dbg, cv::Mat::ones(11,11,CV_8UC1));
 	        erode(dbg, dbg, cv::Mat::ones(11,11,CV_8UC1));
-	            dilate(dbg, dbg, cv::Mat::ones(5,5,CV_8UC1));
-	            erode(dbg, dbg, cv::Mat::ones(5,5,CV_8UC1));
-                Mat x = dbg.clone(); floodFill(x, Point(0, 0), CV_RGB(255, 255, 255));
-                bitwise_not(x, x);
-                dbg |= x;
-	            //dilate(dbg, dbg, cv::Mat::ones(11,11,CV_8UC1));
-	            //erode(dbg, dbg, cv::Mat::ones(11,11,CV_8UC1));
                 Contours contours(dbg, 100, 1e12, 1e12, img.camera_model);
                 contours.drawResult(res, CV_RGB(255, 255, 255));
-                    
+                
                 BOOST_FOREACH(const Contours::OuterBox &box, contours.boxes) {
-                        property_tree::ptree fResult;
-                        fResult.put_child("center", Point_to_ptree(box.centroid, img));
-                        //fResult.put_child("direction", Direction_to_ptree(box.centroid, src[1] - src[0], img));
-                        //fResult.put("direction_symmetry", 2);
+                    property_tree::ptree fResult;
+                    fResult.put_child("center", Point_to_ptree(box.centroid, img));
+                    //fResult.put_child("direction", Direction_to_ptree(box.centroid, src[1] - src[0], img));
+                    //fResult.put("direction_symmetry", 2);
 
-                        fResult.put("orientation_error", box.orientationError);
-                        fResult.put("angle", box.angle);
-                        fResult.put("scale", box.area);
-                        resultVector.push_back(fResult);
+                    fResult.put("orientation_error", box.orientationError);
+                    fResult.put("angle", box.angle);
+                    fResult.put("scale", box.area);
+                    resultVector.push_back(fResult);
                 }
         } else {
                 dbg = Thresholder(blurred).black();
