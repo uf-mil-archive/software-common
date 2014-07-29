@@ -24,6 +24,7 @@ class Blob
 			float circularity_not_hull;
 			float short_length;
 			float long_length;
+			float hollowness;
 			std::vector<cv::Point> contour;
 			cv::Mat intrusions;
 			std::vector<cv::Point> approx_contour;

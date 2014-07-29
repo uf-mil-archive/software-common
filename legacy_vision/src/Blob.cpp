@@ -86,7 +86,7 @@ Blob::Blob(const Mat &img, float minContour, float maxContour, float maxPerimete
         bdata.short_length = rr.size.height;
         bdata.long_length = rr.size.width;
         
-		approxPolyDP(Mat(convex_hull), bdata.approx_contour, perimeter_holder*0.03, true);
+		//approxPolyDP(Mat(convex_hull), bdata.approx_contour, perimeter_holder*0.03, true);
 
 		if(intrusionMode == INTRUSION_SELECT) {
 			Mat img2;

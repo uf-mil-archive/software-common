@@ -28,12 +28,14 @@ def process_ping(ping):
     if len(r['errors']) > 0:
         rospy.logwarn('Errors processing ping: ' + ", ".join(r['errors']))
 
-    pub.publish(header=Header(stamp=ping.header.stamp,
+    valid = len(r['pos']) > 0 and len(r['errors']) == 0
+    if valid:
+        pub.publish(header=Header(stamp=ping.header.stamp,
                               frame_id=ping.header.frame_id),
                 position=Point(*r['pos'].tolist()),
                 freq=r['freq'],
                 amplitude=r['amplitude'],
-                valid=len(r['pos']) > 0 and len(r['errors']) == 0)
+                valid=valid)
     pub_pose.publish(header=Header(stamp=ping.header.stamp,
                                    frame_id=ping.header.frame_id),
     pose=Pose(position=Point(*r['pos'].tolist())))
