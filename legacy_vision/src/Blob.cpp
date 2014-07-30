@@ -109,6 +109,14 @@ Blob::Blob(const Mat &img, float minContour, float maxContour, float maxPerimete
 			bdata.intrusions = thresholded2;
 		}
 
+		int parent = hierarchy[i][3];
+		if(parent > 0) {
+			float area_holder = fabs(contourArea(Mat(contours[parent])));
+			bdata.parent_area = area_holder;
+		} else {
+			bdata.parent_area = -1;
+		}
+
 		data.push_back(bdata);
 	}
 
@@ -133,7 +141,7 @@ void Blob::drawResult(Mat &img, const Scalar &color) {
 		   << "R " << std::setprecision(3) << item.radius;
 		putText(img, os.str().c_str(), Point(item.centroid.x-30,item.centroid.y-10), FONT_HERSHEY_DUPLEX, 1, CV_RGB(0,255,0), 1.5);
 		std::ostringstream os2;
-		os2 << std::setprecision(3) << item.circularity_not_hull << " " << item.hollowness << " " << item.approx_contour.size();
+		os2 << std::setprecision(3) << item.circularity_not_hull << " " << item.hollowness << " " << item.parent_area;
 		putText(img, os2.str().c_str(), Point(item.centroid.x-30,item.centroid.y+10), FONT_HERSHEY_DUPLEX, 1, CV_RGB(0,255,0), 1.5);
 	}
 

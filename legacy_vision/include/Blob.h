@@ -29,6 +29,7 @@ class Blob
 			cv::Mat intrusions;
 			std::vector<cv::Point> approx_contour;
 			std::vector<std::vector<cv::Point> > holes;
+			double parent_area;
 
 			bool operator==(const BlobData &bdata) const {
 				return area == bdata.area;
