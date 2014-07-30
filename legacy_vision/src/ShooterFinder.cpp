@@ -23,8 +23,8 @@ IFinder::FinderResult ShooterFinder::find(const subjugator::ImageSource::Image &
         if(objectPath[0] == "board") {
                 Mat normalized = Normalizer::normRGB(blurred);
                 dbg = Thresholder(normalized).simpleRGB(Vec3b(106, 106, 43), Vec3b(0, 255, 0), 21, -3);
-	        dilate(dbg, dbg, cv::Mat::ones(11,11,CV_8UC1));
-	        erode(dbg, dbg, cv::Mat::ones(11,11,CV_8UC1));
+	        //dilate(dbg, dbg, cv::Mat::ones(11,11,CV_8UC1));
+	        //erode(dbg, dbg, cv::Mat::ones(11,11,CV_8UC1));
                 Contours contours(dbg, 100, 1e12, 1e12, img.camera_model);
                 contours.drawResult(res, CV_RGB(255, 255, 255));
                 
@@ -41,6 +41,7 @@ IFinder::FinderResult ShooterFinder::find(const subjugator::ImageSource::Image &
                 }
         } else {
                 dbg = Thresholder(blurred).black();
+                cv::bitwise_not(dbg,dbg);
                 Blob blob(dbg, 300, 1e10, 1e10, false, true);
                 for(unsigned int i = 0; i < blob.data.size(); )
                         if(blob.data[i].circularity < .7)

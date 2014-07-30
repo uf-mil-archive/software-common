@@ -48,7 +48,7 @@ Mat Thresholder::red() {
     //return dbg;
 	Mat x; addWeighted(channelsRGB[0], 1/2., channelsRGB[1], 1/2., 255/2., x);
 	Mat y; addWeighted(x, 1, channelsRGB[2], -1/2., 0, y);
-	Mat dbg; adaptiveThreshold(y,dbg,255,ADAPTIVE_THRESH_MEAN_C,THRESH_BINARY_INV,35,5);
+	Mat dbg; adaptiveThreshold(y,dbg,255,ADAPTIVE_THRESH_MEAN_C,THRESH_BINARY_INV,35,2);
 	return dbg;
 }
 
@@ -82,7 +82,21 @@ Mat Thresholder::blue() {
 	return dbg;
 }
 
+//shooter
 Mat Thresholder::black() {
+	Mat dbg;
+	Mat v; channelsHSV[2].convertTo(v, CV_32FC1, 1/256., 1/256./2);
+	log(v, v);
+	v.convertTo(dbg, CV_8UC1, 40, 256);
+	adaptiveThreshold(dbg, dbg, 255, 0, THRESH_BINARY_INV, 21, 2);
+	erode(dbg,dbg,cv::Mat::ones(3,3,CV_8UC1));
+	dilate(dbg,dbg,cv::Mat::ones(5,5,CV_8UC1));
+	erode(dbg,dbg,cv::Mat::ones(3,3,CV_8UC1));
+	return dbg;
+}
+
+//collection
+Mat Thresholder::black2() {
 	Mat dbg;
 	Mat v; channelsHSV[2].convertTo(v, CV_32FC1, 1/256., 1/256./2);
 	log(v, v);

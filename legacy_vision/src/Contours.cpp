@@ -100,6 +100,8 @@ Contours::Contours(const Mat &img, float minContour, float maxContour, float max
 		outerBox.centroid.y = (approx[0].y + approx[1].y + approx[2].y + approx[3].y)/4;
 		outerBox.contour.push_back(contours[i]);
 		outerBox.shapes = innerContours;
+		outerBox.aspect_ratio = norm(outerBox.corners[1] - outerBox.corners[0]) / norm(outerBox.corners[2] - outerBox.corners[0]);
+		if(outerBox.aspect_ratio < 1) outerBox.aspect_ratio = 1 / outerBox.aspect_ratio;
 
 		sort(outerBox.corners.begin(), outerBox.corners.end(), CornerComparator(outerBox.centroid));
 

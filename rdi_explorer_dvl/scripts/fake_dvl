@@ -1,9 +1,10 @@
 #!/usr/bin/env python
 
-import roslib
-roslib.load_manifest('rdi_explorer_dvl')
+import math
+
 import rospy
 from std_msgs.msg import Header
+from geometry_msgs.msg import Vector3
 from uf_common.msg import VelocityMeasurements, VelocityMeasurement
 
 rospy.init_node('fake_dvl')
@@ -21,5 +22,6 @@ while not rospy.is_shutdown():
         velocity_measurements=[VelocityMeasurement(
             velocity=0,
             correlation=0,
+            direction=Vector3(*[math.cos(i*2*math.pi/4), math.sin(i*2*math.pi/4), 0]),
         ) for i in xrange(4)],
     ))

@@ -13,6 +13,7 @@ class Thresholder {
 		cv::Mat yellow();
 		cv::Mat blue();
 		cv::Mat black();
+		cv::Mat black2();
 		cv::Mat forrest(cv::Vec3b bg, cv::Vec3b fg, double radius=30, double inclusion=0.5);
 		cv::Mat simpleRGB(cv::Vec3b bg, cv::Vec3b fg, int window=11, int cutoff=3);
 		cv::Mat simpleHSV(uchar hue, uchar range, uchar sat_C);

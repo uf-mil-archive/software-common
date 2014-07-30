@@ -19,7 +19,7 @@ Blob::Blob(const Mat &img, float minContour, float maxContour, float maxPerimete
 	Mat dbg_temp = img.clone();
 	std::vector<std::vector<cv::Point> > contours;
 	std::vector<cv::Vec4i> hierarchy;
-	findContours(dbg_temp,contours,hierarchy,allowInternal ? RETR_TREE : RETR_EXTERNAL,CHAIN_APPROX_SIMPLE);
+	findContours(dbg_temp,contours,hierarchy,RETR_TREE,CHAIN_APPROX_SIMPLE);
 
 	int i = -1;
 	BOOST_FOREACH(std::vector<cv::Point> contour, contours) { i += 1;
@@ -29,6 +29,7 @@ Blob::Blob(const Mat &img, float minContour, float maxContour, float maxPerimete
                         nparents++;
                 if(nparents % 2) // if this node has an odd number of parents
                         continue; // skip it
+                if(nparents != 0 && !allowInternal) continue;
 		
 		if(intrusionMode == INTRUSION_DEFAULT) {
 		} else if(intrusionMode == INTRUSION_IGNORE) {
@@ -67,6 +68,13 @@ Blob::Blob(const Mat &img, float minContour, float maxContour, float maxPerimete
             std::swap(rr.size.width, rr.size.height);
         }
         double rr_angle_rad = rr.angle / 180 * pi<double>();
+
+        double total_inner_area_holder = 0;
+        for(int j = hierarchy[i][2]; j >= 0; j = hierarchy[j][0]) { // for every child contour
+                float inner_area_holder = fabs(contourArea(Mat(contours[j])));
+                total_inner_area_holder += inner_area_holder;
+        }
+
         
 		//circle(ioimages->res,center_holder,2,CV_RGB(0,255,255),-1,8,0);
 		BlobData bdata;
@@ -78,6 +86,7 @@ Blob::Blob(const Mat &img, float minContour, float maxContour, float maxPerimete
                 bdata.direction = radius_holder * cv::Point2f(cos(rr_angle_rad), sin(rr_angle_rad));
 		bdata.circularity = convex_area_holder/(pi<double>()*pow(radius_holder, 2));
 		bdata.circularity_not_hull = area_holder/(pi<double>()*pow(radius_holder, 2));
+		bdata.hollowness = total_inner_area_holder / area_holder;
 		bdata.contour = contour;
 		bdata.rect_center = rr.center;
 
@@ -122,7 +131,7 @@ void Blob::drawResult(Mat &img, const Scalar &color) {
 		   << "R " << std::setprecision(3) << item.radius;
 		putText(img, os.str().c_str(), Point(item.centroid.x-30,item.centroid.y-10), FONT_HERSHEY_DUPLEX, 1, CV_RGB(0,255,0), 1.5);
 		std::ostringstream os2;
-		os2 << std::setprecision(3) << item.circularity_not_hull << " " << item.approx_contour.size();
+		os2 << std::setprecision(3) << item.circularity_not_hull << " " << item.hollowness << " " << item.approx_contour.size();
 		putText(img, os2.str().c_str(), Point(item.centroid.x-30,item.centroid.y+10), FONT_HERSHEY_DUPLEX, 1, CV_RGB(0,255,0), 1.5);
 	}
 

@@ -31,6 +31,7 @@ class Contours
 			double orientationError;
 			bool touches_edge;
 			std::vector<InnerContour> shapes; // contours within this box
+			double aspect_ratio;
 		};
 		std::vector<InnerContour> shapes; // all inner contours
 		std::vector<OuterBox> boxes; // output holder
