@@ -63,7 +63,7 @@ IFinder::FinderResult WreathFinder::find(const subjugator::ImageSource::Image &i
     cv::bitwise_not(dbg, dbg);
     erode(dbg, dbg, cv::Mat::ones(3,3,CV_8UC1));
 
-    Blob blob(dbg, 50, 1000000, 1000000, true, true);
+    Blob blob(dbg, 50*scale*scale, 1000000, 1000000, true, true);
     for(unsigned int i = 0; i < blob.data.size(); ) {
         if(blob.data[i].radius > scale * 70)
             blob.data.erase(blob.data.begin()+i);
