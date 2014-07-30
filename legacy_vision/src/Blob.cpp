@@ -68,16 +68,18 @@ Blob::Blob(const Mat &img, float minContour, float maxContour, float maxPerimete
             std::swap(rr.size.width, rr.size.height);
         }
         double rr_angle_rad = rr.angle / 180 * pi<double>();
+        
+		BlobData bdata;
 
         double total_inner_area_holder = 0;
         for(int j = hierarchy[i][2]; j >= 0; j = hierarchy[j][0]) { // for every child contour
                 float inner_area_holder = fabs(contourArea(Mat(contours[j])));
                 total_inner_area_holder += inner_area_holder;
+                bdata.holes.push_back(contours[j]);
         }
 
         
 		//circle(ioimages->res,center_holder,2,CV_RGB(0,255,255),-1,8,0);
-		BlobData bdata;
 		bdata.perimeter = (float)perimeter_holder;
 		bdata.area = area_holder;
 		bdata.centroid.x = (int)center_holder.x;
