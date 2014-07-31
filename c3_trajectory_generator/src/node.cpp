@@ -164,6 +164,9 @@ struct Node {
     }
 
     void timer_callback(const ros::TimerEvent&) {
+        if(!c3trajectory)
+            return;
+
         ros::Time now = ros::Time::now();
 
         if(actionserver.isNewGoalAvailable()) {
@@ -175,10 +178,6 @@ struct Node {
             this->linear_tolerance = goal->linear_tolerance;
             this->angular_tolerance = goal->angular_tolerance;
         }
-
-        if(!c3trajectory)
-            return;
-
         if(actionserver.isPreemptRequested()) {
             current_waypoint = c3trajectory->getCurrentPoint();
             current_waypoint.r.qdot = subjugator::Vector6d::Zero(); // zero velocities
