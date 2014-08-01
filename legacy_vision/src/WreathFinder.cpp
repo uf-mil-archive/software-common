@@ -81,7 +81,7 @@ IFinder::FinderResult WreathFinder::find(const subjugator::ImageSource::Image &i
 
 
     for(unsigned int i = 0; i < blob.data.size(); ) {
-        if(blob.data[i].parent_area < 1000*scale*scale)
+        if(blob.data[i].parent_area < 1000) //*scale*scale)
             blob.data.erase(blob.data.begin()+i);
         else
             i++;
@@ -119,7 +119,7 @@ IFinder::FinderResult WreathFinder::find(const subjugator::ImageSource::Image &i
     }
     blob.drawResult(res, CV_RGB(0, 255, 0));
 
-//dbg *= 0;
+dbg *= 0;
 
     BOOST_FOREACH(const Blob::BlobData &data, blob.data) {
 //                        if(1.15 < data.aspect_ratio && data.aspect_ratio < 1.5) {
@@ -129,11 +129,14 @@ IFinder::FinderResult WreathFinder::find(const subjugator::ImageSource::Image &i
                     fResult.put_child("direction", Direction_to_ptree(data.centroid, data.direction, img));
         fResult.put("direction_symmetry", 2);
                     Mat tempMask = Mat::zeros(img.image.rows, img.image.cols, CV_8UC1);
-                drawContours(tempMask, std::vector<std::vector<cv::Point> >(1, data.contour), 0, Scalar(255), 3, 8, vector<Vec4i>(), 5);
+                drawContours(tempMask, std::vector<std::vector<cv::Point> >(1, data.contour), 0, Scalar(255), CV_FILLED, 1, vector<Vec4i>(), 5);
+                dilate(tempMask, tempMask, cv::Mat::ones(7,7,CV_8UC1));
+                drawContours(tempMask, std::vector<std::vector<cv::Point> >(1, data.contour), 0, Scalar(0), CV_FILLED, 1, vector<Vec4i>(), 5);
+                erode(tempMask, tempMask, cv::Mat::ones(3,3,CV_8UC1));
                 //BOOST_FOREACH(std::vector<cv::Point> const & hole, data.holes) {
                 //    drawContours(tempMask, std::vector<std::vector<cv::Point> >(1, hole), 0, Scalar(0), CV_FILLED, 8, vector<Vec4i>(), 5);
                 //}
-                //dbg |= tempMask;
+                dbg |= tempMask;
                 fResult.put("redness", mean(normalized, tempMask)[2]/mean(normalized, tempMask)[1]);
                 resultVector.push_back(fResult);
 //                        }

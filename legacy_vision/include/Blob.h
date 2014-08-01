@@ -45,7 +45,7 @@ class Blob
 			INTRUSION_IGNORE,
 			INTRUSION_SELECT};
 		std::vector<BlobData> data;
-		Blob(const cv::Mat &img, float minContour, float maxContour, float maxPerimeter, bool sortByRadius=false, bool allowInternal=false, IntrusionMode intrusionMode=INTRUSION_DEFAULT);
+		Blob(const cv::Mat &img, float minContour, float maxContour, float maxPerimeter, bool sortByRadius=false, bool allowInternal=false, IntrusionMode intrusionMode=INTRUSION_DEFAULT, bool allowEdge=false);
 		void drawResult(cv::Mat &img, const cv::Scalar &color);
 };
 

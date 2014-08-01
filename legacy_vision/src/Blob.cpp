@@ -15,7 +15,7 @@ bool radius_comparator(const Blob::BlobData &blob1, const Blob::BlobData &blob2)
     return blob1.radius < blob2.radius;
 }
 
-Blob::Blob(const Mat &img, float minContour, float maxContour, float maxPerimeter, bool sortByRadius, bool allowInternal, Blob::IntrusionMode intrusionMode) {
+Blob::Blob(const Mat &img, float minContour, float maxContour, float maxPerimeter, bool sortByRadius, bool allowInternal, Blob::IntrusionMode intrusionMode, bool allowEdge) {
 	Mat dbg_temp = img.clone();
 	std::vector<std::vector<cv::Point> > contours;
 	std::vector<cv::Vec4i> hierarchy;
@@ -60,7 +60,7 @@ Blob::Blob(const Mat &img, float minContour, float maxContour, float maxPerimete
 		BOOST_FOREACH(const Point& p, contour)
 			if(p.x <= 1 || p.x >= img.cols-2 || p.y <= 1 || p.y >= img.rows-2)
 				touches_edge = true;
-		if(touches_edge) continue;
+		if(touches_edge && !allowEdge) continue;
 
 		RotatedRect rr = minAreaRect(Mat(contour));
         if(rr.size.width < rr.size.height) { // force width > height

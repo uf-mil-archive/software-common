@@ -21,7 +21,7 @@ IFinder::FinderResult PipeFinder::find(const subjugator::ImageSource::Image &img
 	dilate(orange, orange, cv::Mat::ones(15,15,CV_8UC1)); // +7
 	erode(orange, orange, cv::Mat::ones(3,3,CV_8UC1)); // -1
 
-        Blob blob(orange, 1000, 1e10, 1e10);
+        Blob blob(orange, 1000, 1e10, 1e10, false, false, Blob::INTRUSION_DEFAULT, true);
 
 	Mat res = img.image.clone();
         if(blob.data.size() > 2)
