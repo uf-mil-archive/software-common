@@ -131,7 +131,7 @@ IFinder::FinderResult BinsFinder::find(const subjugator::ImageSource::Image &img
             property_tree::ptree fResult;
             fResult.put_child("center", Point_to_ptree(box.centroid, img));
             fResult.put_child("direction", Direction_to_ptree(box.centroid, src[1] - src[0], img));
-            //fResult.put("direction_symmetry", 2);
+            fResult.put("direction_symmetry", 2);
 
             fResult.put("angle", box.angle);
             fResult.put("scale", box.area);
