@@ -9,6 +9,7 @@ class WreathFinder : public IFinder
 		WreathFinder(std::vector<std::string> objectPath, boost::property_tree::ptree config) : IFinder(objectPath, config) {
 			if(objectPath.size() != 2 || !(
 			        objectPath[0] == "board" ||
+			        objectPath[0] == "bin" ||
 					objectPath[0] == "moonrock" ||
 					objectPath[0] == "cheese" ||
                         false) || !(

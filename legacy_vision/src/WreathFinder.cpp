@@ -45,6 +45,31 @@ IFinder::FinderResult WreathFinder::find(const subjugator::ImageSource::Image &i
         return FinderResult(resultVector, res, dbg);
     }
 
+    if(objectPath[0] == "bin") {
+        std::vector<cv::Mat> channelsRGB; split(normalized, channelsRGB);
+        Mat dbg; adaptiveThreshold(channelsRGB[0],dbg,255,ADAPTIVE_THRESH_MEAN_C,THRESH_BINARY_INV,25,10);
+        //for(int i = 0; i < 1; i++) erode(dbg, dbg, cv::Mat::ones(3,3,CV_8UC1));
+        for(int i = 0; i < 8; i++) dilate(dbg, dbg, cv::Mat::ones(3, 3, CV_8UC1));
+        //for(int i = 0; i < 2; i++) erode(dbg, dbg, cv::Mat::ones(3,3,CV_8UC1));
+        Contours contours(dbg, 10000, 1e12, 1e12, img.camera_model);
+        Mat res = normalized.clone();
+        contours.drawResult(res, CV_RGB(255, 255, 255));
+        vector<property_tree::ptree> resultVector;
+        BOOST_FOREACH(const Contours::OuterBox &box, contours.boxes) {
+            if(box.aspect_ratio > 1.5) continue;
+            property_tree::ptree fResult;
+            fResult.put_child("center", Point_to_ptree(box.centroid, img));
+            fResult.put_child("direction", Direction_to_ptree(box.centroid, box.corners[2] - box.corners[0], img));
+            fResult.put("direction_symmetry", 4);
+
+            fResult.put("orientation_error", box.orientationError);
+            fResult.put("angle", box.angle);
+            fResult.put("scale", box.area);
+            resultVector.push_back(fResult);
+        }
+        return FinderResult(resultVector, res, dbg);
+    }
+
     vector<property_tree::ptree> resultVector;
     if(objectPath[0] == "moonrock") {
         dbg = Thresholder(img.image).black2();
