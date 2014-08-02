@@ -79,7 +79,7 @@ IFinder::FinderResult WreathFinder::find(const subjugator::ImageSource::Image &i
             i++;;
     }*/
 
-
+if(!low) {
     for(unsigned int i = 0; i < blob.data.size(); ) {
         if(blob.data[i].parent_area < 1000) //*scale*scale)
             blob.data.erase(blob.data.begin()+i);
@@ -117,6 +117,7 @@ IFinder::FinderResult WreathFinder::find(const subjugator::ImageSource::Image &i
         throw std::runtime_error("Invalid object path");
         }
     }
+}
     blob.drawResult(res, CV_RGB(0, 255, 0));
 
 dbg *= 0;
