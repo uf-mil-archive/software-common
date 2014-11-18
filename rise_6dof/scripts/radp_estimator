@@ -1,0 +1,181 @@
+#!/usr/bin/env python
+
+from __future__ import division
+
+import traceback
+
+import numpy
+import scipy.io
+
+import roslib
+import rospy
+from geometry_msgs.msg import Vector3, Wrench, WrenchStamped
+from nav_msgs.msg import Odometry
+from std_msgs.msg import Header
+from tf import transformations
+
+from uf_common.orientation_helpers import xyz_array, xyzw_array
+from kill_handling.listener import KillListener
+
+from rise_6dof import estimator as estimatorMod
+from rise_6dof.msg import Input, Estimate
+
+rospy.init_node('radp_estimator')
+
+def unpack_pose(pose):
+    return xyz_array(pose.position), xyzw_array(pose.orientation)
+def unpack_twist(twist):
+    return xyz_array(twist.linear), xyz_array(twist.angular)
+
+
+class Estimator(object):
+    def __init__(self, t, x, gamma=75, k=25, kx=50):
+        self.gamma = gamma*numpy.diag([1, 1, 1, 1, 1, 1, 1, 1])
+        self.k = k
+        self.kx = kx*numpy.eye(6)
+        
+        data = scipy.io.loadmat(roslib.packages.resource_file('rise_6dof', 'data', 'stack.mat'))
+        def process(x):
+            assert len(x) == 1
+            return numpy.array(x[0], dtype=float)
+        self.Yj = [process(_) for _ in data['Yj']]
+        self.gj = [process(_) for _ in data['gj']]
+        self.f0j = [process(_) for _ in data['f0j']]
+        self.xDotj = [process(_) for _ in data['xDotj']]
+        self.uj = [process(_) for _ in data['uj']]
+        
+        assert len(self.Yj) == len(self.gj) == len(self.f0j) == len(self.xDotj) == len(self.uj)
+        self.stackSize = len(self.Yj)
+        
+        self.t = t
+        self.xHat = x.reshape((6, 1))
+        self.thetaHat = numpy.zeros((8, 1))
+    
+    def handle_pair(self, t, x, x_dot, u):
+        dt = t - self.t
+        dt = 0.02
+        
+        Y, f0, g = estimatorMod.estimator(x)
+        #print Y, 'Y'
+        #print 'f0', f0
+        #print 'g', g
+        xTilde = x - self.xHat
+        #print 'xTilde', xTilde
+        
+        values = [None]*self.stackSize
+        for pos in xrange(self.stackSize):
+            Ytemp = list(self.Yj)
+            Ytemp[pos] = Y
+            #print pos, numpy.vstack(Ytemp), numpy.vstack(Ytemp).shape
+            values[pos] = min(numpy.linalg.svd(numpy.vstack(Ytemp), compute_uv=False))
+        #print 'values', values
+        
+        min_sing_val = min(numpy.linalg.svd(numpy.hstack(list(self.Yj)), compute_uv=False))
+        #print min_sing_val, max(values)
+        if max(values) > min_sing_val:
+            pos = max(xrange(self.stackSize), key=lambda x: values[x])
+            #print 'replaced', pos
+            self.Yj[pos] = Y
+            self.gj[pos] = g
+            self.f0j[pos] = f0
+            self.xDotj[pos] = x_dot
+            self.uj[pos] = u
+        
+        estimatorSum = 0
+        for j in xrange(self.stackSize):
+            estimatorSum += self.Yj[j].transpose().dot(
+                self.xDotj[j] - self.f0j[j] - self.gj[j].dot(self.uj[j]) - self.Yj[j].dot(self.thetaHat))
+        thetaHatDot = self.gamma.dot(Y.transpose()).dot(xTilde) + self.gamma.dot(self.k).dot(estimatorSum)
+        xHatDot = Y.dot(self.thetaHat) + f0 + g.dot(u) + self.kx.dot(xTilde)
+        
+        #print 'thetaHatDot', thetaHatDot
+        #print 'xHatDot', xHatDot
+        
+        print 'dt', dt
+        self.t = t
+        self.thetaHat = self.thetaHat + thetaHatDot*dt
+        self.xHat = self.xHat + xHatDot*dt
+        
+        return self.thetaHat, self.xHat
+
+'''e = Estimator(0, numpy.array([[0, 0, 0, 0, 0, 0]]).transpose())
+print e.handle_pair(1,
+    numpy.array([[1, 1, 1, 1, 1, 1]]).transpose(),
+    numpy.array([[1, 1, 1, 1, 1, 1]]).transpose(),
+    numpy.array([[1, 1, 1]]).transpose(),
+)
+fdsafas'''
+
+current_history = []
+def got_current(msg):
+    p, q = unpack_pose(msg.pose.pose)
+    v, av = unpack_twist(msg.twist.twist)
+    qm = transformations.quaternion_matrix(q)[:3, :3]
+    world_vel = qm.dot(v)
+    world_angvel = qm.dot(av)
+    current_history.append((msg.header.stamp, numpy.array([
+        p[0], p[1], transformations.euler_from_quaternion(q)[2],
+        v[0], v[1], world_angvel[2],
+    ]).reshape((6, 1))))
+rospy.Subscriber('current', Odometry, got_current)
+
+kill_listener = KillListener()
+estimator = None
+pub = rospy.Publisher('estimate', Estimate)
+input_pub = rospy.Publisher('input', Input)
+
+output_queue = []
+
+def got_output(msg):
+    global estimator
+    
+    if kill_listener.get_killed(): return
+    if len(current_history) < 30: return
+    
+    output_queue.append((len(current_history), msg))
+    del msg
+    
+    #print len(current_history), output_queue[0]
+    
+    while output_queue and output_queue[0][0] < len(current_history) - 30:
+        pos, m = output_queue.pop(0)
+        
+        #print pos, len(current_history)
+        t, x = current_history[pos]
+        early = current_history[pos - 25]
+        late = current_history[pos + 25]
+        x_dot = (late[1] - early[1])/(late[0] - early[0]).to_sec()
+        
+        u = numpy.array([
+            [m.wrench.force.x],
+            [m.wrench.force.y],
+            [m.wrench.torque.z],
+        ])
+        
+        input_pub.publish(Input(
+            header=Header(
+                stamp=t,
+            ),
+            x=map(float, x.flatten()),
+            x_dot=map(float, x_dot.flatten()),
+            u=map(float, u.flatten()),
+        ))
+        
+        #print x, x_dot, u
+        
+        if estimator is None:
+            print 'Estimator initialized'
+            estimator = Estimator(t.to_sec(), x)
+        else:
+            estimator.handle_pair(t.to_sec(), x, x_dot, u)
+        
+        pub.publish(Estimate(
+            header=Header(
+                stamp=t,
+            ),
+            theta_hat=map(float, estimator.thetaHat.flatten()),
+            x_hat=map(float, estimator.xHat.flatten()),
+        ))
+rospy.Subscriber('output', WrenchStamped, got_output)
+
+rospy.spin()
