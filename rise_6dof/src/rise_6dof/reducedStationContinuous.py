@@ -5,17 +5,18 @@ from numpy.linalg import inv
 
 from model2d import model2d
 from reducedStationBasis import reducedStationBasis
+from estimator import estimator as reducedStationEstimator
 
-def reducedStationContinuous(zeta, Wc_hat, Wa1_hat, gamma, auxdata, extrapolation_grid):
-    [f, g] = model2d(zeta);
-    #[Y,f0,g] = reducedStationEstimator(zeta);
+def reducedStationContinuous(zeta, Wc_hat, Wa1_hat, gamma, auxdata, extrapolation_grid, theta_hat):
+    #[f, g] = model2d(zeta);
+    [Y,f0,g] = reducedStationEstimator(zeta);
 
     sp = reducedStationBasis(zeta);
 
     u1 = -0.5*(inv(auxdata.R).dot(g.transpose())).dot(sp.transpose()).dot(Wa1_hat);
 
-    Fu = f + g.dot(u1);
-    #Fu = Y.dot(theta_hat) + f0 + g.dot(u1 + u2);
+    #Fu = f + g.dot(u1);
+    Fu = Y.dot(theta_hat) + f0 + g.dot(u1);
 
     omega = sp.dot(Fu);
 
@@ -35,10 +36,10 @@ def reducedStationContinuous(zeta, Wc_hat, Wa1_hat, gamma, auxdata, extrapolatio
 
     for i in xrange(auxdata.numPoints):
         eg_col = array([extrapolation_grid[:,i]]).transpose()
-        f_i, g_i = model2d(eg_col);
+        #f_i, g_i = model2d(eg_col);
         
         # Bellman Error Stack
-        #[Y_i,f0_i,g_i] = reducedStationEstimator(extrapolation_grid(:,i));
+        [Y_i,f0_i,g_i] = reducedStationEstimator(extrapolation_grid[:,i]);
         
         sp_i = reducedStationBasis(eg_col);
         
@@ -46,8 +47,8 @@ def reducedStationContinuous(zeta, Wc_hat, Wa1_hat, gamma, auxdata, extrapolatio
         
         Wu_i = u1_i.transpose().dot(auxdata.R).dot(u1_i);
         
-        Fu_i = f_i + g_i.dot(u1_i);
-        # Fu_i = Y_i.dot(theta_hat) + f0_i + g_i.dot(u1_i + u2_i);
+        #Fu_i = f_i + g_i.dot(u1_i);
+        Fu_i = Y_i.dot(theta_hat) + f0_i + g_i.dot(u1_i);
         
         omega_i = sp_i.dot(Fu_i);
         

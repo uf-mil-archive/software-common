@@ -3,7 +3,7 @@ from __future__ import division
 from numpy import *
 
 import rospy
-from rise_6dof.msg import Weights
+from rise_6dof.msg import Weights, Error, Estimate
 from std_msgs.msg import Header
 
 from reducedStationContinuous import reducedStationContinuous
@@ -86,8 +86,23 @@ class RADPController(object):
         auxdata.numPoints = 106
         
         self.weights_pub = rospy.Publisher('radp_weights', Weights)
+        self.error_pub = rospy.Publisher('radp_error', Error)
+        self.estimator_sub = rospy.Subscriber('estimate', Estimate, self.got_estimate)
+    
+    def got_estimate(self, msg):
+        self.theta_hat = array(msg.theta_hat).reshape((8, 1))
     
     def step(self, dt, error):
+        if not hasattr(self, 'theta_hat'):
+            return [0, 0, 0]
+        
+        self.error_pub.publish(Error(
+            header=Header(
+                stamp=rospy.Time.now(),
+            ),
+            zeta=map(float, error.flatten()),
+        ))
+        
         self.weights_pub.publish(Weights(
             header=Header(
                 stamp=rospy.Time.now(),
@@ -99,7 +114,7 @@ class RADPController(object):
         
         u1, dWc_hat, dWa1_hat, dGamma = reducedStationContinuous(
             error, self.Wc_hat, self.Wa1_hat, self.Gamma,
-            self.auxdata, self.extrapolation_grid)
+            self.auxdata, self.extrapolation_grid, self.theta_hat)
         
         self.Wc_hat = self.Wc_hat + dt * dWc_hat
         self.Wa1_hat = self.Wa1_hat + dt * dWa1_hat
