@@ -10,11 +10,11 @@ from reducedStationContinuous import reducedStationContinuous
 
 
 class RADPController(object):
-    def __init__(self, eta_c1=0.1, eta_c2=10, eta_a1=2, nu=0.5, beta=0.05, gamma=800):
-        zeta0 = array([0.5, 0.75, 0.05, 0.05, -0.05, -0.025]).transpose();
-
+    def __init__(self, eta_c1=0.25, eta_c2=0.5, eta_a1=1, nu=0.25, beta=0.025, gamma=400):
         class Object(object): pass
         auxdata = Object()
+        
+        auxdata.constantCurrent = False
 
         auxdata.nodes = 21;
         auxdata.gridSize = 3;
@@ -114,7 +114,8 @@ class RADPController(object):
         
         u1, dWc_hat, dWa1_hat, dGamma = reducedStationContinuous(
             error, self.Wc_hat, self.Wa1_hat, self.Gamma,
-            self.auxdata, self.extrapolation_grid, self.theta_hat)
+            self.auxdata, self.extrapolation_grid, self.theta_hat,
+            nuC, nuCDot, etaDotC, etaDDotC)
         
         self.Wc_hat = self.Wc_hat + dt * dWc_hat
         self.Wa1_hat = self.Wa1_hat + dt * dWa1_hat

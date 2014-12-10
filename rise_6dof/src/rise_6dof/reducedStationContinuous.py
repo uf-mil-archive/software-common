@@ -6,21 +6,33 @@ from numpy.linalg import inv
 from model2d import model2d
 from reducedStationBasis import reducedStationBasis
 from estimator import estimator as reducedStationEstimator
+from bodyCurrent import bodyCurrent
 
-def reducedStationContinuous(zeta, Wc_hat, Wa1_hat, gamma, auxdata, extrapolation_grid, theta_hat):
+def reducedStationContinuous(zeta, Wc_hat, Wa_hat, gamma, auxdata, extrapolation_grid, theta_hat, nuC, nuCDot, etaDotC, etaDDotC):
+    if auxdata.constantCurrent:
+        [nuC, nuCDot] = bodyCurrent(zeta[2], zeta[5], etaDotC, etaDDotC);
+    
     #[f, g] = model2d(zeta);
-    [Y,f0,g] = reducedStationEstimator(zeta);
+    [Y1,Y2,Y3,Y4,f0,f1,g] = reducedStationEstimator(zeta, nuC, nuCDot);
 
     sp = reducedStationBasis(zeta);
 
-    u1 = -0.5*(inv(auxdata.R).dot(g.transpose())).dot(sp.transpose()).dot(Wa1_hat);
+    u = -0.5*(inv(auxdata.R).dot(g.transpose())).dot(sp.transpose()).dot(Wa_hat);
 
-    #Fu = f + g.dot(u1);
-    Fu = Y.dot(theta_hat) + f0 + g.dot(u1);
+    if auxdata.constantCurrent:
+        u_ss = Y3.dot(theta_hat);
+        tau_b = u_ss + u;
+        
+        Fu = (Y1+Y2).dot(theta_hat) + f0 + g.dot(u);
+    else:
+        tau_c = currentCompensator(theta_hat, zeta[3:6], nuC, nuCDot);
+        tau_b = u + tau_c;
+        
+        Fu = (Y4).dot(theta_hat) + f0 + g.dot(u);
 
     omega = sp.dot(Fu);
 
-    delta = zeta.transpose().dot(auxdata.Q).dot(zeta) + u1.transpose().dot(auxdata.R).dot(u1) + Wc_hat.transpose().dot(omega);
+    delta = zeta.transpose().dot(auxdata.Q).dot(zeta) + u.transpose().dot(auxdata.R).dot(u) + Wc_hat.transpose().dot(omega);
 
     # p = sqrt(1 + omega.transpose().dot(omega));
     p = 1 + (auxdata.nu * omega.transpose()).dot(gamma).dot(omega);
@@ -35,20 +47,32 @@ def reducedStationContinuous(zeta, Wc_hat, Wa1_hat, gamma, auxdata, extrapolatio
     # extrapolation_grid = scale*randn(6,auxdata.numPoints);
 
     for i in xrange(auxdata.numPoints):
+        # get a column vector. extrapolation_grid[:,i] yields a 1D array
         eg_col = array([extrapolation_grid[:,i]]).transpose()
         #f_i, g_i = model2d(eg_col);
         
         # Bellman Error Stack
-        [Y_i,f0_i,g_i] = reducedStationEstimator(extrapolation_grid[:,i]);
+        if auxdata.constantCurrent:
+            [nuC_extrap, nuCDot_extrap] = bodyCurrent(
+                extrapolation_grid[2,i], extrapolation_grid[5,i],
+                etaDotC, etaDDotC);
+        else:
+            nuC_extrap = nuCDot_extrap = zeros((3, 1))
+        
+        [Y1_i,Y2_i,_,Y4_i,f0_i,_,g_i] = \
+            reducedStationEstimator(eg_col, nuC_extrap,
+            nuCDot_extrap);
         
         sp_i = reducedStationBasis(eg_col);
         
-        u1_i = -0.5*(inv(auxdata.R).dot(g_i.transpose())).dot(sp_i.transpose()).dot(Wa1_hat);
+        u_i = -0.5*(inv(auxdata.R).dot(g_i.transpose())).dot(sp_i.transpose()).dot(Wa_hat);
         
-        Wu_i = u1_i.transpose().dot(auxdata.R).dot(u1_i);
+        Wu_i = u_i.transpose().dot(auxdata.R).dot(u_i);
         
-        #Fu_i = f_i + g_i.dot(u1_i);
-        Fu_i = Y_i.dot(theta_hat) + f0_i + g_i.dot(u1_i);
+        if auxdata.constantCurrent:
+            Fu_i = (Y1_i+Y2_i).dot(theta_hat) + f0_i + g_i.dot(u_i);
+        else:
+            Fu_i = (Y4_i).dot(theta_hat) + f0_i + g_i.dot(u_i);
         
         omega_i = sp_i.dot(Fu_i);
         
@@ -67,6 +91,6 @@ def reducedStationContinuous(zeta, Wc_hat, Wa1_hat, gamma, auxdata, extrapolatio
     dGamma = (auxdata.beta*(gamma) - \
         auxdata.eta_c1.dot(gamma).dot(omega.dot(omega.transpose())/p**2).dot(gamma)).dot(auxdata.gammaLimit > gamma);
 
-    dWa1_hat = -auxdata.eta_a1*(Wa1_hat - Wc_hat)*(auxdata.WaLimit > Wa1_hat);
+    dWa_hat = -auxdata.eta_a1*(Wa_hat - Wc_hat)*(auxdata.WaLimit > Wa_hat);
 
-    return [u1, dWc_hat, dWa1_hat, dGamma]
+    return [u1, dWc_hat, dWa_hat, dGamma]
