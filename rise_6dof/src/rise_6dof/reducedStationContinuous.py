@@ -7,8 +7,12 @@ from model2d import model2d
 from reducedStationBasis import reducedStationBasis
 from estimator import estimator as reducedStationEstimator
 from bodyCurrent import bodyCurrent
+from currentCompensator import currentCompensator
 
-def reducedStationContinuous(zeta, Wc_hat, Wa_hat, gamma, auxdata, extrapolation_grid, theta_hat, nuC, nuCDot, etaDotC, etaDDotC):
+def reducedStationContinuous(zeta, Wc_hat, Wa_hat, gamma, auxdata, extrapolation_grid, theta_hat, nuC, etaDotC):
+    nuCDot = cross(nuC.reshape(3), [0, 0, zeta[5]]).reshape((3, 1))
+    etaDDotC = cross(etaDotC.reshape(3), [0, 0, zeta[5]]).reshape((3, 1))
+    
     if auxdata.constantCurrent:
         [nuC, nuCDot] = bodyCurrent(zeta[2], zeta[5], etaDotC, etaDDotC);
     
@@ -93,4 +97,4 @@ def reducedStationContinuous(zeta, Wc_hat, Wa_hat, gamma, auxdata, extrapolation
 
     dWa_hat = -auxdata.eta_a1*(Wa_hat - Wc_hat)*(auxdata.WaLimit > Wa_hat);
 
-    return [u1, dWc_hat, dWa_hat, dGamma]
+    return [u, dWc_hat, dWa_hat, dGamma]

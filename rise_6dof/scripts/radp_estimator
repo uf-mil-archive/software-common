@@ -178,7 +178,7 @@ def got_output(msg):
             u=map(float, u.flatten()),
         ))
         
-        #print x[-3:], x_dot[-3:]
+        print x[-3:], x_dot[-3:]
         
         if estimator is None:
             print 'Estimator initialized'

@@ -18,7 +18,7 @@ class Controller(object):
     def __init__(self, config):
         self.config = config
         
-        self._radp = reducedStationMain.RADPController(
+        self._radp = reducedStationMain.RADPController('/base_link',
             beta=self.config['adp_beta'],
             **dict((k, self.config[k]) for k in 'eta_c1 eta_c2 eta_a1 nu gamma'.split(' ')))
         
@@ -96,7 +96,7 @@ class Controller(object):
                 vel_err[0],
                 vel_err[1],
                 vel_err[5],
-            ]]).transpose())
+            ]]).transpose(), p_dot)
         
         wrench_from_vec = lambda output: (world_from_body.T.dot(output[0:3]), world_from_body.T.dot(output[3:6]))
         return wrench_from_vec(pd_output), wrench_from_vec(output)

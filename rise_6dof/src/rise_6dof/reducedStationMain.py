@@ -1,21 +1,28 @@
 from __future__ import division
 
+import traceback
+
 from numpy import *
 
 import rospy
 from rise_6dof.msg import Weights, Error, Estimate
 from std_msgs.msg import Header
 from geometry_msgs.msg import Vector3Stamped
+import tf
+from tf import transformations
+from uf_common.orientation_helpers import xyz_array
 
 from reducedStationContinuous import reducedStationContinuous
 
 
 class RADPController(object):
-    def __init__(self, eta_c1=0.25, eta_c2=0.5, eta_a1=1, nu=0.25, beta=0.025, gamma=400):
+    def __init__(self, body_frame_id, eta_c1=0.25, eta_c2=0.5, eta_a1=1, nu=0.25, beta=0.025, gamma=400):
+        self.body_frame_id = body_frame_id
+        
         class Object(object): pass
         auxdata = Object()
         
-        auxdata.constantCurrent = False
+        auxdata.constantCurrent = False # XXX etaDotC is = nuC at the moment
 
         auxdata.nodes = 21;
         auxdata.gridSize = 3;
@@ -89,16 +96,24 @@ class RADPController(object):
         self.weights_pub = rospy.Publisher('radp_weights', Weights)
         self.error_pub = rospy.Publisher('radp_error', Error)
         self.estimator_sub = rospy.Subscriber('estimate', Estimate, self.got_estimate)
+        self.last_dvl_water_mass_processed = None
         self.dvl_water_mass_processed_sub = rospy.Subscriber('dvl/water_mass_processed', Vector3Stamped, self.got_dvl_water_mass_processed)
+        self.tf_listener = tf.TransformListener()
     
     def got_estimate(self, msg):
         self.theta_hat = array(msg.theta_hat).reshape((8, 1))
     
     def got_dvl_water_mass_processed(self, msg):
-        pass
+        try:
+            trans, rot_q = self.tf_listener.lookupTransform(
+                self.body_frame_id, msg.header.frame_id, rospy.Time(0))
+        except:
+            traceback.print_exc()
+            return
+        self.last_dvl_water_mass_processed = transformations.quaternion_matrix(rot_q)[:3, :3].dot(xyz_array(msg.vector))
     
-    def step(self, dt, error):
-        if not hasattr(self, 'theta_hat'):
+    def step(self, dt, error, body_vel):
+        if not hasattr(self, 'theta_hat') or self.last_dvl_water_mass_processed is None:
             return [0, 0, 0]
         
         self.error_pub.publish(Error(
@@ -117,10 +132,14 @@ class RADPController(object):
             Gamma=self.Gamma.flatten(),
         ))
         
+        nuC = array([body_vel[0] - self.last_dvl_water_mass_processed[0], body_vel[1] - self.last_dvl_water_mass_processed[1], 0], dtype=float).reshape((3, 1))
+        
+        print nuC
+        
         u1, dWc_hat, dWa1_hat, dGamma = reducedStationContinuous(
             error, self.Wc_hat, self.Wa1_hat, self.Gamma,
             self.auxdata, self.extrapolation_grid, self.theta_hat,
-            nuC, nuCDot, etaDotC, etaDDotC)
+            nuC=nuC, etaDotC=nuC) # XXX etaDotC should be constant?
         
         self.Wc_hat = self.Wc_hat + dt * dWc_hat
         self.Wa1_hat = self.Wa1_hat + dt * dWa1_hat
