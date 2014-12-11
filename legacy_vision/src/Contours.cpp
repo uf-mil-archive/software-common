@@ -141,7 +141,7 @@ std::cout << "done: " << outerBox.orientationError << std::endl;
 		BOOST_FOREACH(const Point& p, outerBox.corners)
 			if(p.x <= 1 || p.y >= img.cols-2 || p.y <= 1 || p.y >= img.rows-2)
 				outerBox.touches_edge = true;
-		if(!outerBox.touches_edge)
+		//if(!outerBox.touches_edge)
 			boxes.push_back(outerBox);
 	}
 }
