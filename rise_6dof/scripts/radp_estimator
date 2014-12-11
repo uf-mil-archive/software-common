@@ -9,9 +9,10 @@ import scipy.io
 
 import roslib
 import rospy
-from geometry_msgs.msg import Vector3, Wrench, WrenchStamped
+from geometry_msgs.msg import Vector3, Vector3Stamped, Wrench, WrenchStamped
 from nav_msgs.msg import Odometry
 from std_msgs.msg import Header
+import tf
 from tf import transformations
 
 from uf_common.orientation_helpers import xyz_array, xyzw_array
@@ -21,6 +22,8 @@ from rise_6dof import estimator as estimatorMod
 from rise_6dof.msg import Input, Estimate
 
 rospy.init_node('radp_estimator')
+
+tf_listener = tf.TransformListener()
 
 def unpack_pose(pose):
     return xyz_array(pose.position), xyzw_array(pose.orientation)
@@ -41,26 +44,24 @@ class Estimator(object):
         self.Yj = [process(_) for _ in data['Yj']]
         self.gj = [process(_) for _ in data['gj']]
         self.f0j = [process(_) for _ in data['f0j']]
+        self.f1j = [numpy.zeros((6, 1)) for _ in data['f0j']]
         self.xDotj = [process(_) for _ in data['xDotj']]
         self.uj = [process(_) for _ in data['uj']]
         
-        assert len(self.Yj) == len(self.gj) == len(self.f0j) == len(self.xDotj) == len(self.uj)
+        assert len(self.Yj) == len(self.gj) == len(self.f0j) == len(self.f1j) == len(self.xDotj) == len(self.uj)
         self.stackSize = len(self.Yj)
         
         self.t = t
         self.xHat = x.reshape((6, 1))
         self.thetaHat = numpy.zeros((8, 1))
     
-    def handle_pair(self, t, x, x_dot, u):
+    def handle_pair(self, t, x, x_dot, nuC, nuC_dot, u):
         dt = t - self.t
         dt = 1/15
         
-        Y, f0, g = estimatorMod.estimator(x)
-        #print Y, 'Y'
-        #print 'f0', f0
-        #print 'g', g
+        Y1, Y2, Y3, Y4, f0, f1, g = estimatorMod.estimator(x, nuC, nuC_dot)
+        Y = Y1
         xTilde = x - self.xHat
-        #print 'xTilde', xTilde
         
         values = [None]*self.stackSize
         for pos in xrange(self.stackSize):
@@ -78,15 +79,16 @@ class Estimator(object):
             self.Yj[pos] = Y
             self.gj[pos] = g
             self.f0j[pos] = f0
+            self.f1j[pos] = f1
             self.xDotj[pos] = x_dot
             self.uj[pos] = u
         
         estimatorSum = 0
         for j in xrange(self.stackSize):
             estimatorSum += self.Yj[j].transpose().dot(
-                self.xDotj[j] - self.f0j[j] - self.gj[j].dot(self.uj[j]) - self.Yj[j].dot(self.thetaHat))
+                self.xDotj[j] - self.f0j[j] - self.f1j[j] - self.gj[j].dot(self.uj[j]) - self.Yj[j].dot(self.thetaHat))
         thetaHatDot = self.gamma.dot(Y.transpose()).dot(xTilde) + self.gamma.dot(self.k).dot(estimatorSum)
-        xHatDot = Y.dot(self.thetaHat) + f0 + g.dot(u) + self.kx.dot(xTilde)
+        xHatDot = Y.dot(self.thetaHat) + f0 + f1 + g.dot(u) + self.kx.dot(xTilde)
         
         #print 'thetaHatDot', thetaHatDot
         #print 'xHatDot', xHatDot
@@ -106,8 +108,22 @@ print e.handle_pair(1,
 )
 fdsafas'''
 
+body_frame = None
+
+last_dvl_water_mass_processed = None
+def got_dvl_water_mass_processed(msg):
+    global last_dvl_water_mass_processed
+    if body_frame is None: return
+    trans, rot_q = tf_listener.lookupTransform(
+        body_frame, msg.header.frame_id, rospy.Time(0))
+    last_dvl_water_mass_processed = transformations.quaternion_matrix(rot_q)[:3, :3].dot(xyz_array(msg.vector))
+rospy.Subscriber('/dvl/water_mass_processed', Vector3Stamped, got_dvl_water_mass_processed)
+
 current_history = []
 def got_current(msg):
+    global body_frame
+    body_frame = msg.child_frame_id
+    if last_dvl_water_mass_processed is None: return
     p, q = unpack_pose(msg.pose.pose)
     v, av = unpack_twist(msg.twist.twist)
     qm = transformations.quaternion_matrix(q)[:3, :3]
@@ -116,7 +132,8 @@ def got_current(msg):
     current_history.append((msg.header.stamp, numpy.array([
         p[0], p[1], transformations.euler_from_quaternion(q)[2],
         v[0], v[1], world_angvel[2],
-    ]).reshape((6, 1))))
+        v[0] - last_dvl_water_mass_processed[0], v[1] - last_dvl_water_mass_processed[1], 0, # nuC
+    ], dtype=float).reshape((9, 1))))
 rospy.Subscriber('current', Odometry, got_current)
 
 kill_listener = KillListener()
@@ -161,13 +178,13 @@ def got_output(msg):
             u=map(float, u.flatten()),
         ))
         
-        #print x, x_dot, u
+        print x[-3:], x_dot[-3:]
         
         if estimator is None:
             print 'Estimator initialized'
-            estimator = Estimator(t.to_sec(), x)
+            estimator = Estimator(t.to_sec(), x[:-3])
         else:
-            estimator.handle_pair(t.to_sec(), x, x_dot, u)
+            estimator.handle_pair(t.to_sec(), x[:-3], x_dot[:-3], x[-3:], x_dot[-3:], u)
         
         pub.publish(Estimate(
             header=Header(
