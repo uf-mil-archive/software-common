@@ -1,0 +1,115 @@
+#!/usr/bin/env python
+
+from __future__ import division
+
+import math
+
+import numpy
+
+import roslib
+roslib.load_manifest('rise_6dof')
+import rospy
+from nav_msgs.msg import Odometry
+from std_msgs.msg import Header
+from geometry_msgs.msg import Pose, Twist, Vector3, Quaternion, Point
+from tf import transformations
+
+from uf_common import orientation_helpers
+from uf_common.msg import PoseTwist, PoseTwistStamped
+
+
+rospy.init_node('do_spiral')
+
+RADIUS = 4*.75 # meter
+SPEED = .55*.75 # meter/second
+PERIOD = 2*math.pi*RADIUS/SPEED # second
+DESCENT = 0.5*.75 # meter/revolution
+dt = 1e-3 # second (used for numerical derivatives)
+
+print 'waiting for current position...'
+current = rospy.wait_for_message('/odom', Odometry)
+start = orientation_helpers.xyz_array(current.pose.pose.position)
+print '...got', start
+#start[2] = -.25
+
+def position_generator_orig(t):
+    # RP pi/4
+    # Y pi/2
+    # 0.5
+    th =         1 * 10 * (1 - math.e**(-t/10)) * math.pi
+    th2 = 1234 + 1 *  9 * (1 - math.e**(-t/ 9)) * math.pi
+    th3 = 5678 + 1 * 11 * (1 - math.e**(-t/11)) * math.pi
+    print th, th2, th3
+    return numpy.array([0.5*math.sin(th), 0.5*math.sin(th2), 0.5*math.sin(th3)])
+
+position_generator = lambda t: start + position_generator_orig(t) - position_generator_orig(0)
+
+def positionvelocity_generator(t):
+    pos = position_generator(t)
+    vel = (position_generator(t+dt/2) - position_generator(t-dt/2))/dt
+    return pos, vel
+
+def _sinc(x):
+    return numpy.sinc(x/numpy.pi)
+
+def _quat_from_rotvec(r):
+    r = numpy.array(r)
+    angle = numpy.linalg.norm(r)
+    return numpy.concatenate([
+        _sinc(angle/2)/2 * r, # = sin(angle/2) * normalized(r), without the singularity
+        [math.cos(angle/2)],
+    ])
+
+
+def positionorientationvelocity_generator(t):
+    pos, vel = positionvelocity_generator(t)
+    orient = orientation_helpers.lookat(vel)
+    orient = orientation_helpers.EAST
+    th =  2346 + 1 * 10.5 * (1 - math.e**(-t/10.5)) * math.pi
+    th2 = 4321 + 1 *  9.5 * (1 - math.e**(-t/ 9.5)) * math.pi
+    th3 = 8765 + 1 * 11.5 * (1 - math.e**(-t/11.5)) * math.pi
+    orient = _quat_from_rotvec([0.25*math.pi*math.sin(th), 0.25*math.pi*math.sin(th2), 0.5*math.pi*math.sin(th3)])
+    print orient
+    return pos, orient, vel
+
+def positionorientationvelocityangularvelocity_generator(t):
+    pos, orient, vel = positionorientationvelocity_generator(t)
+    
+    orient1 = positionorientationvelocity_generator(t-dt/2)[1]
+    orient2 = positionorientationvelocity_generator(t+dt/2)[1]
+    angvel = orientation_helpers.quat_to_rotvec(transformations.quaternion_multiply(orient2, transformations.quaternion_inverse(orient1)))/dt
+    
+    return pos, orient, vel, angvel
+
+
+pub = rospy.Publisher('/trajectory', PoseTwistStamped)
+
+start_time = rospy.Time.now()
+while not rospy.is_shutdown():
+    rospy.sleep(.01)
+    
+    now_time = rospy.Time.now()
+    
+    t = (now_time - start_time).to_sec()
+    pos, orient, vel, angvel = positionorientationvelocityangularvelocity_generator(t)
+    if pos[2] < -5:
+        break
+    
+    world_from_body = transformations.quaternion_matrix(orient)[:3, :3]
+    
+    pub.publish(PoseTwistStamped(
+        header=Header(
+            stamp=now_time,
+            frame_id=current.header.frame_id,
+        ),
+        posetwist=PoseTwist(
+            pose=Pose(
+                position=Point(*pos),
+                orientation=Quaternion(*orient),
+            ),
+            twist=Twist(
+                linear=Vector3(*world_from_body.T.dot(vel)),
+                angular=Vector3(*world_from_body.T.dot(angvel)),
+            ),
+        ),
+    ))
