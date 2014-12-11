@@ -5,6 +5,7 @@ from numpy import *
 import rospy
 from rise_6dof.msg import Weights, Error, Estimate
 from std_msgs.msg import Header
+from geometry_msgs.msg import Vector3Stamped
 
 from reducedStationContinuous import reducedStationContinuous
 
@@ -88,9 +89,13 @@ class RADPController(object):
         self.weights_pub = rospy.Publisher('radp_weights', Weights)
         self.error_pub = rospy.Publisher('radp_error', Error)
         self.estimator_sub = rospy.Subscriber('estimate', Estimate, self.got_estimate)
+        self.dvl_water_mass_processed_sub = rospy.Subscriber('dvl/water_mass_processed', Vector3Stamped, self.got_dvl_water_mass_processed)
     
     def got_estimate(self, msg):
         self.theta_hat = array(msg.theta_hat).reshape((8, 1))
+    
+    def got_dvl_water_mass_processed(self, msg):
+        pass
     
     def step(self, dt, error):
         if not hasattr(self, 'theta_hat'):

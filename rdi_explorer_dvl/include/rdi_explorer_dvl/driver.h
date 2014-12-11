@@ -154,6 +154,7 @@ namespace rdi_explorer_dvl {
                             water_res->velocity_measurements.push_back(m);
                         }
                     } else if(section_id == 0x0600) { // Bottom Track
+                        if(ensemble.size() - offset < 2 + 58 + 4) continue;
                         for(int i = 0; i < 4; i++) {
                             correlations[i] = *(ensemble.data() + offset + 32 + i);
                             water_correlations[i] = *(ensemble.data() + offset + 58 + i);

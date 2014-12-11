@@ -9,9 +9,10 @@ import scipy.io
 
 import roslib
 import rospy
-from geometry_msgs.msg import Vector3, Wrench, WrenchStamped
+from geometry_msgs.msg import Vector3, Vector3Stamped, Wrench, WrenchStamped
 from nav_msgs.msg import Odometry
 from std_msgs.msg import Header
+import tf
 from tf import transformations
 
 from uf_common.orientation_helpers import xyz_array, xyzw_array
@@ -21,6 +22,8 @@ from rise_6dof import estimator as estimatorMod
 from rise_6dof.msg import Input, Estimate
 
 rospy.init_node('radp_estimator')
+
+tf_listener = tf.TransformListener()
 
 def unpack_pose(pose):
     return xyz_array(pose.position), xyzw_array(pose.orientation)
@@ -105,8 +108,22 @@ print e.handle_pair(1,
 )
 fdsafas'''
 
+body_frame = None
+
+last_dvl_water_mass_processed = None
+def got_dvl_water_mass_processed(msg):
+    global last_dvl_water_mass_processed
+    if body_frame is None: return
+    trans, rot_q = tf_listener.lookupTransform(
+        body_frame, msg.header.frame_id, rospy.Time(0))
+    last_dvl_water_mass_processed = transformations.quaternion_matrix(rot_q)[:3, :3].dot(xyz_array(msg.vector))
+rospy.Subscriber('/dvl/water_mass_processed', Vector3Stamped, got_dvl_water_mass_processed)
+
 current_history = []
 def got_current(msg):
+    global body_frame
+    body_frame = msg.child_frame_id
+    if last_dvl_water_mass_processed is None: return
     p, q = unpack_pose(msg.pose.pose)
     v, av = unpack_twist(msg.twist.twist)
     qm = transformations.quaternion_matrix(q)[:3, :3]
@@ -115,7 +132,8 @@ def got_current(msg):
     current_history.append((msg.header.stamp, numpy.array([
         p[0], p[1], transformations.euler_from_quaternion(q)[2],
         v[0], v[1], world_angvel[2],
-    ]).reshape((6, 1))))
+        v[0] - last_dvl_water_mass_processed[0], v[1] - last_dvl_water_mass_processed[1], 0, # nuC
+    ], dtype=float).reshape((9, 1))))
 rospy.Subscriber('current', Odometry, got_current)
 
 kill_listener = KillListener()
@@ -160,13 +178,13 @@ def got_output(msg):
             u=map(float, u.flatten()),
         ))
         
-        #print x, x_dot, u
+        #print x[-3:], x_dot[-3:]
         
         if estimator is None:
             print 'Estimator initialized'
-            estimator = Estimator(t.to_sec(), x)
+            estimator = Estimator(t.to_sec(), x[:-3])
         else:
-            estimator.handle_pair(t.to_sec(), x, x_dot, u)
+            estimator.handle_pair(t.to_sec(), x[:-3], x_dot[:-3], x[-3:], x_dot[-3:], u)
         
         pub.publish(Estimate(
             header=Header(
