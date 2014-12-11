@@ -1,5 +1,7 @@
 from __future__ import division
 
+import math
+
 import numpy
 
 from tf import transformations
@@ -92,7 +94,7 @@ class Controller(object):
             output[0], output[1], output[5] = self._radp.step(dt, numpy.array([[
                 -error_position_world[0],
                 -error_position_world[1],
-                -error_position_world[5],
+                -error_position_world[5] - math.pi/4,
                 vel_err[0],
                 vel_err[1],
                 vel_err[5],
