@@ -32,8 +32,8 @@ def unpack_twist(twist):
 
 
 class Estimator(object):
-    def __init__(self, t, x, gamma=75/4, k=25/4, kx=50/4):
-        self.gamma = gamma*numpy.diag([1, 10, 1, 1, 1, 1, 1, 1])
+    def __init__(self, t, x, gamma=75/2, k=25/2, kx=50/2):
+        self.gamma = gamma*numpy.diag([1, 25, 1, 1, 1, 1, 1, 1])
         self.k = k
         self.kx = kx*numpy.eye(6)
         
