@@ -1,7 +1,6 @@
 from __future__ import division
 
 from numpy import *
-from numpy.linalg import inv
 
 from model2d import model2d
 from reducedStationBasis import reducedStationBasis
@@ -9,8 +8,8 @@ from estimator import estimator as reducedStationEstimator
 from bodyCurrent import bodyCurrent
 from currentCompensator import currentCompensator
 
-def reducedStationContinuous(zeta, Wc_hat, Wa_hat, gamma, auxdata, extrapolation_grid, theta_hat, nuC, etaDotC):
-    nuCDot = cross(nuC.reshape(3), [0, 0, zeta[5]]).reshape((3, 1))
+def reducedStationContinuousControl(zeta, Wa_hat, auxdata, theta_hat, nuC, etaDotC):
+    nuCDot = cross(nuC.reshape(3), [0, 0, zeta[5]]).reshape((3, 1)) # XXX take numerical derivative
     etaDDotC = cross(etaDotC.reshape(3), [0, 0, zeta[5]]).reshape((3, 1))
     
     if auxdata.constantCurrent:
@@ -21,7 +20,34 @@ def reducedStationContinuous(zeta, Wc_hat, Wa_hat, gamma, auxdata, extrapolation
 
     sp = reducedStationBasis(zeta);
 
-    u = -0.5*(inv(auxdata.R).dot(g.transpose())).dot(sp.transpose()).dot(Wa_hat);
+    u = -0.5*(auxdata.Rinv.dot(g.transpose())).dot(sp.transpose()).dot(Wa_hat);
+
+    if auxdata.constantCurrent:
+        u_ss = Y3.dot(theta_hat);
+        tau_b = u_ss + u;
+        
+        Fu = (Y1+Y2).dot(theta_hat) + f0 + g.dot(u);
+    else:
+        tau_c = currentCompensator(theta_hat, zeta[3:6], nuC, nuCDot);
+        tau_b = u + tau_c;
+        
+        Fu = (Y4).dot(theta_hat) + f0 + g.dot(u);
+    
+    return tau_b
+
+def reducedStationContinuousWeights(zeta, Wc_hat, Wa_hat, gamma, auxdata, extrapolation_grid, theta_hat, nuC, etaDotC):
+    nuCDot = cross(nuC.reshape(3), [0, 0, zeta[5]]).reshape((3, 1)) # XXX take numerical derivative
+    etaDDotC = cross(etaDotC.reshape(3), [0, 0, zeta[5]]).reshape((3, 1))
+    
+    if auxdata.constantCurrent:
+        [nuC, nuCDot] = bodyCurrent(zeta[2], zeta[5], etaDotC, etaDDotC);
+    
+    #[f, g] = model2d(zeta);
+    [Y1,Y2,Y3,Y4,f0,f1,g] = reducedStationEstimator(zeta, nuC, nuCDot);
+
+    sp = reducedStationBasis(zeta);
+
+    u = -0.5*(auxdata.Rinv.dot(g.transpose())).dot(sp.transpose()).dot(Wa_hat);
 
     if auxdata.constantCurrent:
         u_ss = Y3.dot(theta_hat);
@@ -69,7 +95,7 @@ def reducedStationContinuous(zeta, Wc_hat, Wa_hat, gamma, auxdata, extrapolation
         
         sp_i = reducedStationBasis(eg_col);
         
-        u_i = -0.5*(inv(auxdata.R).dot(g_i.transpose())).dot(sp_i.transpose()).dot(Wa_hat);
+        u_i = -0.5*(auxdata.Rinv.dot(g_i.transpose())).dot(sp_i.transpose()).dot(Wa_hat);
         
         Wu_i = u_i.transpose().dot(auxdata.R).dot(u_i);
         
@@ -97,4 +123,4 @@ def reducedStationContinuous(zeta, Wc_hat, Wa_hat, gamma, auxdata, extrapolation
 
     dWa_hat = -auxdata.eta_a1*(Wa_hat - Wc_hat)*(auxdata.WaLimit > Wa_hat);
 
-    return [u, dWc_hat, dWa_hat, dGamma]
+    return [dWc_hat, dWa_hat, dGamma]

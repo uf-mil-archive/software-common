@@ -38,6 +38,8 @@ def lstsq_box(A, b, x_mins, x_maxs):
 
 def wrench_callback(msg):
     wrench = numpy.concatenate([xyz_array(msg.wrench.force), xyz_array(msg.wrench.torque)])
+    if numpy.isnan(wrench).any():
+        return
     
     # get thrusterinfos that haven't expired
     good_thrusterinfos = []

@@ -1,8 +1,11 @@
 from __future__ import division
 
+import threading
 import traceback
+import time
 
 from numpy import *
+from numpy.linalg import inv
 
 import rospy
 from rise_6dof.msg import Weights, Error, Estimate
@@ -12,7 +15,7 @@ import tf
 from tf import transformations
 from uf_common.orientation_helpers import xyz_array
 
-from reducedStationContinuous import reducedStationContinuous
+from reducedStationContinuous import reducedStationContinuousControl, reducedStationContinuousWeights
 
 
 class RADPController(object):
@@ -22,7 +25,7 @@ class RADPController(object):
         class Object(object): pass
         auxdata = Object()
         
-        auxdata.constantCurrent = False # XXX etaDotC is = nuC at the moment
+        auxdata.constantCurrent = False
 
         auxdata.nodes = 21;
         auxdata.gridSize = 3;
@@ -44,6 +47,7 @@ class RADPController(object):
         # Optimal Weights
         auxdata.Q = 10*diag([2, 5, 2, 1, 1, 1]);
         auxdata.R = eye(3);
+        auxdata.Rinv = inv(auxdata.R);
 
         # Linear System Weights
         W_hat0 = zeros([auxdata.nodes,1]);
@@ -91,14 +95,15 @@ class RADPController(object):
         self.auxdata = auxdata
         self.extrapolation_grid = extrapolation_grid
         
-        auxdata.numPoints = 106
+        auxdata.numPoints = 50
         
-        self.weights_pub = rospy.Publisher('radp_weights', Weights)
-        self.error_pub = rospy.Publisher('radp_error', Error)
+        self.weights_pub = rospy.Publisher('radp_weights', Weights, queue_size=10)
+        self.error_pub = rospy.Publisher('radp_error', Error, queue_size=10)
         self.estimator_sub = rospy.Subscriber('estimate', Estimate, self.got_estimate)
         self.last_dvl_water_mass_processed = None
         self.dvl_water_mass_processed_sub = rospy.Subscriber('dvl/water_mass_processed', Vector3Stamped, self.got_dvl_water_mass_processed)
         self.tf_listener = tf.TransformListener()
+        self.update_running = False
     
     def got_estimate(self, msg):
         self.theta_hat = array(msg.theta_hat).reshape((8, 1))
@@ -123,26 +128,42 @@ class RADPController(object):
             zeta=map(float, error.flatten()),
         ))
         
-        self.weights_pub.publish(Weights(
-            header=Header(
-                stamp=rospy.Time.now(),
-            ),
-            Wc_hat=self.Wc_hat,
-            Wa1_hat=self.Wa1_hat,
-            Gamma=self.Gamma.flatten(),
-        ))
-        
         nuC = array([body_vel[0] - self.last_dvl_water_mass_processed[0], body_vel[1] - self.last_dvl_water_mass_processed[1], 0], dtype=float).reshape((3, 1))
         
-        print nuC
+        print nuC, 'xxx'
         
-        u1, dWc_hat, dWa1_hat, dGamma = reducedStationContinuous(
-            error, self.Wc_hat, self.Wa1_hat, self.Gamma,
-            self.auxdata, self.extrapolation_grid, self.theta_hat,
-            nuC=nuC, etaDotC=nuC) # XXX etaDotC should be constant?
+        self.error = error
+        self.nuC = nuC
         
-        self.Wc_hat = self.Wc_hat + dt * dWc_hat
-        self.Wa1_hat = self.Wa1_hat + dt * dWa1_hat
-        self.dGamma = self.Gamma + dt * dGamma
+        if not hasattr(self, 'etaDotC'):
+            self.etaDotC = nuC # use the first nuC as etaDotC forever
         
-        return u1
+        if not self.update_running:
+            self.update_running = True
+            threading.Thread(target=self.update_weights).start()
+        
+        return reducedStationContinuousControl(
+            error, self.Wa1_hat, self.auxdata, self.theta_hat, nuC=nuC, etaDotC=self.etaDotC)
+    
+    def update_weights(self):
+        while True:
+            time.sleep(0.2)
+            dt = 0.2
+            
+            dWc_hat, dWa1_hat, dGamma = reducedStationContinuousWeights(
+                self.error, self.Wc_hat, self.Wa1_hat, self.Gamma,
+                self.auxdata, self.extrapolation_grid, self.theta_hat,
+                nuC=self.nuC, etaDotC=self.etaDotC)
+            
+            self.Wc_hat = self.Wc_hat + dt * dWc_hat
+            self.Wa1_hat = self.Wa1_hat + dt * dWa1_hat
+            self.dGamma = self.Gamma + dt * dGamma
+            
+            self.weights_pub.publish(Weights(
+                header=Header(
+                    stamp=rospy.Time.now(),
+                ),
+                Wc_hat=self.Wc_hat,
+                Wa1_hat=self.Wa1_hat,
+                Gamma=self.Gamma.flatten(),
+            ))
