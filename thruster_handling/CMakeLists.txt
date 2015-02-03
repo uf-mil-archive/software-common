@@ -4,7 +4,7 @@ cmake_minimum_required(VERSION 2.8.3)
 project(thruster_handling)
 # Load catkin and all dependencies required for this package
 # TODO: remove all from COMPONENTS that are not catkin packages.
-find_package(catkin REQUIRED COMPONENTS rospy message_generation geometry_msgs message_runtime std_msgs eigen_conversions)
+find_package(catkin REQUIRED COMPONENTS rospy message_generation geometry_msgs message_runtime std_msgs eigen_conversions cmake_modules)
 catkin_python_setup()
 
 # CATKIN_MIGRATION: removed during catkin migration
