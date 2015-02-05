@@ -33,7 +33,7 @@ def reducedStationContinuousControl(zeta, Wa_hat, auxdata, theta_hat, nuC, etaDo
         
         Fu = (Y4).dot(theta_hat) + f0 + g.dot(u);
     
-    return tau_b
+    return tau_b, tau_c
 
 def reducedStationContinuousWeights(zeta, Wc_hat, Wa_hat, gamma, auxdata, extrapolation_grid, theta_hat, nuC, etaDotC):
     nuCDot = cross(nuC.reshape(3), [0, 0, zeta[5]]).reshape((3, 1)) # XXX take numerical derivative

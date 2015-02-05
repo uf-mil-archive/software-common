@@ -122,13 +122,6 @@ class RADPController(object):
         if not hasattr(self, 'theta_hat') or self.last_dvl_water_mass_processed is None:
             return [0, 0, 0]
         
-        self.error_pub.publish(Error(
-            header=Header(
-                stamp=rospy.Time.now(),
-            ),
-            zeta=map(float, error.flatten()),
-        ))
-        
         nuC = array([body_vel[0] - self.last_dvl_water_mass_processed[0], body_vel[1] - self.last_dvl_water_mass_processed[1], 0], dtype=float).reshape((3, 1))
         
         print nuC, 'xxx'
@@ -143,8 +136,19 @@ class RADPController(object):
             self.update_running = True
             threading.Thread(target=self.update_weights).start()
         
-        return reducedStationContinuousControl(
+        u, tau_c = reducedStationContinuousControl(
             error, self.Wa1_hat, self.auxdata, self.theta_hat, nuC=nuC, etaDotC=self.etaDotC)
+        
+        self.error_pub.publish(Error(
+            header=Header(
+                stamp=rospy.Time.now(),
+            ),
+            zeta=map(float, error.flatten()),
+            tau_c=map(float, tau_c.flatten()),
+            nuC=map(float, nuC.flatten()),
+        ))
+        
+        return u
     
     def update_weights(self):
         while not self.stop:
