@@ -97,8 +97,8 @@ class RADPController(object):
         
         auxdata.numPoints = 50
         
-        self.weights_pub = rospy.Publisher('radp_weights', Weights, queue_size=10)
-        self.error_pub = rospy.Publisher('radp_error', Error, queue_size=10)
+        self.weights_pub = rospy.Publisher('radp_weights', Weights, queue_size=None)
+        self.error_pub = rospy.Publisher('radp_error', Error, queue_size=None)
         self.estimator_sub = rospy.Subscriber('estimate', Estimate, self.got_estimate)
         self.last_dvl_water_mass_processed = None
         self.dvl_water_mass_processed_sub = rospy.Subscriber('dvl/water_mass_processed', Vector3Stamped, self.got_dvl_water_mass_processed)
