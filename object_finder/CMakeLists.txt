@@ -4,7 +4,7 @@ cmake_minimum_required(VERSION 2.8.3)
 project(object_finder)
 # Load catkin and all dependencies required for this package
 # TODO: remove all from COMPONENTS that are not catkin packages.
-find_package(catkin REQUIRED COMPONENTS roscpp message_filters actionlib message_runtime std_msgs message_generation geometry_msgs uf_common visualization_msgs tf actionlib_msgs cmake_modules)
+find_package(catkin REQUIRED COMPONENTS roscpp message_filters actionlib message_runtime std_msgs message_generation geometry_msgs uf_common visualization_msgs tf actionlib_msgs)
 # CATKIN_MIGRATION: removed during catkin migration
 # cmake_minimum_required(VERSION 2.4.6)
 

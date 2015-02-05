@@ -22,7 +22,6 @@
   <build_depend>uf_common</build_depend>
   <build_depend>tf</build_depend>
   <build_depend>kill_handling</build_depend>
-  <build_depend>cmake_modules</build_depend>
 
   <!-- Dependencies needed after this package is compiled. -->
   <run_depend>nav_msgs</run_depend>

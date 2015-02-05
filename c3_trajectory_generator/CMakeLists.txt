@@ -4,7 +4,7 @@ cmake_minimum_required(VERSION 2.8.3)
 project(c3_trajectory_generator)
 # Load catkin and all dependencies required for this package
 # TODO: remove all from COMPONENTS that are not catkin packages.
-find_package(catkin REQUIRED COMPONENTS nav_msgs actionlib message_runtime message_generation uf_common tf kill_handling cmake_modules)
+find_package(catkin REQUIRED COMPONENTS nav_msgs actionlib message_runtime message_generation uf_common tf kill_handling)
 # CATKIN_MIGRATION: removed during catkin migration
 # cmake_minimum_required(VERSION 2.4.6)
 
