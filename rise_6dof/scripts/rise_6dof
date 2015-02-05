@@ -70,7 +70,7 @@ class Node(object):
         pub = rospy.Publisher('/output', WrenchStamped, queue_size=10)
         pd_pub = rospy.Publisher('/pd_output', WrenchStamped, queue_size=10)
 
-        dt = 1/60
+        dt = 1/50
 
         while not rospy.is_shutdown():
             rospy.sleep(dt)

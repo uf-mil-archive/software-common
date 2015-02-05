@@ -143,11 +143,15 @@ input_pub = rospy.Publisher('input', Input)
 
 output_queue = []
 
+skip_count = 0
 def got_output(msg):
-    global estimator
+    global estimator, skip_count
     
     if kill_listener.get_killed(): return
     if len(current_history) < 30: return
+    
+    skip_count += 1
+    if skip_count % 10: return
     
     output_queue.append((len(current_history), msg))
     del msg
@@ -173,8 +177,8 @@ def got_output(msg):
             header=Header(
                 stamp=t,
             ),
-            x=map(float, x.flatten()),
-            x_dot=map(float, x_dot.flatten()),
+            x=map(float, x[:6].flatten()),
+            x_dot=map(float, x_dot[:6].flatten()),
             u=map(float, u.flatten()),
         ))
         
