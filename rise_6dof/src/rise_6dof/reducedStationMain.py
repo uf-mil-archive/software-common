@@ -104,6 +104,7 @@ class RADPController(object):
         self.dvl_water_mass_processed_sub = rospy.Subscriber('dvl/water_mass_processed', Vector3Stamped, self.got_dvl_water_mass_processed)
         self.tf_listener = tf.TransformListener()
         self.update_running = False
+        self.stop = False
     
     def got_estimate(self, msg):
         self.theta_hat = array(msg.theta_hat).reshape((8, 1))
@@ -146,7 +147,7 @@ class RADPController(object):
             error, self.Wa1_hat, self.auxdata, self.theta_hat, nuC=nuC, etaDotC=self.etaDotC)
     
     def update_weights(self):
-        while True:
+        while not self.stop:
             time.sleep(0.2)
             dt = 0.2
             
@@ -167,3 +168,6 @@ class RADPController(object):
                 Wa1_hat=self.Wa1_hat,
                 Gamma=self.Gamma.flatten(),
             ))
+    
+    def stop(self):
+        self.stop = True

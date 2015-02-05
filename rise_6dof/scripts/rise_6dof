@@ -41,6 +41,7 @@ class Node(object):
             
             self.config = config
             self.processed_config = processed_config
+            self.controller.stop()
             self.controller = controller.Controller(self.processed_config)
 
             return config

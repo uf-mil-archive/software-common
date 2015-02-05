@@ -26,6 +26,9 @@ class Controller(object):
         
         self.reset()
     
+    def stop(self):
+        self._radp.stop()
+    
     def reset(self):
         self._rise_term = numpy.zeros(6)
         self._rise_term_int_prev = numpy.zeros(6)
