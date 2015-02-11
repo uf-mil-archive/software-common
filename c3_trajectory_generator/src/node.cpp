@@ -20,7 +20,7 @@ using namespace nav_msgs;
 using namespace uf_common;
 using namespace c3_trajectory_generator;
 
-
+// take a Post and Twist object and translate it to C3 'Point' object
 subjugator::C3Trajectory::Point Point_from_PoseTwist(const Pose &pose, const Twist &twist) {
     tf::Quaternion q; tf::quaternionMsgToTF(pose.orientation, q);
 
@@ -42,6 +42,7 @@ subjugator::C3Trajectory::Point Point_from_PoseTwist(const Pose &pose, const Twi
     return res;
 }
 
+// create special UF-Common 'PoseTwist' object from C3 'PointWithAcceleration' object
 PoseTwist PoseTwist_from_PointWithAcceleration(const subjugator::C3Trajectory::PointWithAcceleration &p) {
     tf::Quaternion orient = tf::createQuaternionFromRPY(p.q[3], p.q[4], p.q[5]);
 
@@ -65,6 +66,7 @@ PoseTwist PoseTwist_from_PointWithAcceleration(const subjugator::C3Trajectory::P
     return res;
 }
 
+// take C3 'Waypoint' object, translate to geometry_msgs::Pose
 Pose Pose_from_Waypoint(const subjugator::C3Trajectory::Waypoint &wp) {
     Pose res;
 
@@ -88,6 +90,7 @@ struct Node {
 
     ros::Subscriber odom_sub;
     actionlib::SimpleActionServer<uf_common::MoveToAction> actionserver;
+    	// server object used to send out "Move To" actions
     ros::Publisher trajectory_pub;
     ros::Publisher waypoint_pose_pub;
     ros::ServiceServer set_disabled_service;
@@ -103,41 +106,51 @@ struct Node {
 
     double linear_tolerance, angular_tolerance;
     
+    // if kill message issued, reset the c3 pointer
     void killed_callback() {
-        c3trajectory.reset();
+        c3trajectory.reset(); // boost::scoped_ptr.reset()
     }
     
     bool set_disabled(SetDisabledRequest & request, SetDisabledResponse& response) {
         disabled = request.disabled;
         if(disabled) {
-            c3trajectory.reset();
+            c3trajectory.reset(); // boost::scoped_ptr.reset()
         }
         return true;
     }
 
-    Node() :
+    Node() : // now the initialization list
         private_nh("~"),
         kill_listener(boost::bind(&Node::killed_callback, this)),
-        actionserver(nh, "moveto", false),
+        actionserver(nh, "moveto", false),	// what is the actionserver binding to?
+			// ActionServer(ros::NodeHandle, std::string name, bool auto_start)
         disabled(false) {
 
+    	// frame parameters - see next section
         fixed_frame = uf_common::getParam<std::string>(private_nh, "fixed_frame");
         body_frame = uf_common::getParam<std::string>(private_nh, "body_frame");
 
+        // tunable parameters - check in boat_launch/launch/controller.launch
         limits.vmin_b = uf_common::getParam<subjugator::Vector6d>(private_nh, "vmin_b");
         limits.vmax_b = uf_common::getParam<subjugator::Vector6d>(private_nh, "vmax_b");
         limits.amin_b = uf_common::getParam<subjugator::Vector6d>(private_nh, "amin_b");
         limits.amax_b = uf_common::getParam<subjugator::Vector6d>(private_nh, "amax_b");
         limits.arevoffset_b = uf_common::getParam<Eigen::Vector3d>(private_nh, "arevoffset_b");
         limits.umax_b = uf_common::getParam<subjugator::Vector6d>(private_nh, "umax_b");
-        traj_dt = uf_common::getParam<ros::Duration>(private_nh, "traj_dt", ros::Duration(0.0001));
+        traj_dt = uf_common::getParam<ros::Duration>(private_nh, "traj_dt", ros::Duration(0.0001)); // default to Duration(.0001)
 
+        // odom will give an estimate on position and velocity in free space
         odom_sub = nh.subscribe<Odometry>("odom", 1, boost::bind(&Node::odom_callback, this, _1));
+        	// this data likely comes from gps; call call 'odom_callback()'
 
-        trajectory_pub = nh.advertise<PoseTwistStamped>("trajectory", 1);
         waypoint_pose_pub = private_nh.advertise<PoseStamped>("waypoint", 1);
+        	// PoseStamped : position and orientation (includes a Header)
+        trajectory_pub = nh.advertise<PoseTwistStamped>("trajectory", 1);
+        	// PoseTwistStamped : PoseStamped + linear and angular vectors of velocity
 
         update_timer = nh.createTimer(ros::Duration(1./50), boost::bind(&Node::timer_callback, this, _1));
+        	// call 'timer_callback()' every... idk what "./" means.  result is ambiguous
+        	// see line 179 at http://docs.ros.org/diamondback/api/rostime/html/duration_8h_source.html
 
         actionserver.start();
         
@@ -147,22 +160,24 @@ struct Node {
     }
 
     void odom_callback(const OdometryConstPtr& odom) {
-        if(c3trajectory)
+        if(c3trajectory) // boost::scoped_ptr<subjugator::C3Trajectory>
             return; // already initialized
         if(kill_listener.get_killed() || disabled)
             return; // only initialize when unkilled
 
         subjugator::C3Trajectory::Point current = Point_from_PoseTwist(odom->pose.pose, odom->twist.twist);
+        	// function within 'node.cpp'
         current.q[3] = current.q[4] = 0; // zero roll and pitch
         current.qdot = subjugator::Vector6d::Zero(); // zero velocities
 
         c3trajectory.reset(new subjugator::C3Trajectory(current, limits));
         c3trajectory_t = odom->header.stamp;
 
-        current_waypoint = current;
-        current_waypoint_t = odom->header.stamp;
+        current_waypoint = current; // set desired waypoint to calculated Point from PoseTwist
+        current_waypoint_t = odom->header.stamp; // timestamp of waypoint change
     }
 
+    // timer being called every <ambiguous> amount of time
     void timer_callback(const ros::TimerEvent&) {
         if(!c3trajectory)
             return;
@@ -215,7 +230,7 @@ struct Node {
 int main(int argc, char** argv) {
     ros::init(argc, argv, "c3_trajectory_generator");
 
-    Node n;
+    Node n; // see Node struct above
 
     ros::spin();
 
