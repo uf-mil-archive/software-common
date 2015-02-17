@@ -172,9 +172,9 @@ class PoseEditor(object):
     def absolute(self, abs_pos):
         return type(self)(self.frame_id, self.position + abs_pos, self.orientation)
     def adp_test(self):
-        return self.forward(3).right(3).turn_left_deg(45)
+        return self.forward(4).left(4).turn_left_deg(45)
     def adp_test2(self):
-        return self.turn_left_deg(-45).forward(-3).right(-3)
+        return self.turn_left_deg(-45).forward(-4).left(-4)
     
     def  east(self, distance): return self.absolute([ distance, 0, 0])
     def  west(self, distance): return self.absolute([-distance, 0, 0])
