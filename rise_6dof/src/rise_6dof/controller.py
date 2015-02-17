@@ -92,7 +92,9 @@ class Controller(object):
         output = output + body_gain(numpy.diag(self.config['accel_feedforward'])).dot(desired_x_dotdot)
         output = output + body_gain(numpy.diag(self.config['vel_feedforward'])).dot(desired_x_dot)
         
+        print 'a'
         if self.config['use_radp']:
+            print 'b'
             vel_err = x_dot - desired_x_dot
             output[0], output[1], output[5] = self._radp.step(dt, numpy.array([[
                 -error_position_world[0],

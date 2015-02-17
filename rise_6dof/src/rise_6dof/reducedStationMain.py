@@ -101,10 +101,12 @@ class RADPController(object):
         self.error_pub = rospy.Publisher('radp_error', Error, queue_size=None)
         self.estimator_sub = rospy.Subscriber('estimate', Estimate, self.got_estimate)
         self.last_dvl_water_mass_processed = None
+        self.new_last_dvl_water_mass_processed = False
         self.dvl_water_mass_processed_sub = rospy.Subscriber('dvl/water_mass_processed', Vector3Stamped, self.got_dvl_water_mass_processed)
         self.tf_listener = tf.TransformListener()
         self.update_running = False
-        self.stop = False
+        self._stop = False
+        self.world_water_mass_processeds = []
     
     def got_estimate(self, msg):
         self.theta_hat = array(msg.theta_hat).reshape((8, 1))
@@ -116,15 +118,28 @@ class RADPController(object):
         except:
             traceback.print_exc()
             return
+        self.new_last_dvl_water_mass_processed = True
         self.last_dvl_water_mass_processed = transformations.quaternion_matrix(rot_q)[:3, :3].dot(xyz_array(msg.vector))
     
     def step(self, dt, error, body_vel):
         if not hasattr(self, 'theta_hat') or self.last_dvl_water_mass_processed is None:
             return [0, 0, 0]
         
-        nuC = array([body_vel[0] - self.last_dvl_water_mass_processed[0], body_vel[1] - self.last_dvl_water_mass_processed[1], 0], dtype=float).reshape((3, 1))
+        try:
+            _, rot_q = self.tf_listener.lookupTransform(
+                '/map', self.body_frame_id, rospy.Time(0))
+        except:
+            traceback.print_exc()
+            return
         
-        print nuC, 'xxx'
+        old_nuC = array([body_vel[0] - self.last_dvl_water_mass_processed[0], body_vel[1] - self.last_dvl_water_mass_processed[1], 0], dtype=float).reshape((3, 1))
+        if self.new_last_dvl_water_mass_processed:
+            self.world_water_mass_processeds.append(transformations.quaternion_matrix(rot_q)[:3, :3].dot(old_nuC).reshape((3, 1)))
+        
+        window = self.world_water_mass_processeds[-25:]
+        window_mean = __builtins__['sum'](window, zeros((3, 1)))/len(window)
+        nuC = transformations.quaternion_matrix(rot_q)[:3, :3].T.dot(window_mean).reshape((3, 1))
+        print nuC.T, old_nuC.T
         
         self.error = error
         self.nuC = nuC
@@ -151,7 +166,7 @@ class RADPController(object):
         return u
     
     def update_weights(self):
-        while not self.stop:
+        while not self._stop:
             time.sleep(0.2)
             dt = 0.2
             
@@ -174,4 +189,4 @@ class RADPController(object):
             ))
     
     def stop(self):
-        self.stop = True
+        self._stop = True
