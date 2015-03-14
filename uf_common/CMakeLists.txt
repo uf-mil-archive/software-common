@@ -4,7 +4,7 @@ cmake_minimum_required(VERSION 2.8.3)
 project(uf_common)
 # Load catkin and all dependencies required for this package
 # TODO: remove all from COMPONENTS that are not catkin packages.
-find_package(catkin REQUIRED COMPONENTS message_generation message_runtime geometry_msgs tf actionlib interactive_markers std_msgs actionlib_msgs)
+find_package(catkin REQUIRED COMPONENTS message_generation message_runtime geometry_msgs tf actionlib interactive_markers std_msgs actionlib_msgs cmake_modules)
 catkin_python_setup()
 
 # CATKIN_MIGRATION: removed during catkin migration
