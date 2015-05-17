@@ -2,13 +2,6 @@
 #define KILL_HANDLING_BROADCASTER_H
 
 #include <string>
-#include <vector>
-#include <map>
-
-#include <boost/foreach.hpp>
-#include <boost/function.hpp>
-#include <boost/range/adaptor/map.hpp>
-#include <boost/optional.hpp>
 
 #include <ros/ros.h>
 

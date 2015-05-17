@@ -70,4 +70,4 @@ include_directories(include ${Boost_INCLUDE_DIR} ${catkin_INCLUDE_DIRS})
 #rosbuild_add_executable(example examples/example.cpp)
 #target_link_libraries(example ${PROJECT_NAME})
 
-install(PROGRAMS scripts/kill_on_cond scripts/kill scripts/kill_master DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION})
+install(PROGRAMS scripts/kill_on_cond scripts/kill scripts/kill_master scripts/clear DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION})
