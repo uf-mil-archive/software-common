@@ -38,6 +38,7 @@ namespace kill_handling {
 		{
 			SetKill k;
 			k.request.clear = true;
+			k.request.kill.id = id_;
 			set_kill_.call(k);
 		}
 	};
