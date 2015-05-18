@@ -59,4 +59,4 @@ class KillListener(object):
         return self._kills
 
     def _timer_cb(self, event):
-        _check_killed()
+        self._check_killed()
