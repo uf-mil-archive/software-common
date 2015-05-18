@@ -12,11 +12,11 @@ To use this node properly first launch the kill_master. To have a node listen to
 Listeners can be started without the kill master but they will always output true for killed since the kill master is inactive. This also means that if the kill master ever unexpectidly shuts down all kill listeners will kill there respective nodes.
 
 ## Usage
-Cmd
-'''
+Command line
+```
 # Run the master
 $ rosrun kill_handling kill_master
-
+    
 # Cmd line kill
 $ rosrun kill_handling kill
 
@@ -28,33 +28,33 @@ $ rosrun kill_handling clear
 
 # Cmd line clear specific ids
 $ rosrun kill_handling clear id1 id2 ...
-'''
+```
 
 Aliases in the [bashrc](https://github.com/uf-mil/uf-mil/blob/master/bashrc)
-'''
+```
 alias k="rosrun kill_handling kill"
 alias clc_k="rosrun kill_handling clear"
-'''
+```
 
 The kill_on_cond node can be used to kill based on a condition specified in the cond param evaluate on subscriber callbacks to a topic that should be remaped from topic to _your topic_. The value of the cond param should be a python code executable through the eval builtin function. See [kill_on_cond](https://github.com/uf-mil/software-common/blob/master/kill_handling/scripts/kill_on_cond) for more info. Below is an example from [here](https://github.com/uf-mil/SubjuGator/blob/master/sub_launch/launch/common.xml).
-'''
+```
 <node pkg="kill_handling" type="kill_on_cond" name="height_over_bottom_kill">
     <remap from="topic" to="dvl/range"/>
     <param name="cond" value="data &lt; .25"/>
   </node>
-'''
+```
 
 C++ listener
-'''
+```Cpp
 #include <kill_handling/listener.h>
 kill_handling::KillListener kill_listener(/*on_kill_cb*/, /*on_unkill_cb*/);
 
 // Get the descriptions of the kill or kills
 std::vector<std::string> reasons = kill_listener.get_kills();
-'''
+```
 
 C++ broadcaster
-'''
+```Cpp
 #include <kill_handling/broadcaster.h>
 kill_handling::KillBroadcaster kill_broadcaster("id", "description");
 
@@ -66,19 +66,19 @@ kill_broadcaster.send(false);
 
 // Clear the kill 
 kill_broadcaster.clear();
-'''
+```
 
 python listener
-'''
+```python
 from kill_handling.listener import KillListener
 kill_listener = KillListener(set_kill_callback, clear_kill_callback)
 
 # Get a list of reasons for the kill
 reasons = kill_listener.get_kills()
-'''
+```
 
 python broadcaster
-'''
+```python
 from kill_handling.broadcaster import KillBroadcaster
 kill_broadcaster = KillBroadcaster(id='id', description='description')
 
@@ -93,7 +93,7 @@ try:
     kill_broadcaster.clear()
 except rospy.service.ServiceException, e:
     rospy.logwarn(str(e))
-'''
+```
 
 ## TODO
 Added an ignore list to the listeners such that nodes can ignore particular kills if they choose to.
