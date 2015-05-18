@@ -26,12 +26,16 @@ if len(sys.argv) > 1:
 	for i in range(1, len(sys.argv)):
 		name = str(sys.argv[i])
 		rospy.loginfo('Clearing: %s', name)
-		set_kill(Kill(
-			header=Header(
-				stamp=rospy.Time.now(),
-			),
-			id=name,
-			), True)
+		try:
+			set_kill(Kill(
+				header=Header(
+					stamp=rospy.Time.now(),
+				),
+				id=name,
+				), True)
+		except rospy.service.ServiceException, e:
+			rospy.logwarn(str(e))
+		
 else:	
 	rospy.loginfo('Subscribing to /kill')
 	rospy.Subscriber('/kill', KillsStamped, clear_all_cb)
