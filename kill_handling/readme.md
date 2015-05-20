@@ -34,6 +34,13 @@ Aliases in the [bashrc](https://github.com/uf-mil/uf-mil/blob/master/bashrc)
 ```
 alias k="rosrun kill_handling kill"
 alias clc_k="rosrun kill_handling clear"
+function list_kills(){
+
+rostopic echo /kill &
+sleep 1
+kill -SIGINT $!
+
+}
 ```
 
 The kill_on_cond node can be used to kill based on a condition specified in the cond param evaluate on subscriber callbacks to a topic that should be remaped from topic to _your topic_. The value of the cond param should be a python code executable through the eval builtin function. See [kill_on_cond](https://github.com/uf-mil/software-common/blob/master/kill_handling/scripts/kill_on_cond) for more info. Below is an example from [here](https://github.com/uf-mil/SubjuGator/blob/master/sub_launch/launch/common.xml).
