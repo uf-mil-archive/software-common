@@ -56,6 +56,9 @@ C++ listener
 #include <kill_handling/listener.h>
 kill_handling::KillListener kill_listener(/*on_kill_cb*/, /*on_unkill_cb*/);
 
+// Get killed status as a bool
+bool killed = kill_listener.get_killed();
+
 // Get the descriptions of the kill or kills
 std::vector<std::string> reasons = kill_listener.get_kills();
 ```
@@ -79,6 +82,9 @@ python listener
 ```python
 from kill_handling.listener import KillListener
 kill_listener = KillListener(set_kill_callback, clear_kill_callback)
+
+# Get killed status as a Bool
+killed = kill_listener.get_killed()
 
 # Get a list of reasons for the kill
 reasons = kill_listener.get_kills()
