@@ -1,0 +1,103 @@
+#!/usr/bin/python
+
+from __future__ import division
+
+import binascii
+import struct
+import traceback
+
+from twisted.internet import defer, reactor, serialport, protocol
+
+import txros
+from txros import util
+
+import genpy
+from std_msgs.msg import Header
+from geometry_msgs.msg import Point, Vector3
+
+from thruster_handling.msg import ThrusterInfo, ThrusterCommand
+from kill_handling.listener_txros import KillListenerTxROS
+from uf_common import interpolate
+
+
+LIFETIME = 1
+
+class Thruster(object):
+    CALIBRATION_DATA = [-100, 0, +100], [-1, 0, +1] # XXX
+    
+    def __init__(self, nh, bus, name, config, info_pub, kill_listener):
+        self._nh = nh
+        self._bus = bus
+        self._name = name
+        self._config = config
+        self._info_pub = info_pub
+        self._kill_listener = kill_listener
+        
+        self._command_sub = nh.subscribe('/thrusters/command/' + self._name, ThrusterCommand, self._got_command)
+        
+        self._send_command(0)
+        
+        kill_listener.killed_variable.when_satisfies(lambda killed: killed).watch(lambda killed: self._send_command(0))
+        
+        self._info_publisher()
+    
+    def _got_command(self, msg):
+        if not self._kill_listener.killed_variable.value:
+            power = interpolate.sample_curve(self.CALIBRATION_DATA, msg.force)
+            self._send_command(power)
+    
+    def _send_command(self, power):
+        self._bus.write(self._config['node_id'], 0x4, struct.pack('<f', power))
+        print self._name, power
+    
+    @util.cancellableInlineCallbacks
+    def _info_publisher(self):
+        while True:
+            self._info_pub.publish(ThrusterInfo(
+                header=Header(
+                    stamp=self._nh.get_time(),
+                    frame_id=self._config['frame_id'],
+                ),
+                id=self._name,
+                lifetime=genpy.Duration(LIFETIME),
+                active=True,
+                position=Point(*self._config['position']),
+                direction=Vector3(*self._config['direction']),
+                min_force=self.CALIBRATION_DATA[0][0],
+                max_force=self.CALIBRATION_DATA[0][-1],
+                torque_per_force=Vector3(*self._config.get('torque_per_force', [0, 0, 0])),
+            ))
+            yield util.sleep(LIFETIME/2)
+
+class BusProtocol(protocol.Protocol):
+    pass
+
+class Bus(object):
+    def __init__(self, nh, port):
+        self._protocol = BusProtocol()
+        self._port = serialport.SerialPort(self._protocol, port, reactor, 115200)
+    
+    def _send(self, network_id, flags, csr_address, payload):
+        header = struct.pack('<HBBBB', 0xFAAF, network_id, flags, csr_address, len(payload))
+        packet = struct.pack('<sIsI',
+            header, binascii.crc32(header) & 0xffffffff,
+            payload, binascii.crc32(payload) & 0xffffffff)
+        self._protocol.transport.write(packet)
+    
+    def write(self, node_id, address, data):
+        self._send(node_id, 0x00, address, data)
+
+@util.cancellableInlineCallbacks
+def main():
+    nh = yield txros.NodeHandle.from_argv('videoray_m5_thruster_driver')
+    
+    info_pub = nh.advertise('/thrusters/info', ThrusterInfo)
+    kill_listener = KillListenerTxROS(nh)
+    
+    for config in (yield nh.get_param('~buses')):
+        bus = Bus(nh, config['port'])
+        for name, config2 in config['thrusters'].iteritems():
+            thruster = Thruster(nh, bus, name, config2, info_pub, kill_listener)
+    
+    yield defer.Deferred() # never exit
+util.launch_main(main)
