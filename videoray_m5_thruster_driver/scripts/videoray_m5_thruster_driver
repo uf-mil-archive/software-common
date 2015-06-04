@@ -78,10 +78,9 @@ class Bus(object):
         self._port = serialport.SerialPort(self._protocol, port, reactor, 115200)
     
     def _send(self, network_id, flags, csr_address, payload):
-        header = struct.pack('<HBBBB', 0xFAAF, network_id, flags, csr_address, len(payload))
-        packet = struct.pack('<sIsI',
-            header, binascii.crc32(header) & 0xffffffff,
-            payload, binascii.crc32(payload) & 0xffffffff)
+        header = struct.pack('<HBBBB', 0x5FF5, network_id, flags, csr_address, len(payload))
+        packet = header + struct.pack('<I', binascii.crc32(header) & 0xffffffff) + payload + struct.pack('<I', binascii.crc32(payload) & 0xffffffff)
+        print packet.encode('hex')
         self._protocol.transport.write(packet)
     
     def write(self, node_id, address, data):
