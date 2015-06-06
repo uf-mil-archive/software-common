@@ -17,7 +17,7 @@ def parse_arg(arg):
 @util.cancellableInlineCallbacks
 def main():
     try:
-        nh = txros.NodeHandle.from_argv('run_missions')
+        nh = yield txros.NodeHandle.from_argv('run_missions')
         
         missions = [(name, __import__(name, fromlist=['main']).main, args)
             for name, args in map(parse_arg, sys.argv[1:])]
