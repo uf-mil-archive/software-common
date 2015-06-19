@@ -19,7 +19,7 @@ from source works. Run this to do so:
 
     rm -fr /tmp/pyode-build && mkdir -p /tmp/pyode-build && cd /tmp/pyode-build && sudo apt-get build-dep -y python-pyode && sudo apt-get remove -y python-pyode && apt-get source --compile python-pyode && sudo dpkg -i python-pyode_*.deb
 
-This repository also depends on [Pygame](http://www.pygame.org/)
-and libfftw3, installable with:
+This repository also depends on [Pygame](http://www.pygame.org/),
+libfftw3, and pySerial, installable with:
 
-    sudo apt-get install python-pygame libfftw3-dev
+    sudo apt-get install python-pygame libfftw3-dev python-serial
