@@ -21,6 +21,7 @@ class LoadCellProtocol(basic.LineOnlyReceiver):
         V1 = 2 * V2 - 12.8 # convert output of bias amp to output of instrument amp
         Vload = V1/804 # convert output of instrument amp to output of loadcell
         force = (Vload + 1.27e-3) * 100/(29.955e-3)
+        force = force * (0.45359237 * 9.80665) # lbf -> N
         
         #print '%+.03f' % force
         
