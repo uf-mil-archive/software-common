@@ -15,7 +15,6 @@
   <buildtool_depend>catkin</buildtool_depend>
 
   <!-- Dependencies needed to compile this package. -->
-  <build_depend>uf_smach</build_depend>
   <build_depend>uf_common</build_depend>
   <build_depend>rqt_gui</build_depend>
   <build_depend>rawgps_common</build_depend>
@@ -26,7 +25,6 @@
   <build_depend>rqt_gui_py</build_depend>
 
   <!-- Dependencies needed after this package is compiled. -->
-  <run_depend>uf_smach</run_depend>
   <run_depend>uf_common</run_depend>
   <run_depend>rqt_gui</run_depend>
   <run_depend>rawgps_common</run_depend>
@@ -37,7 +35,6 @@
   <run_depend>rqt_gui_py</run_depend>
 
   <!-- Dependencies needed only for running tests. -->
-  <!-- <test_depend>uf_smach</test_depend> -->
   <!-- <test_depend>skytraq_driver</test_depend> -->
   <!-- <test_depend>rqt_gui</test_depend> -->
   <!-- <test_depend>rawgps_common</test_depend> -->

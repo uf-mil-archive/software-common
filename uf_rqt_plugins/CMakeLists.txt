@@ -4,7 +4,7 @@ cmake_minimum_required(VERSION 2.8.3)
 project(uf_rqt_plugins)
 # Load catkin and all dependencies required for this package
 # TODO: remove all from COMPONENTS that are not catkin packages.
-find_package(catkin REQUIRED COMPONENTS uf_smach skytraq_driver rqt_gui rawgps_common rospy uf_common thruster_handling kill_handling rqt_gui_py)
+find_package(catkin REQUIRED COMPONENTS skytraq_driver rqt_gui rawgps_common rospy uf_common thruster_handling kill_handling rqt_gui_py)
 catkin_python_setup()
 
 # CATKIN_MIGRATION: removed during catkin migration
@@ -42,7 +42,7 @@ catkin_python_setup()
 # TODO: fill in what other packages will need to use this package
 catkin_package(
     DEPENDS  # TODO
-    CATKIN_DEPENDS uf_smach skytraq_driver rqt_gui rawgps_common rospy uf_common thruster_handling kill_handling rqt_gui_py
+    CATKIN_DEPENDS skytraq_driver rqt_gui rawgps_common rospy uf_common thruster_handling kill_handling rqt_gui_py
     INCLUDE_DIRS # TODO include
     LIBRARIES # TODO
 )

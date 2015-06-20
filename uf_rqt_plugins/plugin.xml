@@ -25,19 +25,6 @@
       <statustip>Provides kill status information.</statustip>
     </qtgui>
   </class>
-  <class name="Mission" type="uf_rqt_plugins.missionplugin.MissionPlugin" base_class_type="rqt_gui_py::Plugin">
-    <description>
-      Manage mission plans through uf_smach
-    </description>
-    <qtgui>
-      <group>
-        <icon type="file">uf.ico</icon>
-        <label>UF</label>
-      </group>
-      <label>Mission</label>
-      <statustip>Manage mission plans.</statustip>
-    </qtgui>
-  </class>
   <class name="GPS" type="uf_rqt_plugins.gps.GPSPlugin" base_class_type="rqt_gui_py::Plugin">
     <description>
      Allows you to go to GPS waypoint
