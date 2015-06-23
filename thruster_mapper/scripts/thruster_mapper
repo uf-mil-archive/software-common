@@ -18,7 +18,7 @@ from thruster_handling.listener import ThrusterListener
 
 
 rospy.init_node('thruster_mapper')
-tradeoff_distance = rospy.get_param('tradeoff_distance', 0.5) # meters
+tradeoff_distance = rospy.get_param('tradeoff_distance', 0.1) # meters
 # higher tradeoff_distance -> care more about force
 # lower tradeoff_distance -> care more about torque
 

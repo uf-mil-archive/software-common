@@ -3,13 +3,14 @@
 from __future__ import division
 
 import binascii
+import random
 import struct
 import traceback
 
 from twisted.internet import defer, reactor, serialport, protocol
 
 import txros
-from txros import util
+from txros import util, variable
 
 import genpy
 from std_msgs.msg import Header
@@ -18,6 +19,7 @@ from geometry_msgs.msg import Point, Vector3
 from thruster_handling.msg import ThrusterInfo, ThrusterCommand
 from kill_handling.listener_txros import KillListenerTxROS
 from uf_common import interpolate
+from skytraq_driver.datachunker import DataChunker # XXX
 
 
 LIFETIME = 1
@@ -36,56 +38,118 @@ class Thruster(object):
         
         self._command_sub = nh.subscribe('/thrusters/command/' + self._name, ThrusterCommand, self._got_command)
         
-        self._send_command(0)
-        
         kill_listener.killed_variable.when_satisfies(lambda killed: killed).watch(lambda killed: self._send_command(0))
         
-        self._info_publisher()
+        assert self._config['node_id'] not in bus.listeners
+        bus.listeners[self._config['node_id']] = self.callback
+        
+        self.message_received = variable.Event()
+        self.good = False
+    
+    @util.cancellableInlineCallbacks
+    def init(self):
+        self._send_command(0)
+        
+        yield util.sleep(.1)
+        self._bus.write(self._config['node_id'], 0x88, struct.pack('<f', 0.0005))
+        yield util.sleep(.1)
+        self._bus.write(self._config['node_id'], 0x8c, struct.pack('<f', 0.0005))
+        yield util.sleep(.1)
+        
+        self._think()
     
     def _got_command(self, msg):
-        if not self._kill_listener.killed_variable.value:
+        if not self._kill_listener.killed_variable.value and self.good:
             power = interpolate.sample_curve(self.CALIBRATION_DATA, msg.force)
             self._send_command(power)
     
     def _send_command(self, power):
-        self._bus.write(self._config['node_id'], 0x4, struct.pack('<f', power))
-        print self._name, power
+        if abs(power) < 1e-6: power = 0
+        for i in xrange(3):
+            self._bus.write(self._config['node_id'], 0x4, struct.pack('<f', power))
     
     @util.cancellableInlineCallbacks
-    def _info_publisher(self):
+    def _think(self):
         while True:
-            self._info_pub.publish(ThrusterInfo(
-                header=Header(
-                    stamp=self._nh.get_time(),
-                    frame_id=self._config['frame_id'],
-                ),
-                id=self._name,
-                lifetime=genpy.Duration(LIFETIME),
-                active=True,
-                position=Point(*self._config['position']),
-                direction=Vector3(*self._config['direction']),
-                min_force=self.CALIBRATION_DATA[0][0],
-                max_force=self.CALIBRATION_DATA[0][-1],
-                torque_per_force=Vector3(*self._config.get('torque_per_force', [0, 0, 0])),
-            ))
-            yield util.sleep(LIFETIME/2)
+            yield util.sleep(random.uniform(LIFETIME/10, LIFETIME/5))
+            self._bus.send(self._config['node_id'], 0x2, 0xF0, struct.pack('>BB', 0xAA, self._config['node_id']))
+            
+            if self._kill_listener.killed_variable.value or not self.good:
+                yield util.sleep(LIFETIME/10)
+                self._send_command(0)
+    
+    def callback(self, network_id, flags, csr_address, payload):    
+        self.message_received.happened(payload)
+        
+        if len(payload) == 18:
+            device_type, rpm, bus_v, bus_i, temp, fault = struct.unpack('<BffffB', payload)
+            print network_id, flags, csr_address, device_type, rpm, bus_v, bus_i, temp, fault
+            
+            self.good = False
+            if temp >= 50:
+                print 'HIGH TEMPERATURE', temp
+            elif bus_v < 3.7*12:
+                print 'LOW VOLTAGE', bus_v
+                self._send_command(0)
+            else:
+                self._info_pub.publish(ThrusterInfo(
+                    header=Header(
+                        stamp=self._nh.get_time(),
+                        frame_id=self._config['frame_id'],
+                    ),
+                    id=self._name,
+                    lifetime=genpy.Duration(LIFETIME),
+                    active=True,
+                    position=Point(*self._config['position']),
+                    direction=Vector3(*self._config['direction']),
+                    min_force=self.CALIBRATION_DATA[0][0],
+                    max_force=self.CALIBRATION_DATA[0][-1],
+                    torque_per_force=Vector3(*self._config.get('torque_per_force', [0, 0, 0])),
+                ))
+                self.good = True
 
 class BusProtocol(protocol.Protocol):
-    pass
+    def __init__(self, listeners):
+        self.listeners = listeners
+        self.dataReceived = DataChunker(self.dataReceiver())
+    
+    def dataReceiver(self):
+        while True:
+            if (yield 1) != '\xf0': continue
+            if (yield 1) != '\x0f': continue
+            header_struct = '<BBBBI'
+            header = '\xf0\x0f' + (yield struct.calcsize(header_struct))
+            network_id, flags, csr_address, length, header_checksum = struct.unpack(header_struct, header[2:])
+            if binascii.crc32(header[:-4]) & 0xffffffff != header_checksum:
+                print 'invalid header checksum'
+                continue
+            payload = yield length
+            payload_checksum, = struct.unpack('<I', (yield 4))
+            if binascii.crc32(payload) & 0xffffffff != payload_checksum:
+                print 'invalid payload checksum'
+                continue
+            
+            try:
+                self.listeners.get(network_id, lambda *args: None)(network_id, flags, csr_address, payload)
+            except Exception:
+                traceback.print_exc()
 
 class Bus(object):
     def __init__(self, nh, port):
-        self._protocol = BusProtocol()
+        self.listeners = {}
+        self._protocol = BusProtocol(self.listeners)
         self._port = serialport.SerialPort(self._protocol, port, reactor, 115200)
     
-    def _send(self, network_id, flags, csr_address, payload):
+    def send(self, network_id, flags, csr_address, payload):
         header = struct.pack('<HBBBB', 0x5FF5, network_id, flags, csr_address, len(payload))
         packet = header + struct.pack('<I', binascii.crc32(header) & 0xffffffff) + payload + struct.pack('<I', binascii.crc32(payload) & 0xffffffff)
-        print packet.encode('hex')
         self._protocol.transport.write(packet)
     
     def write(self, node_id, address, data):
-        self._send(node_id, 0x00, address, data)
+        self.send(node_id, 0x00, address, data)
+    
+    def read(self, node_id, address, length):
+        self.send(node_id, 0x80+length, address, '')
 
 @util.cancellableInlineCallbacks
 def main():
@@ -98,6 +162,7 @@ def main():
         bus = Bus(nh, config['port'])
         for name, config2 in config['thrusters'].iteritems():
             thruster = Thruster(nh, bus, name, config2, info_pub, kill_listener)
+            yield thruster.init()
     
     yield defer.Deferred() # never exit
 util.launch_main(main)
