@@ -118,6 +118,7 @@ class PoseEditor(object):
     
     @classmethod
     def from_Odometry(cls, msg):
+        print 'PoseEditor from_Odometry: '
         return cls.from_Pose(msg.header.frame_id, msg.pose.pose)
     
     @classmethod
@@ -130,9 +131,12 @@ class PoseEditor(object):
     
     @classmethod
     def from_Pose(cls, frame_id, msg):
+        print 'PoseEditor from_Pose: '
         return cls(frame_id, xyz_array(msg.position), xyzw_array(msg.orientation))
     
     def __init__(self, frame_id, position, orientation):
+        print 'PoseEditor __init__: Position: ', position
+        print 'PoseEditor __init__: Orientation: ', orientation
         self.frame_id = frame_id
         self.position = position
         self.orientation = orientation
@@ -152,6 +156,7 @@ class PoseEditor(object):
     
     
     def set_position(self, position):
+        print 'PoseEditor set_position: '
         return type(self)(self.frame_id, position, self.orientation)
     
     def height(self, height):
@@ -160,9 +165,13 @@ class PoseEditor(object):
         return self.set_position([self.position[0], self.position[1], -depth])
     
     def relative(self, rel_pos):
+        print 'PoseEditor relative: '
         return self.set_position(self.position + self._rot.dot(rel_pos))
     
-    def   forward(self, distance): return self.relative([ distance, 0, 0])
+    def   forward(self, distance): 
+        print 'PoseEditor forward: '
+        return self.relative([ distance, 0, 0])
+
     def  backward(self, distance): return self.relative([-distance, 0, 0])
     def      left(self, distance): return self.relative([0,  distance, 0])
     def     right(self, distance): return self.relative([0, -distance, 0])
@@ -185,6 +194,7 @@ class PoseEditor(object):
     
     
     def set_orientation(self, orientation):
+        print 'PoseEditor set_orientation: '
         return type(self)(self.frame_id, self.position, orientation)
     
     def look_at_rel(self, rel_point): return self.set_orientation(look_at(rel_point))
@@ -198,6 +208,7 @@ class PoseEditor(object):
     def turn_vec_towards_rel(self, body_vec, towards_rel_point): return self.set_orientation(triad(([0, 0, 1], towards_rel_point), ([0, 0, 1], body_vec)))
     
     def yaw_left(self, angle):
+        print 'PoseEditor yaw: '
         return self.set_orientation(transformations.quaternion_multiply(
             transformations.quaternion_about_axis(angle, [0, 0, 1]),
             self.orientation,
