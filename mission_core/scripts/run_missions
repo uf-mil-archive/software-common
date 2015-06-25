@@ -3,6 +3,7 @@
 import sys
 import traceback
 import signal
+import yaml
 
 from twisted.internet import defer, reactor
 
@@ -11,7 +12,7 @@ from txros import util
 
 
 def parse_arg(arg):
-    x = arg.split(',')
+    x = yaml.load('[%s]' % (arg,))
     return x[0], x[1:]
 
 @util.cancellableInlineCallbacks
