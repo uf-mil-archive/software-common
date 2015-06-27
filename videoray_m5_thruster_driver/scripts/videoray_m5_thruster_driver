@@ -90,6 +90,8 @@ class Thruster(object):
             device_type, rpm, bus_v, bus_i, temp, fault = struct.unpack('<BffffB', payload)
             print network_id, flags, csr_address, device_type, rpm, bus_v, bus_i, temp, fault
             
+            if rpm != 0.0: print 'CURRENT', bus_i, rpm
+            
             if temp > 60:
                 print 'HIGH TEMPERATURE', temp
                 self._temperature_killer.kill()
@@ -98,7 +100,7 @@ class Thruster(object):
             while len(self._voltage_buffer) > self._voltage_buffer_length:
                 self._voltage_buffer.pop(0)
             if len(self._voltage_buffer) == self._voltage_buffer_length:
-                if sum(self._voltage_buffer)/len(self._voltage_buffer) < 3.7*12:
+                if sum(self._voltage_buffer)/len(self._voltage_buffer) < 3.3*12:
                     print 'LOW VOLTAGE', bus_v
                     self._undervoltage_killer.kill()
             print sum(self._voltage_buffer)/len(self._voltage_buffer)
