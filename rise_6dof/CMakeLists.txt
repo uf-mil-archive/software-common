@@ -34,14 +34,6 @@ catkin_python_setup()
 # CATKIN_MIGRATION: removed during catkin migration
 # set(LIBRARY_OUTPUT_PATH ${PROJECT_SOURCE_DIR}/lib)
 
-add_message_files(
-    FILES
-    Weights.msg
-    Estimate.msg
-    Error.msg
-    Input.msg
-)
-
 #uncomment if you have defined messages
 #rosbuild_genmsg()
 #uncomment if you have defined services
