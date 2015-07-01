@@ -1,13 +1,9 @@
 from __future__ import division
 
-import math
-
 import numpy
 
 from tf import transformations
 from uf_common.orientation_helpers import quat_to_rotvec
-
-from rise_6dof import reducedStationMain
 
 class Controller(object):
     '''
@@ -20,14 +16,7 @@ class Controller(object):
     def __init__(self, config):
         self.config = config
         
-        self._radp = reducedStationMain.RADPController('/base_link',
-            beta=self.config['adp_beta'],
-            **dict((k, self.config[k]) for k in 'eta_c1 eta_c2 eta_a1 nu gamma'.split(' ')))
-        
         self.reset()
-    
-    def stop(self):
-        self._radp.stop()
     
     def reset(self):
         self._rise_term = numpy.zeros(6)
@@ -35,9 +24,6 @@ class Controller(object):
     
     def update(self, dt, desired, current):
         ((desired_p, desired_o), (desired_p_dot, desired_o_dot), (desired_p_dotdot, desired_o_dotdot)), ((p, o), (p_dot, o_dot)) = desired, current
-        
-        if self.config['use_radp']:
-            desired_p = desired_p + transformations.quaternion_matrix(desired_o)[:3, :3].dot([self.config['zeta_dist'], self.config['zeta_dist'], 0])
         
         world_from_body = transformations.quaternion_matrix(o)[:3, :3]
         x_dot = numpy.concatenate([
@@ -91,19 +77,6 @@ class Controller(object):
             self._rise_term_int_prev = numpy.zeros(6)
         output = output + body_gain(numpy.diag(self.config['accel_feedforward'])).dot(desired_x_dotdot)
         output = output + body_gain(numpy.diag(self.config['vel_feedforward'])).dot(desired_x_dot)
-        
-        print 'a'
-        if self.config['use_radp']:
-            print 'b'
-            vel_err = x_dot - desired_x_dot
-            output[0], output[1], output[5] = self._radp.step(dt, numpy.array([[
-                -error_position_world[0],
-                -error_position_world[1],
-                -error_position_world[5] - math.pi/4,
-                vel_err[0],
-                vel_err[1],
-                vel_err[5],
-            ]]).transpose(), p_dot)
         
         wrench_from_vec = lambda output: (world_from_body.T.dot(output[0:3]), world_from_body.T.dot(output[3:6]))
         return wrench_from_vec(pd_output), wrench_from_vec(output)

@@ -71,7 +71,6 @@ namespace rdi_explorer_dvl {
             }
             
             void read(boost::optional<uf_common::VelocityMeasurements> &res,
-                      boost::optional<uf_common::VelocityMeasurements> &water_res,
                       boost::optional<uf_common::Float64Stamped> &height_res){
                 res = boost::none;
                 height_res = boost::none;
@@ -113,13 +112,10 @@ namespace rdi_explorer_dvl {
                     uint16_t section_id = getu16le(ensemble.data() + offset);
                     
                     std::vector<double> correlations(4, nan(""));
-                    std::vector<double> water_correlations(4, nan(""));
                     if(section_id == 0x5803) { // Bottom Track High Resolution Velocity
-                        if(ensemble.size() - offset < 2 + 4*12) continue;
+                        if(ensemble.size() - offset < 2 + 4*4) continue;
                         res = boost::make_optional(uf_common::VelocityMeasurements());
                         res->header.stamp = stamp;
-                        water_res = boost::make_optional(uf_common::VelocityMeasurements());
-                        water_res->header.stamp = stamp;
                         
                         std::vector<geometry_msgs::Vector3> dirs;
                         {
@@ -142,22 +138,9 @@ namespace rdi_explorer_dvl {
                             }
                             res->velocity_measurements.push_back(m);
                         }
-                        for(int i = 0; i < 4; i++) {
-                            uf_common::VelocityMeasurement m;
-                            m.direction = dirs[i];
-                            int32_t vel = gets32le(ensemble.data() + offset + 2 + 4*8 + 4*i);
-                            m.velocity = -vel * .01e-3;
-                            if(vel == -3276801) { // -3276801 indicates no data
-                                ROS_ERROR("DVL didn't return water mass velocity for beam %i", i+1);
-                                m.velocity = nan("");
-                            }
-                            water_res->velocity_measurements.push_back(m);
-                        }
                     } else if(section_id == 0x0600) { // Bottom Track
-                        if(ensemble.size() - offset < 2 + 58 + 4) continue;
                         for(int i = 0; i < 4; i++) {
                             correlations[i] = *(ensemble.data() + offset + 32 + i);
-                            water_correlations[i] = *(ensemble.data() + offset + 58 + i);
                         }
                     } else if(section_id == 0x5804) { // Bottom Track Range
                         if(ensemble.size() - offset < 2 + 4*3) continue;
@@ -174,11 +157,6 @@ namespace rdi_explorer_dvl {
                             res->velocity_measurements[i].correlation = correlations[i];
                         }
                     }
-                    if(water_res) {
-                        for(int i = 0; i < 4; i++) {
-                            water_res->velocity_measurements[i].correlation = water_correlations[i];
-                        }
-                    }
                 }
             }
             
@@ -188,9 +166,9 @@ namespace rdi_explorer_dvl {
                 
                 std::stringstream buf;
                 buf << "CR0\r"; // load factory settings (won't change baud rate)
-                buf << "#BJ 100 110 000\r"; // enable only bottom track, high res velocity, and bottom track range
-                buf << "#BK1\r"; // send water mass pings
-                buf << "#BL10,10,20\r"; // configure near layer and far layer to 1 and 2 meters
+                buf << "#BJ 100 110 000\r"; // enable only bottom track high res velocity and bottom track range
+                //buf << "#BK2\r"; // send water mass pings when bottom track pings fail
+                //buf << "#BL7,36,46\r"; // configure near layer and far layer to 12 and 15 feet
                 buf << "ES0\r"; // 0 salinity
                 buf << "EX00000\r"; // no transformation
                 buf << "EZ10000010\r"; // configure sensor sources. Provide manual data for everything except speed of sound and temperature
