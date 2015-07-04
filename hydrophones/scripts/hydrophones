@@ -12,24 +12,24 @@ from hydrophones.msg import Ping, ProcessedPing, Debug
 from std_msgs.msg import Header
 from geometry_msgs.msg import Point, PoseStamped, Pose
 
-def get_heading(r):
-  return math.atan2(r['pos'][1], r['pos'][0])
-
 def get_declination(r):
-  return math.atan2(-r['pos'][2], numpy.linalg.norm(r['pos'][0:2]))
+    return math.atan2(-r['pos'][2], numpy.linalg.norm(r['pos'][0:2]))
 
-def get_orientation():
-  if len(r['pos']) > 0:
-    return get_heading(r), get_declination(r)
-  else 
-    return 0,0
+def get_heading(r):
+    return math.atan2(r['pos'][1], r['pos'][0])
+
+def get_bearing(r):
+    if len(r['pos']) > 0:
+        return get_heading(r), get_declination(r)   
+    else:
+        return 0, 0
 
 def process_ping(ping):
     samples = util.ping_to_samples(ping)
     sample_rate = ping.sample_rate
 
     r = algorithms.run(samples, sample_rate, v_sound, dist_h, dist_h4)
-    heading, declination = get_orientation(r)
+    heading, declination = get_bearing(r)
     
     if len(r['errors']) > 0:
         rospy.logwarn('Errors processing ping: ' + ", ".join(r['errors']))
@@ -39,7 +39,7 @@ def process_ping(ping):
         pub.publish(header=Header(stamp=ping.header.stamp,
                               frame_id=ping.header.frame_id),
                 position=Point(*r['pos'].tolist()),
-                freq=r['freq'], 
+                freq = r['freq'], 
                 heading = heading,
                 declination = declination,
                 amplitude=r['amplitude'],

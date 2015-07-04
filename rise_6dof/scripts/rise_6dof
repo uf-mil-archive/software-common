@@ -35,15 +35,9 @@ class Node(object):
                 processed_config[name] = x
             processed_config['use_rise'] = config['use_rise']
             processed_config['two_d_mode'] = config['two_d_mode']
-            processed_config['use_radp'] = config['use_radp']
-            for name in 'eta_c1 eta_c2 eta_a1 nu adp_beta gamma zeta_dist'.split(' '):
-                processed_config[name] = float(config[name])
-            
+
             self.config = config
             self.processed_config = processed_config
-            if hasattr(self, 'controller'):
-                self.controller.stop()
-            self.controller = controller.Controller(self.processed_config)
 
             return config
         except:
@@ -69,8 +63,8 @@ class Node(object):
         self.constant_wrench_time = None
         rospy.Service('send_constant_wrench', SendConstantWrench, self.send_constant_wrench)
 
-        pub = rospy.Publisher('/output', WrenchStamped, queue_size=None)
-        pd_pub = rospy.Publisher('/pd_output', WrenchStamped, queue_size=None)
+        pub = rospy.Publisher('/output', WrenchStamped)
+        pd_pub = rospy.Publisher('/pd_output', WrenchStamped)
 
         dt = 1/50
 

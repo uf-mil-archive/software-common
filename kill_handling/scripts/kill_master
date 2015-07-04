@@ -8,12 +8,17 @@ import rospy
 from std_msgs.msg import Header
 
 from kill_handling.srv import SetKill
-from kill_handling.msg import KillsStamped
+from kill_handling.msg import KillsStamped, Kill
 
-kills = dict()
+kills = dict(initial=Kill(id='initial', active=True, description='initial kill'))
+initial = True
 
 def set_kill(req):
+    global initial
     if not req.clear:
+        if initial and req.kill.active:
+            initial = False
+            del kills['initial']
         kills[req.kill.id] = req.kill
     else:
         del kills[req.kill.id]

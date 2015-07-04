@@ -18,6 +18,7 @@ from geometry_msgs.msg import Point, Vector3
 
 from thruster_handling.msg import ThrusterInfo, ThrusterCommand
 from kill_handling.listener_txros import KillListenerTxROS
+from kill_handling.broadcaster_txros import KillBroadcasterTxROS
 from uf_common import interpolate
 from skytraq_driver.datachunker import DataChunker # XXX
 
@@ -28,13 +29,15 @@ class Thruster(object):
     CALIBRATION_DATA = (-1., 1.), (-1., 1.)
     CALIBRATION_DATA = (-85.16798603621542, -83.11245965680112, -80.72780555898515, -77.26080420472348, -74.24265026914527, -67.98354200661714, -64.73528274880252, -58.839594796790784, -54.214964815228186, -49.31660284098751, -43.84480379387167, -39.157067326228415, -33.524153970597816, -27.99452422080355, -21.62868280175304, -16.710638097126996, -11.252028508516814, -6.915131637123009, -3.325975605624676, -0.6694157478467332, -0.0, 1.2820153667461807, 4.5426524240814805, 8.881375528191455, 13.348137837179078, 18.081935952218934, 23.798044353808, 28.566743805201153, 34.71221980983474, 41.44351068686406, 45.79359701676346, 53.66790665936434, 58.868611605503126, 64.13079971975266, 70.43881043612473, 75.2278013621419, 79.71972509966326, 83.98438432139565, 87.39923658587354, 92.2549864634037, 93.17094362793253), (-1.0, -0.95, -0.9, -0.85, -0.8, -0.75, -0.7, -0.65, -0.6, -0.55, -0.5, -0.45, -0.4, -0.35, -0.3, -0.25, -0.2, -0.15, -0.1, -0.05, 0.0, 0.05, 0.1, 0.15, 0.2, 0.25, 0.3, 0.35, 0.4, 0.45, 0.5, 0.55, 0.6, 0.65, 0.7, 0.75, 0.8, 0.85, 0.9, 0.95, 1.0)
     
-    def __init__(self, nh, bus, name, config, info_pub, kill_listener):
+    def __init__(self, nh, bus, name, config, info_pub, kill_listener, temperature_killer, undervoltage_killer):
         self._nh = nh
         self._bus = bus
         self._name = name
         self._config = config
         self._info_pub = info_pub
         self._kill_listener = kill_listener
+        self._temperature_killer = temperature_killer
+        self._undervoltage_killer = undervoltage_killer
         
         self._command_sub = nh.subscribe('/thrusters/command/' + self._name, ThrusterCommand, self._got_command)
         
@@ -44,7 +47,9 @@ class Thruster(object):
         bus.listeners[self._config['node_id']] = self.callback
         
         self.message_received = variable.Event()
-        self.good = False
+        
+        self._voltage_buffer = []
+        self._voltage_buffer_length = 1000
     
     @util.cancellableInlineCallbacks
     def init(self):
@@ -59,7 +64,7 @@ class Thruster(object):
         self._think()
     
     def _got_command(self, msg):
-        if not self._kill_listener.killed_variable.value and self.good:
+        if not self._kill_listener.killed_variable.value:
             power = interpolate.sample_curve(self.CALIBRATION_DATA, msg.force)
             self._send_command(power)
     
@@ -74,7 +79,7 @@ class Thruster(object):
             yield util.sleep(random.uniform(LIFETIME/10, LIFETIME/5))
             self._bus.send(self._config['node_id'], 0x2, 0xF0, struct.pack('>BB', 0xAA, self._config['node_id']))
             
-            if self._kill_listener.killed_variable.value or not self.good:
+            if self._kill_listener.killed_variable.value:
                 yield util.sleep(LIFETIME/10)
                 self._send_command(0)
     
@@ -85,28 +90,35 @@ class Thruster(object):
             device_type, rpm, bus_v, bus_i, temp, fault = struct.unpack('<BffffB', payload)
             print network_id, flags, csr_address, device_type, rpm, bus_v, bus_i, temp, fault
             
-            self.good = False
-            if temp >= 50:
+            if rpm != 0.0: print 'CURRENT', bus_i, rpm
+            
+            if temp > 60:
                 print 'HIGH TEMPERATURE', temp
-            elif bus_v < 3.7*12:
-                print 'LOW VOLTAGE', bus_v
-                self._send_command(0)
-            else:
-                self._info_pub.publish(ThrusterInfo(
-                    header=Header(
-                        stamp=self._nh.get_time(),
-                        frame_id=self._config['frame_id'],
-                    ),
-                    id=self._name,
-                    lifetime=genpy.Duration(LIFETIME),
-                    active=True,
-                    position=Point(*self._config['position']),
-                    direction=Vector3(*self._config['direction']),
-                    min_force=self.CALIBRATION_DATA[0][0],
-                    max_force=self.CALIBRATION_DATA[0][-1],
-                    torque_per_force=Vector3(*self._config.get('torque_per_force', [0, 0, 0])),
-                ))
-                self.good = True
+                self._temperature_killer.kill()
+            
+            self._voltage_buffer.append(bus_v)
+            while len(self._voltage_buffer) > self._voltage_buffer_length:
+                self._voltage_buffer.pop(0)
+            if len(self._voltage_buffer) == self._voltage_buffer_length:
+                if sum(self._voltage_buffer)/len(self._voltage_buffer) < 3.3*12:
+                    print 'LOW VOLTAGE', bus_v
+                    self._undervoltage_killer.kill()
+            print sum(self._voltage_buffer)/len(self._voltage_buffer)
+            
+            self._info_pub.publish(ThrusterInfo(
+                header=Header(
+                    stamp=self._nh.get_time(),
+                    frame_id=self._config['frame_id'],
+                ),
+                id=self._name,
+                lifetime=genpy.Duration(LIFETIME),
+                active=True,
+                position=Point(*self._config['position']),
+                direction=Vector3(*self._config['direction']),
+                min_force=self.CALIBRATION_DATA[0][0],
+                max_force=self.CALIBRATION_DATA[0][-1],
+                torque_per_force=Vector3(*self._config.get('torque_per_force', [0, 0, 0])),
+            ))
 
 class BusProtocol(protocol.Protocol):
     def __init__(self, listeners):
@@ -151,6 +163,25 @@ class Bus(object):
     def read(self, node_id, address, length):
         self.send(node_id, 0x80+length, address, '')
 
+class Killer(object):
+    def __init__(self, nh, name, description, listener):
+        self._name = nh.get_name() + '/' + name
+        self._broadcaster = KillBroadcasterTxROS(nh, self._name, description)
+        self._listener = listener
+        self._active = False
+        self._think()
+    
+    @util.cancellableInlineCallbacks
+    def _think(self):
+        while True:
+            if {k.id for k in self._listener.kills_variable.value} - {self._name}:
+                self._active = False
+            yield self._broadcaster.send(self._active)
+            yield util.sleep(.25)
+    
+    def kill(self):
+        self._active = True
+
 @util.cancellableInlineCallbacks
 def main():
     nh = yield txros.NodeHandle.from_argv('videoray_m5_thruster_driver')
@@ -158,10 +189,13 @@ def main():
     info_pub = nh.advertise('/thrusters/info', ThrusterInfo)
     kill_listener = KillListenerTxROS(nh)
     
+    temperature_killer = Killer(nh, 'temperature', 'Thruster temperature limit', kill_listener)
+    undervoltage_killer = Killer(nh, 'undervoltage', 'Thruster undervoltage limit', kill_listener)
+    
     for config in (yield nh.get_param('~buses')):
         bus = Bus(nh, config['port'])
         for name, config2 in config['thrusters'].iteritems():
-            thruster = Thruster(nh, bus, name, config2, info_pub, kill_listener)
+            thruster = Thruster(nh, bus, name, config2, info_pub, kill_listener, temperature_killer, undervoltage_killer)
             yield thruster.init()
     
     yield defer.Deferred() # never exit

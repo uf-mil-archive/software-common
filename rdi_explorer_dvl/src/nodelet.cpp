@@ -34,7 +34,6 @@ namespace rdi_explorer_dvl {
                     getPrivateNodeHandle(), "frame_id");
                 
                 pub = getNodeHandle().advertise<uf_common::VelocityMeasurements>("dvl", 10);
-                water_pub = getNodeHandle().advertise<uf_common::VelocityMeasurements>("dvl/water_mass", 10);
                 range_pub = getNodeHandle().advertise<uf_common::Float64Stamped>("dvl/range", 10);
                 
                 device = boost::make_shared<Device>(port, baudrate);
@@ -51,16 +50,11 @@ namespace rdi_explorer_dvl {
             void polling_thread() {
                 while(running) {
                     boost::optional<uf_common::VelocityMeasurements> msg;
-                    boost::optional<uf_common::VelocityMeasurements> water_msg;
                     boost::optional<uf_common::Float64Stamped> range_msg;
-                    device->read(msg, water_msg, range_msg);
+                    device->read(msg, range_msg);
                     if(msg) {
                         msg->header.frame_id = frame_id;
                         pub.publish(*msg);
-                    }
-                    if(msg) {
-                        water_msg->header.frame_id = frame_id;
-                        water_pub.publish(*water_msg);
                     }
                     if(range_msg) {
                         range_msg->header.frame_id = frame_id;
@@ -71,7 +65,6 @@ namespace rdi_explorer_dvl {
             
             std::string frame_id;
             ros::Publisher pub;
-            ros::Publisher water_pub;
             ros::Publisher range_pub;
             boost::shared_ptr<Device> device;
             ros::Timer heartbeat_timer;
