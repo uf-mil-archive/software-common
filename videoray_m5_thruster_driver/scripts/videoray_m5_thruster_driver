@@ -6,6 +6,7 @@ import binascii
 import random
 import struct
 import traceback
+import json
 
 from twisted.internet import defer, reactor, serialport, protocol
 
@@ -99,10 +100,9 @@ class Thruster(object):
             self._voltage_buffer.append(bus_v)
             while len(self._voltage_buffer) > self._voltage_buffer_length:
                 self._voltage_buffer.pop(0)
-            if len(self._voltage_buffer) == self._voltage_buffer_length:
-                if sum(self._voltage_buffer)/len(self._voltage_buffer) < 3.3*12:
-                    print 'LOW VOLTAGE', bus_v
-                    self._undervoltage_killer.kill()
+            if sum(self._voltage_buffer)/len(self._voltage_buffer) < 3.5*12:
+                print 'LOW VOLTAGE', bus_v
+                self._undervoltage_killer.kill()
             print sum(self._voltage_buffer)/len(self._voltage_buffer)
             
             self._info_pub.publish(ThrusterInfo(
@@ -118,6 +118,14 @@ class Thruster(object):
                 min_force=self.CALIBRATION_DATA[0][0],
                 max_force=self.CALIBRATION_DATA[0][-1],
                 torque_per_force=Vector3(*self._config.get('torque_per_force', [0, 0, 0])),
+                extra=json.dumps(dict(
+                    rpm=rpm,
+                    bus_voltage=bus_v,
+                    bus_voltage_filtered=sum(self._voltage_buffer)/len(self._voltage_buffer),
+                    bus_current=bus_i,
+                    temperature=temp,
+                    fault=fault,
+                )),
             ))
 
 class BusProtocol(protocol.Protocol):
