@@ -1,4 +1,5 @@
 <library path="src">
+
   <class name="Thrusters" type="uf_rqt_plugins.thrusterplugin.ThrusterPlugin" base_class_type="rqt_gui_py::Plugin">
     <description>
       Controls multiple thrusters through uf-ros-pkg/thruster_handling.
@@ -12,6 +13,7 @@
       <statustip>Control thrusters.</statustip>
     </qtgui>
   </class>
+
   <class name="Kill" type="uf_rqt_plugins.killplugin.KillPlugin" base_class_type="rqt_gui_py::Plugin">
     <description>
       Provides status information for uf-ros-pkg/kill_handling.
@@ -25,6 +27,7 @@
       <statustip>Provides kill status information.</statustip>
     </qtgui>
   </class>
+
   <class name="GPS" type="uf_rqt_plugins.gps.GPSPlugin" base_class_type="rqt_gui_py::Plugin">
     <description>
      Allows you to go to GPS waypoint
@@ -38,6 +41,7 @@
       <statustip>GPS Waypoints</statustip>
     </qtgui>
   </class>
+
   <class name="Status" type="uf_rqt_plugins.propagatorstatus.PropStatus" base_class_type="rqt_gui_py::Plugin">
     <description>
      Displays status of all devices
@@ -51,6 +55,7 @@
       <statustip>PropaGator Status</statustip>
     </qtgui>
   </class>
+
   <class name="Engineering_Plant" type="uf_rqt_plugins.engineering_plant.Engineering_Plant" base_class_type="rqt_gui_py::Plugin">
     <description>
      Plant monitoring GUI with Kill/Un-kill buttons
@@ -64,6 +69,7 @@
       <statustip>Plant Status</statustip>
     </qtgui>
   </class>
+
   <class name="Actuators" type="uf_rqt_plugins.actuatorplugin.ActuatorPlugin" base_class_type="rqt_gui_py::Plugin">
     <description>
       Plugin for controlling SubjuGator's actuators.
@@ -77,4 +83,19 @@
       <statustip>SubjuGator Actuators</statustip>
     </qtgui>
   </class>
+
+  <class name="propagatorgui" type="uf_rqt_plugins.propagatorgui.PropaGatorGUI" base_class_type="rqt_gui_py::Plugin">
+    <description>
+      GUI for PropaGator status display and interactions
+    </description>
+    <qtgui>
+      <group>
+        <icon type="file">uf.ico</icon>
+        <label>UF</label>
+      </group>
+      <label>PropaGator_GUI</label>
+      <statustip>PropaGator_GUI</statustip>
+    </qtgui>
+  </class>
+
 </library>
