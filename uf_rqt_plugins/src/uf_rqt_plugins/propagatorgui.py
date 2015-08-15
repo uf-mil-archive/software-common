@@ -27,6 +27,7 @@
 import roslib
 roslib.load_manifest('uf_rqt_plugins')
 from kill_handling.listener import KillListener
+from kill_handling.broadcaster import KillBroadcaster
 
 import os
 import rospy
@@ -56,25 +57,54 @@ class PropaGatorGUI(Plugin):
         self._float_label = self._widget.findChild(QLabel, 'float_label')
         self._autonomous_label = self._widget.findChild(QLabel, 'autonomous_label')
 
+        self._kill_push_btn = self._widget.findChild(QPushButton, 'kill_push_btn')
+
         # Load images
         self._green_indicator = QPixmap(os.path.join(cwd, 'green_indicator.png'))
         self._red_indicator = QPixmap(os.path.join(cwd, 'red_indicator.png'))
 
         # Set up ROS interfaces
-        self._kill_listener = KillListener(None, None)
+        self._kill_listener = KillListener()
+        self._kill_broadcaster = KillBroadcaster(id = 'PropaGator GUI', 
+            description = 'PropaGator GUI kill')
+
+        # Connect push buttons
+        self._kill_push_btn.toggled.connect(self._on_kill_push_btn_toggle)
 
         # Set up update timer at 10Hz
         self.update_timer = QTimer()
         self.update_timer.timeout.connect(self._onUpdate)
         self.update_timer.start(100)
 
-    def _onUpdate(self):
+
+    # Push btn callbacks
+    def _on_kill_push_btn_toggle(self, checked):
+        if checked:
+            self._kill_broadcaster.send(True)
+        else:
+            self._kill_broadcaster.send(False)
+
+    # Update functions
+    def _updateStatus(self):
         # Check if killed
         if self._kill_listener.get_killed():
             self._kill_label.setPixmap(self._red_indicator)
         else:
             self._kill_label.setPixmap(self._green_indicator)
 
-
+        # Check float status
         self._float_label.setPixmap(self._green_indicator)
+
+        # Check if in autonomous or RC
         self._autonomous_label.setPixmap(self._green_indicator)
+
+    def _updateControl(self):
+        pass
+
+    def _updateLidar(self):
+        pass
+
+    def _onUpdate(self):
+        self._updateStatus()
+        self._updateControl()
+        self._updateLidar()
