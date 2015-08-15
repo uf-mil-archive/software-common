@@ -102,6 +102,8 @@ class PropaGatorGUI(Plugin):
         self.update_timer.stop()
         self._odom_sub.unregister()
         del self._odom_sub
+        self._float_sub.unregister()
+        del self._float_sub
         # Kill broadcaster is not cleared, the user should unkill before closing the GUI
         del self._kill_broadcaster
         del self._kill_listener
