@@ -23,23 +23,32 @@
 #   * Low level path planner mode drop down
 #   * Lidar angle mode control
 #   * Float
+#
+# Bugs:
+#   * (Solved)memory errors occur when using python threads with ROS threads
+#       * See _odom_callback
 
 import roslib
 roslib.load_manifest('uf_rqt_plugins')
 from kill_handling.listener import KillListener
 from kill_handling.broadcaster import KillBroadcaster
+from nav_msgs.msg import Odometry
+from uf_common.orientation_helpers import quat_to_rotvec, xyzw_array
+import rospy
 
 import os
 import rospy
 from qt_gui.plugin import Plugin
 from python_qt_binding import loadUi
 from python_qt_binding.QtGui import QWidget, QPushButton, QLabel, QPixmap
-from python_qt_binding.QtCore import SIGNAL, QTimer, Qt
+from python_qt_binding.QtCore import QTimer, Qt, QThread, QObject, Signal
 
 
 cwd = os.path.dirname(os.path.realpath(__file__))
 
 class PropaGatorGUI(Plugin):
+    odom_update_signal = Signal()
+
     def __init__(self, contex):
         super(PropaGatorGUI, self).__init__(contex)
 
@@ -56,6 +65,12 @@ class PropaGatorGUI(Plugin):
         self._kill_label = self._widget.findChild(QLabel, 'kill_label')
         self._float_label = self._widget.findChild(QLabel, 'float_label')
         self._autonomous_label = self._widget.findChild(QLabel, 'autonomous_label')
+        self._odom_x_label = self._widget.findChild(QLabel, 'odom_x_label')
+        self._odom_y_label = self._widget.findChild(QLabel, 'odom_y_label')
+        self._odom_yaw_label = self._widget.findChild(QLabel, 'odom_yaw_label')
+        self._odom_d_x_label = self._widget.findChild(QLabel, 'odom_d_x_label')
+        self._odom_d_y_label = self._widget.findChild(QLabel, 'odom_d_y_label')
+        self._odom_d_yaw_label = self._widget.findChild(QLabel, 'odom_d_yaw_label')
 
         self._kill_push_btn = self._widget.findChild(QPushButton, 'kill_push_btn')
 
@@ -67,15 +82,41 @@ class PropaGatorGUI(Plugin):
         self._kill_listener = KillListener()
         self._kill_broadcaster = KillBroadcaster(id = 'PropaGator GUI', 
             description = 'PropaGator GUI kill')
+        self._odom_sub = rospy.Subscriber('/odom', Odometry, self._odom_callback)
 
         # Connect push buttons
         self._kill_push_btn.toggled.connect(self._on_kill_push_btn_toggle)
+
+        # Connect other signals
+        self.odom_update_signal.connect(self._odom_update, Qt.BlockingQueuedConnection)
 
         # Set up update timer at 10Hz
         self.update_timer = QTimer()
         self.update_timer.timeout.connect(self._onUpdate)
         self.update_timer.start(100)
 
+    # Subscriber callbacks
+    # Since this is in a different thread it is possible and likely that
+        #   the drawing thread will try and draw while the text is being changed
+        #   this causes all kinds of mahem such as segmentation faults, double free, ...
+        #   To prevent this from hapening this thread emits a Qt signal which is set up
+        #   to block the main thread
+    def _odom_callback(self, msg):
+        self.last_odom_msg = msg
+        self.odom_update_signal.emit()
+
+    def _odom_update(self):
+        pos = self.last_odom_msg.pose.pose.position
+        yaw = quat_to_rotvec(xyzw_array(self.last_odom_msg.pose.pose.orientation))[2]
+        vel = self.last_odom_msg.twist.twist.linear
+        dYaw = self.last_odom_msg.twist.twist.angular.z
+
+        self._odom_x_label.setText('X: %3.3f' % pos.x)
+        self._odom_y_label.setText('Y: %3.3f' % pos.y)
+        self._odom_yaw_label.setText('Yaw: %3.3f' % yaw)
+        self._odom_d_x_label.setText('dX: %3.3f' % vel.x)
+        self._odom_d_y_label.setText('dY: %3.3f' % vel.y)
+        self._odom_d_yaw_label.setText('dYaw: %3.3f' % dYaw)
 
     # Push btn callbacks
     def _on_kill_push_btn_toggle(self, checked):

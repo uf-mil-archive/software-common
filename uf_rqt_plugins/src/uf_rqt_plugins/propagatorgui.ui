@@ -308,6 +308,27 @@
         </widget>
        </item>
        <item>
+        <widget class="QLabel" name="odom_d_x_label">
+         <property name="text">
+          <string>dX:</string>
+         </property>
+        </widget>
+       </item>
+       <item>
+        <widget class="QLabel" name="odom_d_y_label">
+         <property name="text">
+          <string>dY:</string>
+         </property>
+        </widget>
+       </item>
+       <item>
+        <widget class="QLabel" name="odom_d_yaw_label">
+         <property name="text">
+          <string>dYaw:</string>
+         </property>
+        </widget>
+       </item>
+       <item>
         <spacer name="horizontalSpacer">
          <property name="orientation">
           <enum>Qt::Horizontal</enum>
