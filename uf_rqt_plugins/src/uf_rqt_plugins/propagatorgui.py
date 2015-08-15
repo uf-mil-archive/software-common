@@ -33,6 +33,7 @@ roslib.load_manifest('uf_rqt_plugins')
 from kill_handling.listener import KillListener
 from kill_handling.broadcaster import KillBroadcaster
 from nav_msgs.msg import Odometry
+from std_msgs.msg import Bool
 from uf_common.orientation_helpers import quat_to_rotvec, xyzw_array
 import rospy
 
@@ -47,10 +48,12 @@ from python_qt_binding.QtCore import QTimer, Qt, QThread, QObject, Signal
 cwd = os.path.dirname(os.path.realpath(__file__))
 
 class PropaGatorGUI(Plugin):
-    odom_update_signal = Signal()
-
     def __init__(self, contex):
         super(PropaGatorGUI, self).__init__(contex)
+
+        # Initilize variables
+        self._float_status = False
+        self.last_odom_msg = Odometry()
 
         # Assign a name
         self.setObjectName('PropaGatorGUI')
@@ -83,12 +86,10 @@ class PropaGatorGUI(Plugin):
         self._kill_broadcaster = KillBroadcaster(id = 'PropaGator GUI', 
             description = 'PropaGator GUI kill')
         self._odom_sub = rospy.Subscriber('/odom', Odometry, self._odom_callback)
+        self._float_sub = rospy.Subscriber('/float_status', Bool, self._float_callback)
 
         # Connect push buttons
         self._kill_push_btn.toggled.connect(self._on_kill_push_btn_toggle)
-
-        # Connect other signals
-        self.odom_update_signal.connect(self._odom_update, Qt.BlockingQueuedConnection)
 
         # Set up update timer at 10Hz
         # A Qt timer is used instead of a ros timer since Qt components are updated
@@ -109,11 +110,13 @@ class PropaGatorGUI(Plugin):
     # Since this is in a different thread it is possible and likely that
         #   the drawing thread will try and draw while the text is being changed
         #   this causes all kinds of mahem such as segmentation faults, double free, ...
-        #   To prevent this from hapening this thread emits a Qt signal which is set up
-        #   to block the main thread as described here http://wiki.ros.org/rqt/Tutorials/Writing%20a%20Python%20Plugin
+        #   To prevent this from hapening this thread updates only none QT variables
+        #   described here http://wiki.ros.org/rqt/Tutorials/Writing%20a%20Python%20Plugin
     def _odom_callback(self, msg):
         self.last_odom_msg = msg
-        self.odom_update_signal.emit()
+
+    def _float_callback(self, status):
+        self._float_status = status.data
 
     def _odom_update(self):
         pos = self.last_odom_msg.pose.pose.position
@@ -144,7 +147,10 @@ class PropaGatorGUI(Plugin):
             self._kill_label.setPixmap(self._green_indicator)
 
         # Check float status
-        self._float_label.setPixmap(self._green_indicator)
+        if self._float_status:
+            self._float_label.setPixmap(self._red_indicator)
+        else:
+            self._float_label.setPixmap(self._green_indicator)            
 
         # Check if in autonomous or RC
         self._autonomous_label.setPixmap(self._green_indicator)
@@ -159,3 +165,4 @@ class PropaGatorGUI(Plugin):
         self._updateStatus()
         self._updateControl()
         self._updateLidar()
+        self._odom_update()
