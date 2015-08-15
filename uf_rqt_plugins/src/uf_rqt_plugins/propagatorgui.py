@@ -26,7 +26,7 @@
 #
 # Bugs:
 #   * (Solved)memory errors occur when using python threads with ROS threads
-#       * See _odom_callback
+#       * See _odom_callback and http://wiki.ros.org/rqt/Tutorials/Writing%20a%20Python%20Plugin
 
 import roslib
 roslib.load_manifest('uf_rqt_plugins')
@@ -91,16 +91,26 @@ class PropaGatorGUI(Plugin):
         self.odom_update_signal.connect(self._odom_update, Qt.BlockingQueuedConnection)
 
         # Set up update timer at 10Hz
+        # A Qt timer is used instead of a ros timer since Qt components are updated
         self.update_timer = QTimer()
         self.update_timer.timeout.connect(self._onUpdate)
         self.update_timer.start(100)
+
+    # Everything needs to be turned off here
+    def shutdown_plugin(self):
+        self.update_timer.stop()
+        self._odom_sub.unregister()
+        del self._odom_sub
+        # Kill broadcaster is not cleared, the user should unkill before closing the GUI
+        del self._kill_broadcaster
+        del self._kill_listener
 
     # Subscriber callbacks
     # Since this is in a different thread it is possible and likely that
         #   the drawing thread will try and draw while the text is being changed
         #   this causes all kinds of mahem such as segmentation faults, double free, ...
         #   To prevent this from hapening this thread emits a Qt signal which is set up
-        #   to block the main thread
+        #   to block the main thread as described here http://wiki.ros.org/rqt/Tutorials/Writing%20a%20Python%20Plugin
     def _odom_callback(self, msg):
         self.last_odom_msg = msg
         self.odom_update_signal.emit()
