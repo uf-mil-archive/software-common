@@ -34,6 +34,7 @@ from kill_handling.listener import KillListener
 from kill_handling.broadcaster import KillBroadcaster
 from nav_msgs.msg import Odometry
 from std_msgs.msg import Bool
+from motor_control.srv import FloatMode
 from uf_common.orientation_helpers import quat_to_rotvec, xyzw_array
 import rospy
 
@@ -76,6 +77,7 @@ class PropaGatorGUI(Plugin):
         self._odom_d_yaw_label = self._widget.findChild(QLabel, 'odom_d_yaw_label')
 
         self._kill_push_btn = self._widget.findChild(QPushButton, 'kill_push_btn')
+        self._float_push_btn = self._widget.findChild(QPushButton, 'float_push_btn')
 
         # Load images
         self._green_indicator = QPixmap(os.path.join(cwd, 'green_indicator.png'))
@@ -87,9 +89,11 @@ class PropaGatorGUI(Plugin):
             description = 'PropaGator GUI kill')
         self._odom_sub = rospy.Subscriber('/odom', Odometry, self._odom_callback)
         self._float_sub = rospy.Subscriber('/float_status', Bool, self._float_callback)
+        self._float_proxy = rospy.ServiceProxy('/float_mode', FloatMode)
 
         # Connect push buttons
         self._kill_push_btn.toggled.connect(self._on_kill_push_btn_toggle)
+        self._float_push_btn.toggled.connect(self._on_float_push_btn_toggle)
 
         # Set up update timer at 10Hz
         # A Qt timer is used instead of a ros timer since Qt components are updated
@@ -139,6 +143,16 @@ class PropaGatorGUI(Plugin):
             self._kill_broadcaster.send(True)
         else:
             self._kill_broadcaster.send(False)
+
+    def _on_float_push_btn_toggle(self, checked):
+        # TODO: Check if float service active
+        try:
+            if checked:
+                self._float_proxy(True)
+            else:
+                self._float_proxy(False)
+        except rospy.service.ServiceException:
+            pass
 
     # Update functions
     def _updateStatus(self):

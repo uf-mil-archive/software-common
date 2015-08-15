@@ -110,6 +110,16 @@
          </widget>
         </item>
         <item>
+         <widget class="QPushButton" name="float_push_btn">
+          <property name="text">
+           <string>Disable Thrusters</string>
+          </property>
+          <property name="checkable">
+           <bool>true</bool>
+          </property>
+         </widget>
+        </item>
+        <item>
          <layout class="QHBoxLayout" name="horizontalLayout_6">
           <item>
            <widget class="QPushButton" name="rc_push_btn">
