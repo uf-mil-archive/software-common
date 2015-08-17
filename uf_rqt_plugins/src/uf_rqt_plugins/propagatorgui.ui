@@ -46,7 +46,7 @@
             <item>
              <widget class="QLabel" name="label_3">
               <property name="text">
-               <string>System enabled</string>
+               <string>System</string>
               </property>
              </widget>
             </item>
@@ -64,7 +64,7 @@
             <item>
              <widget class="QLabel" name="label_4">
               <property name="text">
-               <string>Thrusters enabled</string>
+               <string>Thrusters</string>
               </property>
              </widget>
             </item>
