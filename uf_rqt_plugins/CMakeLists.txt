@@ -42,7 +42,7 @@ catkin_python_setup()
 # TODO: fill in what other packages will need to use this package
 catkin_package(
     DEPENDS  # TODO
-    CATKIN_DEPENDS skytraq_driver rqt_gui rawgps_common rospy uf_common thruster_handling kill_handling rqt_gui_py
+    CATKIN_DEPENDS skytraq_driver rqt_gui rawgps_common rospy uf_common thruster_handling kill_handling rqt_gui_py controller
     INCLUDE_DIRS # TODO include
     LIBRARIES # TODO
 )

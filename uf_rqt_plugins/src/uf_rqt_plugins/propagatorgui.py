@@ -34,7 +34,7 @@ from kill_handling.listener import KillListener
 from kill_handling.broadcaster import KillBroadcaster
 from nav_msgs.msg import Odometry
 from std_msgs.msg import Bool
-from motor_control.srv import FloatMode
+from controller.srv import FloatMode
 from uf_common.orientation_helpers import quat_to_rotvec, xyzw_array
 import rospy
 
@@ -88,8 +88,8 @@ class PropaGatorGUI(Plugin):
         self._kill_broadcaster = KillBroadcaster(id = 'PropaGator GUI', 
             description = 'PropaGator GUI kill')
         self._odom_sub = rospy.Subscriber('/odom', Odometry, self._odom_callback)
-        self._float_sub = rospy.Subscriber('/float_status', Bool, self._float_callback)
-        self._float_proxy = rospy.ServiceProxy('/float_mode', FloatMode)
+        self._float_sub = rospy.Subscriber('/controller/float_status', Bool, self._float_callback)
+        self._float_proxy = rospy.ServiceProxy('/controller/float_mode', FloatMode)
 
         # Connect push buttons
         self._kill_push_btn.toggled.connect(self._on_kill_push_btn_toggle)

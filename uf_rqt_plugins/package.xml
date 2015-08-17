@@ -23,6 +23,7 @@
   <build_depend>thruster_handling</build_depend>
   <build_depend>kill_handling</build_depend>
   <build_depend>rqt_gui_py</build_depend>
+  <build_depend>controller</build_depend>
 
   <!-- Dependencies needed after this package is compiled. -->
   <run_depend>uf_common</run_depend>
@@ -33,6 +34,7 @@
   <run_depend>thruster_handling</run_depend>
   <run_depend>kill_handling</run_depend>
   <run_depend>rqt_gui_py</run_depend>
+  <run_depend>controller</run_depend>
 
   <!-- Dependencies needed only for running tests. -->
   <!-- <test_depend>skytraq_driver</test_depend> -->
