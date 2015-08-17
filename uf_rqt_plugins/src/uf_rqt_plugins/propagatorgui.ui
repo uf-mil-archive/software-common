@@ -71,22 +71,11 @@
            </layout>
           </item>
           <item>
-           <layout class="QHBoxLayout" name="horizontalLayout_4" stretch="0,1">
-            <item>
-             <widget class="QLabel" name="autonomous_label">
-              <property name="text">
-               <string>Autonomous</string>
-              </property>
-             </widget>
-            </item>
-            <item>
-             <widget class="QLabel" name="label_5">
-              <property name="text">
-               <string>Autonomous</string>
-              </property>
-             </widget>
-            </item>
-           </layout>
+           <widget class="QLabel" name="controller_label">
+            <property name="text">
+             <string>Controller: xbox_rc</string>
+            </property>
+           </widget>
           </item>
          </layout>
         </item>
@@ -120,25 +109,7 @@
          </widget>
         </item>
         <item>
-         <layout class="QHBoxLayout" name="horizontalLayout_6">
-          <item>
-           <widget class="QPushButton" name="rc_push_btn">
-            <property name="text">
-             <string>RC</string>
-            </property>
-           </widget>
-          </item>
-          <item>
-           <widget class="QPushButton" name="autonomous_push_btn">
-            <property name="text">
-             <string>Autonomous</string>
-            </property>
-           </widget>
-          </item>
-         </layout>
-        </item>
-        <item>
-         <widget class="QComboBox" name="control_combo_box"/>
+         <widget class="QComboBox" name="controller_combo_box"/>
         </item>
        </layout>
       </widget>
