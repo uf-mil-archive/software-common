@@ -78,6 +78,7 @@ class PropaGatorGUI(Plugin):
         self._odom_d_x_label = self._widget.findChild(QLabel, 'odom_d_x_label')
         self._odom_d_y_label = self._widget.findChild(QLabel, 'odom_d_y_label')
         self._odom_d_yaw_label = self._widget.findChild(QLabel, 'odom_d_yaw_label')
+        self._placeholder_label = self._widget.findChild(QLabel, 'placeholder_label')
 
         self._kill_push_btn = self._widget.findChild(QPushButton, 'kill_push_btn')
         self._float_push_btn = self._widget.findChild(QPushButton, 'float_push_btn')
@@ -86,6 +87,7 @@ class PropaGatorGUI(Plugin):
         # Load images
         self._green_indicator = QPixmap(os.path.join(cwd, 'green_indicator.png'))
         self._red_indicator = QPixmap(os.path.join(cwd, 'red_indicator.png'))
+        self._placeholder_image = QPixmap(os.path.join(cwd, 'placeholder.png'))
 
         # Set up ROS interfaces
         self._kill_listener = KillListener()
@@ -110,6 +112,9 @@ class PropaGatorGUI(Plugin):
         self.update_timer = QTimer()
         self.update_timer.timeout.connect(self._onUpdate)
         self.update_timer.start(100)
+
+        # Temp
+        self._placeholder_label.setPixmap(self._placeholder_image)
 
     # Everything needs to be turned off here
     def shutdown_plugin(self):

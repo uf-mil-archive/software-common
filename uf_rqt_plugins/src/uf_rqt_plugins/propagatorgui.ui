@@ -264,7 +264,7 @@
     </layout>
    </item>
    <item>
-    <layout class="QVBoxLayout" name="verticalLayout_2" stretch="0,0">
+    <layout class="QVBoxLayout" name="verticalLayout_2" stretch="0,1">
      <item>
       <layout class="QHBoxLayout" name="horizontalLayout_5">
        <item>
@@ -325,17 +325,11 @@
       </layout>
      </item>
      <item>
-      <spacer name="verticalSpacer">
-       <property name="orientation">
-        <enum>Qt::Vertical</enum>
+      <widget class="QLabel" name="placeholder_label">
+       <property name="text">
+        <string>Placeholder</string>
        </property>
-       <property name="sizeHint" stdset="0">
-        <size>
-         <width>20</width>
-         <height>40</height>
-        </size>
-       </property>
-      </spacer>
+      </widget>
      </item>
     </layout>
    </item>
