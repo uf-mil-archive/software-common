@@ -75,7 +75,7 @@ def fit_ellipsoid(points):
     for axis in xrange(3):
         assert min(p[axis] for p in compensated) < 0 < max(p[axis] for p in compensated)
     
-    return scale, shift, calculate_error(compensated)
+    return scale, shift, compensated
 
 def test():
     # generate a set of points passed through a random transform, then make sure
@@ -90,7 +90,8 @@ def test():
     points = [scale.dot(transformations.unit_vector(numpy.random.randn(3))) + shift
         for i in xrange(1000)]
     
-    scale2, shift2, error = fit_ellipsoid(points)
+    scale2, shift2, compensated = fit_ellipsoid(points)
+    error = calculate_error(compensated)
     
     assert numpy.allclose(scale2, scale)
     assert numpy.allclose(shift2, shift), (shift2, shift)
@@ -110,21 +111,48 @@ if not len(points):
     print 'no data in bag file'
     sys.exit()
 
+points = numpy.array(points)
+
+print 'original error: %.4f%%' % (100*calculate_error(points),)
+
+def axisEqual3D(ax):
+    ax.axis('tight')
+    extents = numpy.array([getattr(ax, 'get_{}lim'.format(dim))() for dim in 'xyz'])
+    r = numpy.max(numpy.abs(extents))
+    for dim in 'xyz':
+        getattr(ax, 'set_{}lim'.format(dim))(-r, r)
+
 try:
     import matplotlib.pyplot as plt
     from mpl_toolkits.mplot3d import Axes3D
-    fig = plt.figure()
+    fig = plt.figure(figsize=(10, 10))
     ax = fig.add_subplot('111', projection='3d')
+    ax.scatter([0], [0], [0], s=100, c='r')
     ax.scatter(*zip(*points[::10,:]))
+    axisEqual3D(ax)
     plt.show()
 except:
     import traceback
     traceback.print_exc()
 
-print 'orig error: %.4f%%' % (100*calculate_error(points),)
+scale, shift, compensated = fit_ellipsoid(points)
+compensated = numpy.array(compensated)
+print 'error: %.4f%%' % (100*calculate_error(compensated),)
 
-scale, shift, error = fit_ellipsoid(points)
-print 'error: %.4f%%' % (100*error,)
+try:
+    import matplotlib.pyplot as plt
+    from mpl_toolkits.mplot3d import Axes3D
+    fig = plt.figure(figsize=(10, 10))
+    ax = fig.add_subplot('111', projection='3d')
+    ax.scatter([0], [0], [0], s=100, c='r')
+    ax.scatter(*zip(*points[::10,:]))
+    ax.scatter(*zip(*compensated[::10,:]), c='g')
+    axisEqual3D(ax)
+    plt.show()
+except:
+    import traceback
+    traceback.print_exc()
+
 print
 print yaml.dump(dict(
     scale=map(lambda x: map(float, x), scale),
