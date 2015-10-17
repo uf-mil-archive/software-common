@@ -24,7 +24,7 @@ def fit_ellipsoid(points):
     # fit model
     #     X[0] x2 + X[1] y2 + X[2] z2 +
     #     X[3] (2xy) + X[4] (2xz) + X[5] (2yz) +
-    #     X[5] (-2x) + X[7] (-2y) + X[8] (-2z) = 1
+    #     X[6] (-2x) + X[7] (-2y) + X[8] (-2z) = 1
     # to points using linear least squares
     
     A = numpy.zeros((points.shape[0], 9))
@@ -52,7 +52,6 @@ def fit_ellipsoid(points):
         [X[4], X[5], X[2]],
     ]))
     shift = ka.dot(X[6:9])
-    print ka
     
     # the A matrix has eigenvalues which are squares of the axis scale factors, so
     # taking the matrix square root yields the transform from a sphere to the ellipsoid
@@ -81,10 +80,9 @@ def test():
     
     rot = transformations.random_rotation_matrix()[:3, :3]
     s = normalized_matrix(numpy.diag([random.expovariate(1) for i in xrange(3)]))
-    s = normalized_matrix(numpy.diag([1, 3, 2]))
     
     scale = rot.dot(s).dot(rot.T)
-    shift = numpy.random.randn(3)*0
+    shift = numpy.random.randn(3)
     
     points = [scale.dot(transformations.unit_vector(numpy.random.randn(3))) + shift
         for i in xrange(1000)]
@@ -92,9 +90,10 @@ def test():
     scale2, shift2, error = fit_ellipsoid(points)
     
     assert numpy.allclose(scale2, scale)
-    assert numpy.allclose(shift2, shift)
-    assert error < 1e-6
-test()
+    assert numpy.allclose(shift2, shift), (shift2, shift)
+    assert error < 1e-5, error
+for i in xrange(100):
+    test()
 
 
 xyz_array = lambda o: numpy.array([o.x, o.y, o.z])
