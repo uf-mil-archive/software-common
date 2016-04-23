@@ -151,16 +151,18 @@ struct Node {
             return; // already initialized
         if(kill_listener.get_killed() || disabled)
             return; // only initialize when unkilled
+        
+        ros::Time now = ros::Time::now();
 
         subjugator::C3Trajectory::Point current = Point_from_PoseTwist(odom->pose.pose, odom->twist.twist);
         current.q[3] = current.q[4] = 0; // zero roll and pitch
         current.qdot = subjugator::Vector6d::Zero(); // zero velocities
 
         c3trajectory.reset(new subjugator::C3Trajectory(current, limits));
-        c3trajectory_t = odom->header.stamp;
+        c3trajectory_t = now;
 
         current_waypoint = current;
-        current_waypoint_t = odom->header.stamp;
+        current_waypoint_t = now;
     }
 
     void timer_callback(const ros::TimerEvent&) {
@@ -174,7 +176,7 @@ struct Node {
             current_waypoint = subjugator::C3Trajectory::Waypoint(
                 Point_from_PoseTwist(goal->posetwist.pose, goal->posetwist.twist),
                 goal->speed, !goal->uncoordinated);
-            current_waypoint_t = now; // goal->header.stamp;
+            current_waypoint_t = now;
             this->linear_tolerance = goal->linear_tolerance;
             this->angular_tolerance = goal->angular_tolerance;
         }
