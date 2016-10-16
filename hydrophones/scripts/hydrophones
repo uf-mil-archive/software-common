@@ -38,7 +38,7 @@ def process_ping(ping):
                 valid=valid)
     pub_pose.publish(header=Header(stamp=ping.header.stamp,
                                    frame_id=ping.header.frame_id),
-    pose=Pose(position=Point(*r['pos'].tolist())))
+    pose=Pose(position=Point(*(r['pos']/numpy.linalg.norm(r['pos'])*5).tolist())))
     pub_debug.publish(header=Header(stamp=ping.header.stamp,
                                     frame_id=ping.header.frame_id),
                       deltas=r['deltas'].tolist(),
