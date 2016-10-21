@@ -94,7 +94,7 @@ def bandpass(samples, sample_rate):
     """Applies a 20-30khz bandpass FIR filter"""
     # 25-40KHz is the range of the pinger for the roboboat competition
     fir = scipy.signal.firwin(128,
-                              [19e3/(sample_rate/2), 41e3/(sample_rate/2)],
+                              [19e3/(sample_rate/2), 51e3/(sample_rate/2)],
                               window='hann',
                               pass_zero=False)
     return scipy.signal.lfilter(fir, 1, samples)
@@ -111,8 +111,8 @@ def compute_deltas(samples, sample_rate, ping_freq, template_periods, plot=False
                                            template_width)
     if template_pos is None:
         return numpy.empty(0), numpy.empty(0), None, template_width
-    start = template_pos - period//2
-    stop = template_pos + period//2
+    start = template_pos - period*3//2
+    stop = template_pos + period*3//2
 
     deltas = numpy.empty(samples.shape[0]-1)
     errors = numpy.empty(samples.shape[0]-1)
